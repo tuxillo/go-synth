@@ -44,28 +44,90 @@ sudo install -m 0755 dsynth /usr/local/bin/
 # Initialize configuration
 sudo dsynth init
 
-# Edit configuration
+# Edit configuration (adjust paths and worker count)
 sudo vi /etc/dsynth/dsynth.ini
 
-# Build a package
+# Build a single package with dependencies
 sudo dsynth build editors/vim
+
+# Build multiple packages
+sudo dsynth build editors/vim shells/bash devel/git
+
+# Build with flavor
+sudo dsynth build lang/python@py39
+
+# Force rebuild (ignore CRC cache)
+sudo dsynth force editors/vim
+
+# Fetch distfiles without building
+sudo dsynth fetch-only editors/vim
 
 # Build all installed packages
 sudo dsynth upgrade-system
 
-# Build entire ports tree
+# Build entire ports tree (WARNING: takes a long time!)
 sudo dsynth everything
+
+# View build results
+sudo dsynth logs results
+sudo dsynth logs failure
+sudo dsynth logs editors/vim
+
+# Clean up build environment
+sudo dsynth cleanup
 ```
 
 ## Configuration
 
 Configuration is stored in `/etc/dsynth/dsynth.ini` or `/usr/local/etc/dsynth/dsynth.ini`.
 
-Key settings:
-- `Number_of_builders`: Parallel worker count (default: CPU cores / 2)
-- `Directory_packages`: Where built packages are stored
-- `Directory_buildbase`: Temporary build directory
-- `Directory_portsdir`: Location of ports tree
+### Example Configuration
+
+```ini
+[Global Configuration]
+
+# Number of parallel builders (default: CPU cores / 2)
+Number_of_builders=8
+
+# Maximum jobs per builder (make -j)
+Max_jobs=8
+
+# Directory paths
+Directory_packages=/build/packages
+Directory_buildbase=/build
+Directory_portsdir=/usr/ports
+Directory_distfiles=/build/distfiles
+Directory_options=/build/options
+Directory_logs=/build/logs
+
+# System path (use / for native system)
+System_path=/
+
+# Use tmpfs for work directories (highly recommended)
+Use_tmpfs=yes
+
+# Tmpfs sizes
+Tmpfs_worksize=64g
+Tmpfs_localbasesize=16g
+
+# Use ccache to speed up rebuilds
+Use_ccache=no
+Ccache_dir=/build/ccache
+
+# Use /usr/src for base system headers
+Use_usrsrc=no
+```
+
+### Key Settings
+
+- **Number_of_builders**: Parallel worker count (default: CPU cores / 2)
+- **Max_jobs**: Make parallelism level per builder
+- **Directory_packages**: Where built packages are stored
+- **Directory_buildbase**: Temporary build directory (needs lots of space)
+- **Directory_portsdir**: Location of ports tree
+- **Use_tmpfs**: Use tmpfs for faster builds (needs RAM)
+- **Tmpfs_worksize**: Size for work directories
+- **Tmpfs_localbasesize**: Size for /usr/local in chroot
 
 ## Commands
 
@@ -92,37 +154,57 @@ Key settings:
 
 ```
 dsynth-go/
-├── main.go           # CLI entry point
-├── config/           # Configuration parsing
-│   └── config.go
-├── pkg/              # Package management
-│   ├── pkg.go        # Package metadata
-│   ├── bulk.go       # Parallel operations
-│   ├── deps.go       # Dependency resolution
-│   └── crcdb.go      # CRC database
-├── build/            # Build engine
-│   ├── build.go      # Main build logic
-│   ├── phases.go     # Build phases
-│   └── fetch.go      # Fetch-only mode
-├── mount/            # Filesystem management
-│   └── mount.go      # Mount/unmount logic
-├── log/              # Logging system
-│   ├── logger.go     # Multi-file logger
-│   ├── pkglog.go     # Per-package logs
-│   └── viewer.go     # Log viewing
-└── util/             # Utilities
-    └── util.go
+├── main.go                # CLI entry point
+├── config/                # Configuration parsing
+│   └── config.go          # INI config and system detection
+├── pkg/                   # Package management
+│   ├── pkg.go             # Package metadata and registry
+│   ├── bulk.go            # Parallel bulk operations
+│   ├── deps.go            # Dependency resolution & topological sort
+│   ├── crcdb.go           # CRC32 database for change detection
+│   └── crcdb_helpers.go   # Database utilities
+├── build/                 # Build engine
+│   ├── build.go           # Main build orchestration
+│   ├── phases.go          # Build phase execution
+│   └── fetch.go           # Fetch-only mode
+├── mount/                 # Filesystem management
+│   └── mount.go           # Mount/unmount for chroots
+├── log/                   # Logging system
+│   ├── logger.go          # 8-file multi-logger
+│   ├── pkglog.go          # Per-package build logs
+│   └── viewer.go          # Log viewing utilities
+└── util/                  # Utilities
+    └── util.go            # Helper functions
 ```
 
 ## How It Works
 
 1. **Dependency Resolution**: Scans port Makefiles to build complete dependency graph
-2. **Topological Sort**: Orders packages so dependencies build first
-3. **CRC Checking**: Compares port directory checksums to skip unchanged ports
-4. **Worker Pool**: Spawns parallel workers (chrooted environments)
-5. **Build Phases**: Executes standard BSD port build phases (fetch, extract, patch, build, package)
+2. **Topological Sort**: Orders packages using Kahn's algorithm so dependencies build first
+3. **CRC Checking**: Computes CRC32 of port directories to skip unchanged ports
+4. **Worker Pool**: Spawns parallel workers with isolated chroot environments
+5. **Build Phases**: Executes all standard BSD port build phases:
+   - install-pkgs, check-sanity, fetch-depends, fetch, checksum
+   - extract-depends, extract, patch-depends, patch
+   - build-depends, lib-depends, configure, build
+   - run-depends, stage, check-plist, package
 6. **Package Extraction**: Copies built packages to repository
-7. **Database Update**: Updates CRC database on success
+7. **Database Update**: Updates CRC database on successful builds
+
+## Logging
+
+dsynth-go creates 8 distinct log files in the logs directory:
+
+- **00_last_results.log**: Aggregate build results with timestamps
+- **01_success_list.log**: List of successfully built ports
+- **02_failure_list.log**: List of failed builds with failure phase
+- **03_ignored_list.log**: Ports ignored due to IGNORE settings
+- **04_skipped_list.log**: Ports skipped due to dependency failures
+- **05_abnormal_command_output.log**: Unusual build output
+- **06_obsolete_packages.log**: Obsolete packages found
+- **07_debug.log**: Debug information
+
+Additionally, detailed per-package logs are saved in `logs/logs/category/portname.log`.
 
 ## Differences from Original dsynth
 

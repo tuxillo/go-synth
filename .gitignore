@@ -14,8 +14,8 @@ dsynth
 # Go workspace file
 go.work
 
-# Build directories
-/build/
+# Build output directories (runtime, not source)
+# Note: build/ is a source directory, so it should NOT be ignored
 /logs/
 *.log
 

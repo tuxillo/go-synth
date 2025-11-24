@@ -1,7 +1,6 @@
 package pkg
 
 import (
-	"fmt"
 	"sync"
 
 	"dsynth/config"
@@ -9,13 +8,13 @@ import (
 
 // Bulk operation queue for parallel package info fetching
 type BulkQueue struct {
-	cfg       *config.Config
-	maxBulk   int
-	workChan  chan *bulkWork
+	cfg        *config.Config
+	maxBulk    int
+	workChan   chan *bulkWork
 	resultChan chan *bulkResult
-	wg        sync.WaitGroup
-	mu        sync.Mutex
-	active    int
+	wg         sync.WaitGroup
+	mu         sync.Mutex
+	active     int
 }
 
 type bulkWork struct {
@@ -56,11 +55,11 @@ func (bq *BulkQueue) worker() {
 
 	for work := range bq.workChan {
 		pkg, err := getPackageInfo(work.category, work.name, work.flavor, bq.cfg)
-		
+
 		if err == nil && work.flags != "x" {
 			pkg.Flags |= PkgFManualSel
 		}
-		
+
 		if err == nil && work.flags == "d" {
 			pkg.Flags |= PkgFManualSel // Debug stop mode
 		}
@@ -84,11 +83,11 @@ func (bq *BulkQueue) Queue(category, name, flavor, flags string) {
 
 func (bq *BulkQueue) GetResult() (*Package, error) {
 	result := <-bq.resultChan
-	
+
 	bq.mu.Lock()
 	bq.active--
 	bq.mu.Unlock()
-	
+
 	return result.pkg, result.err
 }
 

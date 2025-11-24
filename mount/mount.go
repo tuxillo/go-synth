@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	MountTypeMask = 0x000F
-	MountTypeTmpfs = 0x0001
+	MountTypeMask   = 0x000F
+	MountTypeTmpfs  = 0x0001
 	MountTypeNullfs = 0x0002
-	MountTypeDevfs = 0x0003
+	MountTypeDevfs  = 0x0003
 	MountTypeProcfs = 0x0004
-	MountTypeRW = 0x0010
-	MountTypeBig = 0x0020
-	MountTypeMed = 0x0080
+	MountTypeRW     = 0x0010
+	MountTypeBig    = 0x0020
+	MountTypeMed    = 0x0080
 )
 
 const (
