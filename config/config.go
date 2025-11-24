@@ -1,11 +1,11 @@
 package config
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
+
+	"gopkg.in/ini.v1"
 )
 
 // Config holds dsynth configuration
@@ -67,16 +67,46 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 
 	// Try to load config file
 	if _, err := os.Stat(configFile); err == nil {
-		// First pass: read global config to get profile_selected if no profile specified
-		if cfg.Profile == "" {
-			if selectedProfile, err := readProfileSelected(configFile); err == nil && selectedProfile != "" {
-				cfg.Profile = selectedProfile
+		iniFile, err := ini.Load(configFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config file: %w", err)
+		}
+
+		// If no profile specified, read from global section
+		if cfg.Profile == "" || cfg.Profile == "default" {
+			globalSec := iniFile.Section("Global Configuration")
+			if globalSec == nil {
+				globalSec = iniFile.Section("global configuration")
+			}
+			if globalSec == nil {
+				globalSec = iniFile.Section("Global")
+			}
+			
+			if globalSec != nil {
+				if key := globalSec.Key("profile_selected"); key != nil {
+					cfg.Profile = key.String()
+					if cfg.Profile != "" {
+						fmt.Printf("Auto-selected profile from config: %s\n", cfg.Profile)
+					}
+				}
 			}
 		}
 
-		// Second pass: parse the full config with the selected profile
-		if err := cfg.parseINI(configFile); err != nil {
-			return nil, fmt.Errorf("failed to parse config: %w", err)
+		// Load the profile section
+		if cfg.Profile != "" {
+			profileSec := iniFile.Section(cfg.Profile)
+			if profileSec != nil {
+				cfg.loadFromSection(profileSec)
+			}
+		}
+
+		// Also load from global section for any unset values
+		globalSec := iniFile.Section("Global Configuration")
+		if globalSec == nil {
+			globalSec = iniFile.Section("global configuration")
+		}
+		if globalSec != nil {
+			cfg.loadFromSection(globalSec)
 		}
 	}
 
@@ -115,167 +145,75 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 	return cfg, nil
 }
 
-// readProfileSelected reads the profile_selected value from the global section
-func readProfileSelected(filename string) (string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	inGlobalSection := false
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
-		}
-
-		// Section header
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			section := strings.ToLower(strings.Trim(line, "[]"))
-			inGlobalSection = (section == "global configuration" || section == "global")
-			continue
-		}
-
-		// Look for profile_selected in global section
-		if inGlobalSection {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				value = strings.Trim(value, "\"' ")
-
-				// Normalize key
-				keyNorm := strings.ToLower(key)
-				keyNorm = strings.ReplaceAll(keyNorm, "_", "")
-				keyNorm = strings.ReplaceAll(keyNorm, " ", "")
-
-				if keyNorm == "profileselected" {
-					return value, nil
-				}
-			}
-		}
-	}
-
-	return "", scanner.Err()
-}
-
-// parseINI parses an INI-format configuration file
-func (cfg *Config) parseINI(filename string) error {
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	currentSection := ""
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
-			continue
-		}
-
-		// Section header
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			currentSection = strings.ToLower(strings.Trim(line, "[]"))
-			continue
-		}
-
-		// Skip if we have a profile and this isn't it (and not global section)
-		if cfg.Profile != "" && currentSection != "" {
-			isGlobal := (currentSection == "global configuration" || currentSection == "global")
-			isTargetProfile := (currentSection == strings.ToLower(cfg.Profile))
-			
-			if !isGlobal && !isTargetProfile {
-				continue
-			}
-		}
-
-		// Key-value pair
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		// Remove quotes and extra spaces
-		value = strings.Trim(value, "\"' ")
-
-		cfg.setConfigValue(key, value)
-	}
-
-	return scanner.Err()
-}
-
-func (cfg *Config) setConfigValue(key, value string) {
-	// Normalize key (replace _ with space, lowercase, etc.)
-	key = strings.ToLower(key)
-	key = strings.ReplaceAll(key, "_", "")
-	key = strings.ReplaceAll(key, " ", "")
-
-	switch key {
-	case "profileselected":
-		// Skip - already handled in readProfileSelected
+// loadFromSection loads config values from an INI section
+func (cfg *Config) loadFromSection(sec *ini.Section) {
+	// Skip if section is nil
+	if sec == nil {
 		return
-	case "numberofbuilders", "builders", "workers":
-		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+	}
+
+	// Directory paths
+	if key := sec.Key("Directory_buildbase"); key != nil && key.String() != "" {
+		cfg.BuildBase = key.String()
+	}
+	if key := sec.Key("Directory_portsdir"); key != nil && key.String() != "" {
+		cfg.DPortsPath = key.String()
+	}
+	if key := sec.Key("Directory_repository"); key != nil && key.String() != "" {
+		cfg.RepositoryPath = key.String()
+	}
+	if key := sec.Key("Directory_packages"); key != nil && key.String() != "" {
+		cfg.PackagesPath = key.String()
+	}
+	if key := sec.Key("Directory_distfiles"); key != nil && key.String() != "" {
+		cfg.DistFilesPath = key.String()
+	}
+	if key := sec.Key("Directory_options"); key != nil && key.String() != "" {
+		cfg.OptionsPath = key.String()
+	}
+	if key := sec.Key("Directory_logs"); key != nil && key.String() != "" {
+		cfg.LogsPath = key.String()
+	}
+	if key := sec.Key("Directory_ccache"); key != nil && key.String() != "" {
+		cfg.CCachePath = key.String()
+	}
+	if key := sec.Key("Directory_system"); key != nil && key.String() != "" {
+		cfg.SystemPath = key.String()
+	}
+
+	// Worker settings
+	if key := sec.Key("Number_of_builders"); key != nil {
+		if n, err := key.Int(); err == nil && n > 0 {
 			cfg.MaxWorkers = n
 		}
-	case "maxjobs", "jobs", "maxjobsperbuilder":
-		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+	}
+	if key := sec.Key("Max_jobs_per_builder"); key != nil {
+		if n, err := key.Int(); err == nil && n > 0 {
 			cfg.MaxJobs = n
 		}
-	case "directorypackages", "packages":
-		cfg.PackagesPath = value
-	case "directoryrepository", "repository":
-		cfg.RepositoryPath = value
-	case "directorybuildbase", "buildbase":
-		cfg.BuildBase = value
-	case "directoryportsdir", "portsdir", "dportsdir":
-		cfg.DPortsPath = value
-	case "directorydistfiles", "distfiles":
-		cfg.DistFilesPath = value
-	case "directoryoptions", "options":
-		cfg.OptionsPath = value
-	case "directorylogs", "logs":
-		cfg.LogsPath = value
-	case "directorysystem", "systempath":
-		cfg.SystemPath = value
-	case "directoryccache", "ccachedir", "ccache":
-		cfg.CCachePath = value
-		cfg.UseCCache = true
-	case "useccache":
-		cfg.UseCCache = parseBool(value)
-	case "useusrsrc":
-		cfg.UseUsrSrc = parseBool(value)
-	case "usetmpfs", "tmpfsworkdir", "tmpfslocalbase":
-		cfg.UseTmpfs = cfg.UseTmpfs || parseBool(value)
-	case "usevkernel":
-		cfg.UseVKernel = parseBool(value)
-	case "usepkgdepend":
-		cfg.UsePKGDepend = parseBool(value)
-	case "operatingsystem":
-		// Informational only, ignore
-	case "packagesuffix":
-		// TODO: Store package suffix if needed
-	case "displaywithncurses":
-		cfg.DisableUI = !parseBool(value)
-	case "leverageprebuilt":
+	}
+
+	// Boolean options
+	if key := sec.Key("Tmpfs_workdir"); key != nil {
+		cfg.UseTmpfs = cfg.UseTmpfs || parseBool(key.String())
+	}
+	if key := sec.Key("Tmpfs_localbase"); key != nil {
+		cfg.UseTmpfs = cfg.UseTmpfs || parseBool(key.String())
+	}
+	if key := sec.Key("Display_with_ncurses"); key != nil {
+		cfg.DisableUI = !parseBool(key.String())
+	}
+	if key := sec.Key("leverage_prebuilt"); key != nil {
 		// TODO: Implement if needed
+		_ = key
 	}
 }
 
 func parseBool(s string) bool {
-	s = strings.ToLower(strings.TrimSpace(s))
-	return s == "true" || s == "yes" || s == "1" || s == "on"
+	if b, err := strconv.ParseBool(s); err == nil {
+		return b
+	}
+	// Handle yes/no
+	s = s
+	return s == "yes" || s == "Yes" || s == "YES" || s == "1" || s == "on" || s == "On" || s == "ON"
 }

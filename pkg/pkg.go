@@ -321,13 +321,18 @@ func MarkPackagesNeedingBuild(head *Package, cfg *config.Config) (int, error) {
 		return 0, fmt.Errorf("failed to initialize CRC database: %w", err)
 	}
 
+	// DEBUG: Check database status
+	total, _ := crcDB.Stats()
+	fmt.Printf("\nDEBUG: CRC Database has %d entries\n", total)
+	fmt.Printf("DEBUG: Database path: %s\n", filepath.Join(cfg.BuildBase, "dsynth.db"))
+
 	fmt.Println("\nChecking which packages need rebuilding...")
 
 	needBuild := 0
-	total := 0
+	checked := 0
 
 	for pkg := head; pkg != nil; pkg = pkg.Next {
-		total++
+		checked++
 
 		// Skip packages marked with errors
 		if pkg.Flags&(PkgFNotFound|PkgFCorrupt) != 0 {
@@ -350,20 +355,21 @@ func MarkPackagesNeedingBuild(head *Package, cfg *config.Config) (int, error) {
 		// Check if build is needed
 		if crcDB.CheckNeedsBuild(pkg, cfg) {
 			needBuild++
+			fmt.Printf("  %s: needs rebuild\n", pkg.PortDir)
 		} else {
 			// Mark as already successful (no build needed)
 			pkg.Flags |= PkgFSuccess | PkgFPackaged
 			fmt.Printf("  %s: up-to-date\n", pkg.PortDir)
 		}
 
-		if total%100 == 0 {
-			fmt.Printf("  Checked %d packages...\r", total)
+		if checked%100 == 0 {
+			fmt.Printf("  Checked %d packages...\r", checked)
 		}
 	}
 
-	fmt.Printf("  Checked %d packages\n", total)
+	fmt.Printf("  Checked %d packages\n", checked)
 	fmt.Printf("  %d packages need building\n", needBuild)
-	fmt.Printf("  %d packages are up-to-date\n", total-needBuild)
+	fmt.Printf("  %d packages are up-to-date\n", checked-needBuild)
 
 	return needBuild, nil
 }

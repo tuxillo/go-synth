@@ -1,11 +1,6 @@
 package main
 
 import (
-	"dsynth/build"
-	"dsynth/config"
-	"dsynth/log"
-	"dsynth/pkg"
-	"dsynth/util"
 	"flag"
 	"fmt"
 	"os"
@@ -13,6 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"dsynth/build"
+	"dsynth/config"
+	"dsynth/log"
+	"dsynth/pkg"
+	"dsynth/util"
 )
 
 var Version = "dev"
@@ -244,7 +245,7 @@ func doPrepareSystem(cfg *config.Config) {
 
 func doRebuildRepo(cfg *config.Config) {
 	fmt.Println("Rebuilding repository metadata...")
-
+	
 	// TODO: Implement pkg repo rebuild
 	fmt.Println("Repository rebuild not yet implemented")
 }
@@ -301,15 +302,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		fmt.Println("No ports specified")
 		return
 	}
-	// DEBUG: Print config values
-	fmt.Printf("DEBUG: Config loaded:\n")
-	fmt.Printf("  Profile: %s\n", cfg.Profile)
-	fmt.Printf("  BuildBase: %s\n", cfg.BuildBase)
-	fmt.Printf("  OptionsPath: %s\n", cfg.OptionsPath)
-	fmt.Printf("  PackagesPath: %s\n", cfg.PackagesPath)
-	fmt.Printf("  DistFilesPath: %s\n", cfg.DistFilesPath)
-	fmt.Printf("  DPortsPath: %s\n", cfg.DPortsPath)
-	fmt.Println()
+
 	// Initialize logger
 	logger, err := log.NewLogger(cfg)
 	if err != nil {
@@ -318,21 +311,32 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	}
 	defer logger.Close()
 
+	// DEBUG: Print config values
+	fmt.Printf("\nDEBUG: Config loaded:\n")
+	fmt.Printf("  Profile: %s\n", cfg.Profile)
+	fmt.Printf("  BuildBase: %s\n", cfg.BuildBase)
+	fmt.Printf("  OptionsPath: %s\n", cfg.OptionsPath)
+	fmt.Printf("  PackagesPath: %s\n", cfg.PackagesPath)
+	fmt.Printf("  RepositoryPath: %s\n", cfg.RepositoryPath)
+	fmt.Printf("  DistFilesPath: %s\n", cfg.DistFilesPath)
+	fmt.Printf("  DPortsPath: %s\n", cfg.DPortsPath)
+	fmt.Println()
+
 	// Setup signal handler for cleanup
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-
+	
 	var buildCleanup func()
-
+	
 	// Goroutine to handle signals
 	go func() {
 		sig := <-sigChan
 		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
-
+		
 		if buildCleanup != nil {
 			buildCleanup()
 		}
-
+		
 		os.Exit(1)
 	}()
 
@@ -358,6 +362,23 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		os.Exit(1)
 	}
 
+	// DEBUG: Print what packages are marked for build vs skipped
+	fmt.Println("\nDEBUG: Package status (first 10):")
+	count := 0
+	for p := head; p != nil && count < 10; p = p.Next {
+		fmt.Printf("  %s: Flags=%08x PkgFile=%s\n", p.PortDir, p.Flags, p.PkgFile)
+		
+		// Check if package file actually exists
+		pkgPath := filepath.Join(cfg.PackagesPath, "All", p.PkgFile)
+		if _, err := os.Stat(pkgPath); err == nil {
+			fmt.Printf("    -> Package EXISTS at %s\n", pkgPath)
+		} else {
+			fmt.Printf("    -> Package NOT FOUND at %s (err: %v)\n", pkgPath, err)
+		}
+		count++
+	}
+	fmt.Println()
+
 	if needBuild == 0 {
 		fmt.Println("All packages are up-to-date!")
 		return
@@ -374,7 +395,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	// Execute build - NOW WITH 3 RETURN VALUES
 	stats, cleanup, err := build.DoBuild(head, cfg, logger)
 	buildCleanup = cleanup // Store cleanup function for signal handler
-
+	
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Build error: %v\n", err)
 		if cleanup != nil {
@@ -441,4 +462,3 @@ func doLogs(cfg *config.Config, portList []string) {
 
 	fmt.Print(string(content))
 }
-

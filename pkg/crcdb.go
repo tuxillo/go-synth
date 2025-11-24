@@ -19,6 +19,7 @@ type CRCDatabase struct {
 	entries map[string]*CRCEntry
 	mu      sync.RWMutex
 	dirty   bool
+	saveMu  sync.Mutex // Separate mutex for file I/O
 }
 
 // CRCEntry represents a single package entry in the CRC database
@@ -139,15 +140,28 @@ func (db *CRCDatabase) Load() error {
 
 // Save writes the CRC database to disk
 func (db *CRCDatabase) Save() error {
+	// Use separate save mutex to prevent concurrent file writes
+	db.saveMu.Lock()
+	defer db.saveMu.Unlock()
+
 	db.mu.RLock()
 	if !db.dirty {
 		db.mu.RUnlock()
 		return nil
 	}
+	
+	// Copy entries while holding read lock
+	entries := make(map[string]*CRCEntry, len(db.entries))
+	for k, v := range db.entries {
+		entries[k] = v
+	}
 	db.mu.RUnlock()
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(db.path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create database directory: %w", err)
+	}
 
 	// Create temp file
 	tmpPath := db.path + ".tmp"
@@ -155,36 +169,46 @@ func (db *CRCDatabase) Save() error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
 	// Write all entries
-	for _, entry := range db.entries {
-		if err := binary.Write(file, binary.LittleEndian, entry.CRC); err != nil {
-			return err
-		}
+	writeErr := func() error {
+		for _, entry := range entries {
+			if err := binary.Write(file, binary.LittleEndian, entry.CRC); err != nil {
+				return err
+			}
 
-		if err := writeString(file, entry.PortDir); err != nil {
-			return err
-		}
-		if err := writeString(file, entry.Version); err != nil {
-			return err
-		}
-		if err := writeString(file, entry.PkgFile); err != nil {
-			return err
-		}
+			if err := writeString(file, entry.PortDir); err != nil {
+				return err
+			}
+			if err := writeString(file, entry.Version); err != nil {
+				return err
+			}
+			if err := writeString(file, entry.PkgFile); err != nil {
+				return err
+			}
 
-		if err := binary.Write(file, binary.LittleEndian, entry.Size); err != nil {
-			return err
+			if err := binary.Write(file, binary.LittleEndian, entry.Size); err != nil {
+				return err
+			}
+			if err := binary.Write(file, binary.LittleEndian, entry.Mtime); err != nil {
+				return err
+			}
+			if err := binary.Write(file, binary.LittleEndian, entry.BuildTime); err != nil {
+				return err
+			}
 		}
-		if err := binary.Write(file, binary.LittleEndian, entry.Mtime); err != nil {
-			return err
-		}
-		if err := binary.Write(file, binary.LittleEndian, entry.BuildTime); err != nil {
-			return err
-		}
+		return nil
+	}()
+
+	if writeErr != nil {
+		file.Close()
+		os.Remove(tmpPath)
+		return writeErr
 	}
 
 	if err := file.Sync(); err != nil {
+		file.Close()
+		os.Remove(tmpPath)
 		return err
 	}
 	file.Close()
@@ -194,7 +218,11 @@ func (db *CRCDatabase) Save() error {
 		return err
 	}
 
+	// Clear dirty flag
+	db.mu.Lock()
 	db.dirty = false
+	db.mu.Unlock()
+
 	return nil
 }
 
@@ -214,8 +242,8 @@ func (db *CRCDatabase) CheckNeedsBuild(pkg *Package, cfg *config.Config) bool {
 		return true
 	}
 
-	// Check if package file exists
-	pkgPath := filepath.Join(cfg.RepositoryPath, pkg.PkgFile)
+	// Check if package file exists - FIXED: Use PackagesPath + /All
+	pkgPath := filepath.Join(cfg.PackagesPath, "All", pkg.PkgFile)
 	info, err := os.Stat(pkgPath)
 	if os.IsNotExist(err) {
 		return true
@@ -248,7 +276,7 @@ func (db *CRCDatabase) CheckNeedsBuild(pkg *Package, cfg *config.Config) bool {
 	return false
 }
 
-// UpdateAfterBuild updates the database after a successful build
+// UpdateAfterBuild updates the database after a successful build and saves immediately
 func (db *CRCDatabase) UpdateAfterBuild(pkg *Package, cfg *config.Config) {
 	// Use config to get proper port path
 	portPath := filepath.Join(cfg.DPortsPath, pkg.Category, pkg.Name)
@@ -258,19 +286,31 @@ func (db *CRCDatabase) UpdateAfterBuild(pkg *Package, cfg *config.Config) {
 		return
 	}
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	// Get package file size
+	pkgPath := filepath.Join(cfg.PackagesPath, "All", pkg.PkgFile)
+	var pkgSize int64
+	if info, err := os.Stat(pkgPath); err == nil {
+		pkgSize = info.Size()
+	}
 
+	// Update in-memory database
+	db.mu.Lock()
 	db.entries[pkg.PortDir] = &CRCEntry{
 		PortDir:   pkg.PortDir,
 		CRC:       crc,
 		Version:   pkg.Version,
 		PkgFile:   pkg.PkgFile,
-		Size:      0, // Will be updated when package is verified
+		Size:      pkgSize,
 		Mtime:     time.Now().Unix(),
 		BuildTime: time.Now().Unix(),
 	}
 	db.dirty = true
+	db.mu.Unlock()
+
+	// Save immediately after each build (thread-safe)
+	if err := db.Save(); err != nil {
+		fmt.Printf("Warning: failed to save CRC database after building %s: %v\n", pkg.PortDir, err)
+	}
 }
 
 // Delete removes an entry from the database
@@ -409,7 +449,7 @@ func VerifyPackageIntegrity(cfg *config.Config) error {
 			fmt.Printf("  Checked %d/%d packages...\r", i, len(entries))
 		}
 
-		pkgPath := filepath.Join(cfg.RepositoryPath, entry.PkgFile)
+		pkgPath := filepath.Join(cfg.PackagesPath, "All", entry.PkgFile)
 		info, err := os.Stat(pkgPath)
 		if os.IsNotExist(err) {
 			missing++
