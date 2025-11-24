@@ -269,6 +269,11 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) error {
 	}
 
 	pkg.PkgFile = strings.TrimSpace(lines[2])
+	
+	// Check if it's a meta port BEFORE setting default
+	// Meta ports don't produce a package file
+	isMeta := pkg.PkgFile == ""
+	
 	if pkg.PkgFile == "" {
 		pkgname := strings.TrimSpace(lines[0])
 		if pkgname == "" {
@@ -290,8 +295,8 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) error {
 		pkg.IgnoreReason = ignoreReason
 	}
 
-	// Check if it's a meta port
-	if pkg.PkgFile == "" || strings.Contains(pkg.PkgFile, "NOPORTDOCS") {
+	// Mark meta ports
+	if isMeta {
 		pkg.Flags |= PkgFMeta
 	}
 
@@ -367,9 +372,9 @@ func SaveCRCDatabase() error {
 }
 
 // UpdateCRCAfterBuild updates CRC database for a successfully built package
-func UpdateCRCAfterBuild(pkg *Package) {
+func UpdateCRCAfterBuild(pkg *Package, cfg *config.Config) {
 	if globalCRCDB != nil {
-		globalCRCDB.UpdateAfterBuild(pkg)
+		globalCRCDB.UpdateAfterBuild(pkg, cfg)
 	}
 }
 

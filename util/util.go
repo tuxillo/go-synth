@@ -158,8 +158,15 @@ func FormatBytes(bytes int64) string {
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
+		if exp >= 5 { // Limit to PB
+			break
+		}
 	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+	units := "KMGTPE"
+	if exp >= len(units) {
+		exp = len(units) - 1
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), units[exp])
 }
 
 // FormatDuration formats a duration as human-readable string

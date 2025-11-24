@@ -249,8 +249,9 @@ func (db *CRCDatabase) CheckNeedsBuild(pkg *Package, cfg *config.Config) bool {
 }
 
 // UpdateAfterBuild updates the database after a successful build
-func (db *CRCDatabase) UpdateAfterBuild(pkg *Package) {
-	portPath := filepath.Join(globalCRCDB.path[:len(globalCRCDB.path)-10], "ports", pkg.Category, pkg.Name)
+func (db *CRCDatabase) UpdateAfterBuild(pkg *Package, cfg *config.Config) {
+	// Use config to get proper port path
+	portPath := filepath.Join(cfg.DPortsPath, pkg.Category, pkg.Name)
 	crc, err := computePortCRC(portPath)
 	if err != nil {
 		fmt.Printf("Warning: failed to compute CRC for %s: %v\n", pkg.PortDir, err)

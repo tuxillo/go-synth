@@ -226,7 +226,7 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	pkgLogger.WriteSuccess(duration)
 
 	// Update CRC database
-	pkg.UpdateCRCAfterBuild(p)
+	pkg.UpdateCRCAfterBuild(p, ctx.cfg)
 
 	return true
 }

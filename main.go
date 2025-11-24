@@ -137,7 +137,7 @@ func usage() {
 	fmt.Println("  -d            Debug verbosity")
 	fmt.Println("  -f            Force operations")
 	fmt.Println("  -y            Answer yes to all prompts")
-	fmt.Println("  -m GB         Package dependency memory target")
+	fmt.Println("  -m GB         Package dependency memory target (reserved)")
 	fmt.Println("  -p profile    Override profile selection")
 	fmt.Println("  -s N          Initial worker count (slow start)")
 	fmt.Println("  -C dir        Config base directory")

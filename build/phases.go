@@ -89,7 +89,7 @@ func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Conf
 	cmd.Dir = "/"
 
 	// Capture output
-	logger.WriteCommand(cmd.String())
+	logger.WriteCommand(strings.Join(cmd.Args, " "))
 	output, err := cmd.CombinedOutput()
 	logger.Write(output)
 
