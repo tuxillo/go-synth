@@ -21,13 +21,10 @@ type PackageLogger struct {
 
 // NewPackageLogger creates a new package logger
 func NewPackageLogger(cfg *config.Config, portDir string) *PackageLogger {
-	// Create log directory for package
-	logDir := filepath.Join(cfg.LogsPath, "logs")
-	categoryDir := filepath.Join(logDir, strings.Split(portDir, "/")[0])
-	os.MkdirAll(categoryDir, 0755)
-
-	// Create log file
-	logFile := filepath.Join(logDir, portDir+".log")
+	// Convert category/name to category___name format
+	logFileName := strings.ReplaceAll(portDir, "/", "___") + ".log"
+	logFile := filepath.Join(cfg.LogsPath, logFileName)
+	
 	file, err := os.Create(logFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to create package log: %v\n", err)

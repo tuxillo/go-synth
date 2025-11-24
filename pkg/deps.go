@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"dsynth/config"
@@ -27,6 +28,12 @@ func resolveDependencies(head *Package, cfg *config.Config) error {
 
 	processedCount := 0
 	totalQueued := len(toProcess)
+
+	// Track the tail of the linked list so we can append new packages
+	tail := head
+	for tail != nil && tail.Next != nil {
+		tail = tail.Next
+	}
 
 	// Iteratively resolve dependencies
 	for len(toProcess) > 0 {
@@ -60,6 +67,12 @@ func resolveDependencies(head *Package, cfg *config.Config) error {
 
 					// Check if already in registry
 					if existing := globalRegistry.Find(origin.portDir); existing != nil {
+						// Already in registry, add to linked list if not there
+						if existing.Next == nil && existing.Prev == nil && existing != head {
+							tail.Next = existing
+							existing.Prev = tail
+							tail = existing
+						}
 						continue
 					}
 
@@ -84,8 +97,27 @@ func resolveDependencies(head *Package, cfg *config.Config) error {
 				continue
 			}
 
-			globalRegistry.Enter(pkg)
-			toProcess = append(toProcess, pkg)
+			// Add to registry
+			existingPkg := globalRegistry.Enter(pkg)
+			
+			// Add to linked list if it's a new package
+			if existingPkg == pkg {
+				// New package, add to tail
+				if tail != nil {
+					tail.Next = pkg
+					pkg.Prev = tail
+					tail = pkg
+				}
+				toProcess = append(toProcess, pkg)
+			} else {
+				// Existing package, make sure it's in the list
+				if existingPkg.Next == nil && existingPkg.Prev == nil && existingPkg != head {
+					tail.Next = existingPkg
+					existingPkg.Prev = tail
+					tail = existingPkg
+				}
+				toProcess = append(toProcess, existingPkg)
+			}
 		}
 	}
 
@@ -275,13 +307,24 @@ func GetBuildOrder(head *Package) []*Package {
 		inDegree[pkg] = len(pkg.IDependOn)
 	}
 
+	fmt.Fprintf(os.Stderr, "DEBUG GetBuildOrder: Total packages: %d\n", len(packages))
+
+	// Debug: show in-degrees
+	for pkg, degree := range inDegree {
+		fmt.Fprintf(os.Stderr, "DEBUG: %s in-degree=%d (depends on %d, depended by %d)\n",
+			pkg.PortDir, degree, len(pkg.IDependOn), len(pkg.DependsOnMe))
+	}
+
 	// Queue packages with no dependencies
 	queue := make([]*Package, 0)
 	for _, pkg := range packages {
 		if inDegree[pkg] == 0 {
 			queue = append(queue, pkg)
+			fmt.Fprintf(os.Stderr, "DEBUG: Starting with zero in-degree: %s\n", pkg.PortDir)
 		}
 	}
+
+	fmt.Fprintf(os.Stderr, "DEBUG: Queue start size: %d\n", len(queue))
 
 	// Process queue
 	result := make([]*Package, 0, len(packages))
@@ -291,12 +334,16 @@ func GetBuildOrder(head *Package) []*Package {
 		queue = queue[1:]
 		result = append(result, pkg)
 
+		fmt.Fprintf(os.Stderr, "DEBUG: Processing %s, queue size now %d\n", pkg.PortDir, len(queue))
+
 		// Reduce in-degree for dependents
 		for _, link := range pkg.DependsOnMe {
 			dep := link.Pkg
 			inDegree[dep]--
+			fmt.Fprintf(os.Stderr, "DEBUG:   Reduced %s to in-degree=%d\n", dep.PortDir, inDegree[dep])
 			if inDegree[dep] == 0 {
 				queue = append(queue, dep)
+				fmt.Fprintf(os.Stderr, "DEBUG:   Added %s to queue\n", dep.PortDir)
 			}
 		}
 	}
@@ -305,7 +352,17 @@ func GetBuildOrder(head *Package) []*Package {
 	if len(result) != len(packages) {
 		fmt.Printf("Warning: circular dependencies detected (%d/%d packages in order)\n",
 			len(result), len(packages))
+		
+		// Debug: show which packages are stuck
+		fmt.Fprintf(os.Stderr, "DEBUG: Packages not in result:\n")
+		for pkg, degree := range inDegree {
+			if degree > 0 {
+				fmt.Fprintf(os.Stderr, "  %s: in-degree=%d\n", pkg.PortDir, degree)
+			}
+		}
 	}
+
+	fmt.Fprintf(os.Stderr, "DEBUG: Final result: %d packages\n", len(result))
 
 	return result
 }

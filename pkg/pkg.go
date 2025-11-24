@@ -45,7 +45,7 @@ type Package struct {
 	Name     string
 	Flavor   string
 	Version  string
-	PkgFile  string // Package filename
+	PkgFile  string // Package filename (just the basename, e.g., "vim-9.0.pkg")
 	Flags    int
 
 	// Dependencies
@@ -268,7 +268,12 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) error {
 		pkg.Version = "unknown"
 	}
 
-	pkg.PkgFile = strings.TrimSpace(lines[2])
+	// CRITICAL: Extract just the basename from PKGFILE
+	// The Makefile might return a full path, but we only want the filename
+	pkgFileRaw := strings.TrimSpace(lines[2])
+	if pkgFileRaw != "" {
+		pkg.PkgFile = filepath.Base(pkgFileRaw)
+	}
 
 	// Check if it's a meta port BEFORE setting default
 	// Meta ports don't produce a package file

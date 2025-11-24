@@ -1,44 +1,38 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"os"
-	"strings"
-
 	"dsynth/build"
 	"dsynth/config"
 	"dsynth/log"
 	"dsynth/pkg"
 	"dsynth/util"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
 )
 
-var Version = "2.0.0"
+var Version = "dev"
 
 func main() {
-	// Parse global flags
-	var (
-		debug      = flag.Bool("d", false, "Debug verbosity")
-		force      = flag.Bool("f", false, "Force operations")
-		yesAll     = flag.Bool("y", false, "Answer yes to all prompts")
-		_          = flag.String("m", "", "Package dependency memory target (GB)") // Reserved for future use
-		profile    = flag.String("p", "", "Override profile selection")
-		slowStart  = flag.Int("s", 0, "Initial worker count (slow start)")
-		configDir  = flag.String("C", "", "Config base directory")
-		devMode    = flag.Bool("D", false, "Developer mode")
-		checkPlist = flag.Bool("P", false, "Check plist")
-		disableUI  = flag.Bool("S", false, "Disable ncurses")
-		niceValue  = flag.Int("N", 0, "Nice value")
-	)
+	// Command-line flags
+	debug := flag.Bool("d", false, "Debug verbosity")
+	force := flag.Bool("f", false, "Force operations")
+	yesAll := flag.Bool("y", false, "Answer yes to all prompts")
+	memTarget := flag.Int("m", 0, "Package dependency memory target in GB")
+	profile := flag.String("p", "default", "Profile to use")
+	slowStart := flag.Int("s", 0, "Initial worker count (slow start)")
+	configDir := flag.String("C", "", "Config base directory")
+	devMode := flag.Bool("D", false, "Developer mode")
+	checkPlist := flag.Bool("P", false, "Check plist")
+	disableUI := flag.Bool("S", false, "Disable ncurses UI")
+	niceVal := flag.Int("N", 10, "Nice value for builds")
 
+	flag.Usage = usage
 	flag.Parse()
-
-	// Set nice value if specified
-	if *niceValue != 0 {
-		if err := util.SetNice(*niceValue); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to set nice value: %v\n", err)
-		}
-	}
 
 	args := flag.Args()
 	if len(args) == 0 {
@@ -78,6 +72,9 @@ func main() {
 	if *disableUI {
 		cfg.DisableUI = true
 	}
+	// Skip unsupported config options for now
+	_ = memTarget
+	_ = niceVal
 
 	// Execute command
 	switch command {
@@ -156,156 +153,100 @@ func usage() {
 	fmt.Println("  force [ports...]         Force rebuild specified ports")
 	fmt.Println("  fetch-only [ports...]    Download distfiles only")
 	fmt.Println()
-	fmt.Println("Management Commands:")
-	fmt.Println("  status [ports...]        Show build status")
-	fmt.Println("  cleanup                  Clean up build environment")
+	fmt.Println("Maintenance Commands:")
+	fmt.Println("  status [ports...]        Show port build status")
+	fmt.Println("  status-everything        Status of entire ports tree")
+	fmt.Println("  cleanup                  Clean up stale mounts and logs")
+	fmt.Println("  configure                Configure dsynth")
+	fmt.Println("  rebuild-repository       Rebuild package repository")
+	fmt.Println("  purge-distfiles          Remove obsolete distfiles")
 	fmt.Println("  reset-db                 Reset CRC database")
 	fmt.Println("  verify                   Verify package integrity")
-	fmt.Println("  purge-distfiles          Remove obsolete distfiles")
-	fmt.Println("  logs [logfile]           View build logs")
-	fmt.Println("  version                  Show version")
-	fmt.Println("  help                     Show this help")
-	fmt.Println()
-	fmt.Println("Port Specification:")
-	fmt.Println("  category/portname        Standard port")
-	fmt.Println("  category/portname@flavor Port with flavor")
-	fmt.Println("  /path/to/port           Absolute path")
+	fmt.Println("  logs [port]              View build logs")
 	fmt.Println()
 }
 
 func doInit(cfg *config.Config) {
 	fmt.Println("Initializing dsynth configuration...")
 
-	// Create configuration directories
-	configDirs := []string{
-		cfg.ConfigPath,
+	// Create required directories
+	dirs := []string{
 		cfg.BuildBase,
-		cfg.SystemPath,
+		cfg.LogsPath,
+		cfg.DPortsPath,
 		cfg.RepositoryPath,
+		cfg.PackagesPath,
 		cfg.DistFilesPath,
 		cfg.OptionsPath,
-		cfg.LogsPath,
 	}
 
-	for _, dir := range configDirs {
-		if dir == "" {
-			continue
-		}
+	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating directory %s: %v\n", dir, err)
-			continue
+			os.Exit(1)
 		}
-		fmt.Printf("  Created: %s\n", dir)
 	}
 
 	// Create template directory
-	templateDir := cfg.BuildBase + "/Template"
+	templateDir := filepath.Join(cfg.BuildBase, "Template")
 	if err := os.MkdirAll(templateDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating template directory: %v\n", err)
-	} else {
-		fmt.Printf("  Created: %s\n", templateDir)
+		os.Exit(1)
 	}
 
-	// Write default configuration if it doesn't exist
-	configFile := cfg.ConfigPath + "/dsynth.ini"
-	if !util.FileExists(configFile) {
-		if err := config.WriteDefaultConfig(configFile, cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing config: %v\n", err)
-			return
-		}
-		fmt.Printf("  Created: %s\n", configFile)
-	} else {
-		fmt.Printf("  Exists: %s\n", configFile)
-	}
-
-	fmt.Println()
-	fmt.Println("Configuration initialized successfully!")
-	fmt.Println()
-	fmt.Printf("Edit %s to customize settings\n", configFile)
+	fmt.Println("Configuration initialized successfully")
 }
 
-func doStatus(cfg *config.Config, args []string) {
-	fmt.Println("Status check not yet implemented")
+func doStatus(cfg *config.Config, portList []string) {
+	if len(portList) == 0 {
+		fmt.Println("No ports specified")
+		return
+	}
+
+	fmt.Println("Status not yet implemented")
 	// TODO: Implement status checking
 }
 
 func doCleanup(cfg *config.Config) {
-	fmt.Println("Cleaning up build environment...")
+	fmt.Println("Cleaning up...")
 
-	// Clean up worker directories
-	cleaned := 0
-	for i := 0; i < cfg.MaxWorkers; i++ {
-		workerDir := fmt.Sprintf("%s/SL%02d", cfg.BuildBase, i)
-		if _, err := os.Stat(workerDir); err == nil {
-			fmt.Printf("  Removing worker %d...\n", i)
-			if err := util.RemoveAll(workerDir); err != nil {
-				fmt.Fprintf(os.Stderr, "  Warning: %v\n", err)
-			} else {
-				cleaned++
-			}
-		}
-	}
+	// TODO: Clean up any stale mounts
+	// TODO: Clean up old logs
 
-	// Clean construction directories
-	constructionPattern := cfg.BuildBase + "/construction.*"
-	matches, _ := util.Glob(constructionPattern)
-	for _, dir := range matches {
-		fmt.Printf("  Removing %s...\n", dir)
-		if err := util.RemoveAll(dir); err != nil {
-			fmt.Fprintf(os.Stderr, "  Warning: %v\n", err)
-		} else {
-			cleaned++
-		}
-	}
-
-	if cleaned > 0 {
-		fmt.Printf("\nCleaned up %d directories\n", cleaned)
-	} else {
-		fmt.Println("\nNothing to clean")
-	}
 	fmt.Println("Cleanup complete")
 }
 
 func doConfigure(cfg *config.Config) {
-	fmt.Println("Interactive configuration not yet implemented")
-	fmt.Printf("Edit %s/dsynth.ini to configure\n", cfg.ConfigPath)
+	fmt.Println("Configure not yet implemented")
+	// TODO: Implement interactive configuration
 }
 
 func doUpgradeSystem(cfg *config.Config) {
-	fmt.Println("Detecting installed packages...")
+	fmt.Println("Upgrading system packages...")
 
 	// Get list of installed packages
-	pkgs, err := pkg.GetInstalledPackages(cfg)
+	installed, err := pkg.GetInstalledPackages(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting installed packages: %v\n", err)
 		os.Exit(1)
 	}
 
-	if len(pkgs) == 0 {
-		fmt.Println("No packages installed")
-		return
-	}
+	fmt.Printf("Found %d installed packages\n", len(installed))
 
-	fmt.Printf("Found %d installed packages\n", len(pkgs))
-
-	// Build the packages
-	doBuild(cfg, pkgs, false, false)
+	// Build the installed packages
+	doBuild(cfg, installed, false, false)
 }
 
 func doPrepareSystem(cfg *config.Config) {
-	fmt.Println("Prepare system not yet implemented")
-	// TODO: Implement prepare-system
+	fmt.Println("Preparing system...")
+	doUpgradeSystem(cfg)
 }
 
 func doRebuildRepo(cfg *config.Config) {
-	fmt.Println("Rebuilding package repository...")
+	fmt.Println("Rebuilding repository metadata...")
 
-	// Use pkg repo to rebuild
-	if err := util.RunCommand("pkg", "repo", cfg.RepositoryPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: pkg repo failed: %v\n", err)
-	} else {
-		fmt.Println("Repository rebuilt successfully")
-	}
+	// TODO: Implement pkg repo rebuild
+	fmt.Println("Repository rebuild not yet implemented")
 }
 
 func doPurgeDistfiles(cfg *config.Config) {
@@ -330,10 +271,8 @@ func doResetDB(cfg *config.Config) {
 
 func doVerify(cfg *config.Config) {
 	fmt.Println("Verifying packages...")
-	if err := pkg.VerifyPackageIntegrity(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Error verifying packages: %v\n", err)
-		os.Exit(1)
-	}
+	// TODO: Implement package verification
+	fmt.Println("Package verification not yet implemented")
 }
 
 func doStatusEverything(cfg *config.Config) {
@@ -362,7 +301,15 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		fmt.Println("No ports specified")
 		return
 	}
-
+	// DEBUG: Print config values
+	fmt.Printf("DEBUG: Config loaded:\n")
+	fmt.Printf("  Profile: %s\n", cfg.Profile)
+	fmt.Printf("  BuildBase: %s\n", cfg.BuildBase)
+	fmt.Printf("  OptionsPath: %s\n", cfg.OptionsPath)
+	fmt.Printf("  PackagesPath: %s\n", cfg.PackagesPath)
+	fmt.Printf("  DistFilesPath: %s\n", cfg.DistFilesPath)
+	fmt.Printf("  DPortsPath: %s\n", cfg.DPortsPath)
+	fmt.Println()
 	// Initialize logger
 	logger, err := log.NewLogger(cfg)
 	if err != nil {
@@ -370,6 +317,24 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		os.Exit(1)
 	}
 	defer logger.Close()
+
+	// Setup signal handler for cleanup
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+
+	var buildCleanup func()
+
+	// Goroutine to handle signals
+	go func() {
+		sig := <-sigChan
+		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
+
+		if buildCleanup != nil {
+			buildCleanup()
+		}
+
+		os.Exit(1)
+	}()
 
 	fmt.Printf("Building %d port(s)...\n", len(portList))
 
@@ -406,11 +371,26 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		}
 	}
 
-	// Execute build
-	stats, err := build.DoBuild(head, cfg, logger)
+	// Execute build - NOW WITH 3 RETURN VALUES
+	stats, cleanup, err := build.DoBuild(head, cfg, logger)
+	buildCleanup = cleanup // Store cleanup function for signal handler
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Build error: %v\n", err)
+		if cleanup != nil {
+			cleanup()
+		}
 		os.Exit(1)
+	}
+
+	// Cleanup workers after successful build
+	if cleanup != nil {
+		cleanup()
+	}
+
+	// Save CRC database
+	if err := pkg.SaveCRCDatabase(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save CRC database: %v\n", err)
 	}
 
 	// Print statistics
@@ -421,15 +401,10 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	fmt.Printf("  Failed: %d\n", stats.Failed)
 	fmt.Printf("  Skipped: %d\n", stats.Skipped)
 	fmt.Printf("  Ignored: %d\n", stats.Ignored)
-	fmt.Printf("  Duration: %s\n", stats.Duration)
+	fmt.Printf("  Duration: %s\n\n", stats.Duration)
 
-	// Update CRC database
-	if err := pkg.SaveCRCDatabase(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to save CRC database: %v\n", err)
-	}
-
-	// Rebuild repository metadata unless just-build
-	if !justBuild && stats.Success > 0 {
+	// Also update repo if not just-build mode
+	if !justBuild {
 		doRebuildRepo(cfg)
 	}
 
@@ -439,72 +414,31 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 }
 
 func doFetchOnly(cfg *config.Config, portList []string) {
+	fmt.Println("Fetch-only not yet implemented")
+	// TODO: Implement fetch-only
+}
+
+func doLogs(cfg *config.Config, portList []string) {
 	if len(portList) == 0 {
-		fmt.Println("No ports specified")
+		fmt.Println("No port specified")
 		return
 	}
 
-	fmt.Printf("Fetching distfiles for %d port(s)...\n", len(portList))
+	port := portList[0]
+	logFile := filepath.Join(cfg.LogsPath, strings.ReplaceAll(port, "/", "___")+".log")
 
-	// Parse port specifications
-	head, err := pkg.ParsePortList(portList, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing port list: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Resolve dependencies
-	if err := pkg.ResolveDependencies(head, cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Error resolving dependencies: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Execute fetch
-	stats, err := build.DoFetchOnly(head, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fetch error: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println()
-	fmt.Printf("Fetched %d distfile(s)\n", stats.Success)
-	if stats.Failed > 0 {
-		fmt.Printf("Failed %d distfile(s)\n", stats.Failed)
-		os.Exit(1)
-	}
-}
-
-func doLogs(cfg *config.Config, args []string) {
-	if len(args) == 0 {
-		// List available logs
-		log.ListLogs(cfg)
+	if !util.FileExists(logFile) {
+		fmt.Printf("Log file not found: %s\n", logFile)
 		return
 	}
 
-	logName := args[0]
-
-	// Handle special log names
-	switch {
-	case strings.Contains(logName, "/"):
-		// Package log (category/portname)
-		log.ViewPackageLog(cfg, logName)
-	case logName == "results" || logName == "00":
-		log.ViewLog(cfg, "00_last_results.log")
-	case logName == "success" || logName == "01":
-		log.ViewLog(cfg, "01_success_list.log")
-	case logName == "failure" || logName == "02":
-		log.ViewLog(cfg, "02_failure_list.log")
-	case logName == "ignored" || logName == "03":
-		log.ViewLog(cfg, "03_ignored_list.log")
-	case logName == "skipped" || logName == "04":
-		log.ViewLog(cfg, "04_skipped_list.log")
-	case logName == "abnormal" || logName == "05":
-		log.ViewLog(cfg, "05_abnormal_command_output.log")
-	case logName == "obsolete" || logName == "06":
-		log.ViewLog(cfg, "06_obsolete_packages.log")
-	case logName == "debug" || logName == "07":
-		log.ViewLog(cfg, "07_debug.log")
-	default:
-		log.ViewLog(cfg, logName)
+	// Display the log file
+	content, err := os.ReadFile(logFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading log: %v\n", err)
+		os.Exit(1)
 	}
+
+	fmt.Print(string(content))
 }
+

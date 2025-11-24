@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -44,7 +45,8 @@ type BuildContext struct {
 }
 
 // DoBuild executes the main build process
-func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildStats, error) {
+// Returns stats, cleanup function, and error
+func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
 	buildOrder := pkg.GetBuildOrder(head)
 
@@ -53,6 +55,18 @@ func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildS
 		logger:    logger,
 		queue:     make(chan *pkg.Package, 100),
 		startTime: time.Now(),
+	}
+
+	// Create cleanup function
+	cleanup := func() {
+		fmt.Fprintf(os.Stderr, "Cleaning up worker mounts...\n")
+		for i, worker := range ctx.workers {
+			if worker != nil {
+				if err := mount.DoWorkerUnmounts(worker.Mount, cfg); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to unmount worker %d: %v\n", i, err)
+				}
+			}
+		}
 	}
 
 	// Count packages that need building
@@ -91,7 +105,8 @@ func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildS
 		// Setup mounts for each worker
 		if err := mount.DoWorkerMounts(ctx.workers[i].Mount, cfg); err != nil {
 			logger.Error(fmt.Sprintf("Failed to setup mounts for worker %d: %v", i, err))
-			return nil, fmt.Errorf("worker %d mount failed: %w", i, err)
+			cleanup() // Cleanup any workers we did create
+			return nil, cleanup, fmt.Errorf("worker %d mount failed: %w", i, err)
 		}
 
 		// Start worker goroutine
@@ -126,17 +141,12 @@ func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildS
 	// Wait for all workers to finish
 	ctx.wg.Wait()
 
-	// Cleanup workers
-	for i, worker := range ctx.workers {
-		if err := mount.DoWorkerUnmounts(worker.Mount, cfg); err != nil {
-			logger.Error(fmt.Sprintf("Warning: failed to unmount worker %d: %v", i, err))
-		}
-	}
-
 	// Calculate duration
 	ctx.stats.Duration = time.Since(ctx.startTime)
 
-	return &ctx.stats, nil
+	// Don't call cleanup here - let the caller do it
+	// This allows proper cleanup on signals
+	return &ctx.stats, cleanup, nil
 }
 
 // workerLoop is the main loop for a build worker

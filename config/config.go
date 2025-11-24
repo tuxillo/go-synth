@@ -4,92 +4,77 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
-
-	"golang.org/x/sys/unix"
 )
 
-// Config holds all dsynth configuration
+// Config holds dsynth configuration
 type Config struct {
-	// Paths
-	ConfigPath     string
+	Profile        string
+	BuildBase      string
 	DPortsPath     string
 	RepositoryPath string
-	BuildBase      string
+	PackagesPath   string
 	DistFilesPath  string
 	OptionsPath    string
-	PackagesPath   string
 	LogsPath       string
-	SystemPath     string
 	CCachePath     string
+	SystemPath     string
 
-	// Build settings
-	MaxWorkers   int
-	MaxJobs      int
-	SlowStart    int
-	NumaMask     string
-	UseSSCCBase  bool
-	UseUsrSrc    bool
+	MaxWorkers int
+	MaxJobs    int
+	SlowStart  int
+
 	UseCCache    bool
+	UseUsrSrc    bool
 	UseTmpfs     bool
 	UseVKernel   bool
 	UsePKGDepend bool
 
-	// Sizes
-	TmpfsWorkSize      string
-	TmpfsLocalbaseSize string
-	TmpfsUsrLocalSize  string
-
-	// Behavior
 	Debug      bool
 	Force      bool
 	YesAll     bool
 	DevMode    bool
 	CheckPlist bool
 	DisableUI  bool
+}
 
-	// Profile
-	Profile string
+var globalConfig *Config
+
+// GetConfig returns the global configuration
+func GetConfig() *Config {
+	return globalConfig
+}
+
+// SetConfig sets the global configuration
+func SetConfig(cfg *Config) {
+	globalConfig = cfg
 }
 
 // LoadConfig loads configuration from file
-func LoadConfig(configDir string, profile string) (*Config, error) {
+func LoadConfig(configDir, profile string) (*Config, error) {
 	cfg := &Config{
-		MaxWorkers:         runtime.NumCPU() / 2,
-		MaxJobs:            runtime.NumCPU(),
-		SlowStart:          0,
-		Profile:            profile,
-		SystemPath:         "/",
-		UseUsrSrc:          false,
-		UseCCache:          false,
-		UseTmpfs:           true,
-		TmpfsWorkSize:      "64g",
-		TmpfsLocalbaseSize: "16g",
-		TmpfsUsrLocalSize:  "16g",
+		Profile:    profile,
+		MaxWorkers: 1,
+		MaxJobs:    1,
 	}
 
-	if cfg.MaxWorkers < 1 {
-		cfg.MaxWorkers = 1
+	// Determine config file path
+	configFile := "/etc/dsynth/dsynth.ini"
+	if configDir != "" {
+		configFile = configDir + "/dsynth.ini"
 	}
 
-	// Determine config path
-	if configDir == "" {
-		if _, err := os.Stat("/etc/dsynth"); err == nil {
-			configDir = "/etc/dsynth"
-		} else if _, err := os.Stat("/usr/local/etc/dsynth"); err == nil {
-			configDir = "/usr/local/etc/dsynth"
-		} else {
-			configDir = "/etc/dsynth"
-		}
-	}
-	cfg.ConfigPath = configDir
-
-	// Load config file if it exists
-	configFile := filepath.Join(configDir, "dsynth.ini")
+	// Try to load config file
 	if _, err := os.Stat(configFile); err == nil {
+		// First pass: read global config to get profile_selected if no profile specified
+		if cfg.Profile == "" {
+			if selectedProfile, err := readProfileSelected(configFile); err == nil && selectedProfile != "" {
+				cfg.Profile = selectedProfile
+			}
+		}
+
+		// Second pass: parse the full config with the selected profile
 		if err := cfg.parseINI(configFile); err != nil {
 			return nil, fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -130,6 +115,55 @@ func LoadConfig(configDir string, profile string) (*Config, error) {
 	return cfg, nil
 }
 
+// readProfileSelected reads the profile_selected value from the global section
+func readProfileSelected(filename string) (string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	inGlobalSection := false
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+
+		// Section header
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section := strings.ToLower(strings.Trim(line, "[]"))
+			inGlobalSection = (section == "global configuration" || section == "global")
+			continue
+		}
+
+		// Look for profile_selected in global section
+		if inGlobalSection {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				value = strings.Trim(value, "\"' ")
+
+				// Normalize key
+				keyNorm := strings.ToLower(key)
+				keyNorm = strings.ReplaceAll(keyNorm, "_", "")
+				keyNorm = strings.ReplaceAll(keyNorm, " ", "")
+
+				if keyNorm == "profileselected" {
+					return value, nil
+				}
+			}
+		}
+	}
+
+	return "", scanner.Err()
+}
+
 // parseINI parses an INI-format configuration file
 func (cfg *Config) parseINI(filename string) error {
 	file, err := os.Open(filename)
@@ -155,9 +189,14 @@ func (cfg *Config) parseINI(filename string) error {
 			continue
 		}
 
-		// Skip if we have a profile and this isn't it
-		if cfg.Profile != "" && currentSection != "" && currentSection != strings.ToLower(cfg.Profile) {
-			continue
+		// Skip if we have a profile and this isn't it (and not global section)
+		if cfg.Profile != "" && currentSection != "" {
+			isGlobal := (currentSection == "global configuration" || currentSection == "global")
+			isTargetProfile := (currentSection == strings.ToLower(cfg.Profile))
+			
+			if !isGlobal && !isTargetProfile {
+				continue
+			}
 		}
 
 		// Key-value pair
@@ -169,8 +208,8 @@ func (cfg *Config) parseINI(filename string) error {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		// Remove quotes
-		value = strings.Trim(value, "\"'")
+		// Remove quotes and extra spaces
+		value = strings.Trim(value, "\"' ")
 
 		cfg.setConfigValue(key, value)
 	}
@@ -185,17 +224,21 @@ func (cfg *Config) setConfigValue(key, value string) {
 	key = strings.ReplaceAll(key, " ", "")
 
 	switch key {
+	case "profileselected":
+		// Skip - already handled in readProfileSelected
+		return
 	case "numberofbuilders", "builders", "workers":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			cfg.MaxWorkers = n
 		}
-	case "maxjobs", "jobs":
+	case "maxjobs", "jobs", "maxjobsperbuilder":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			cfg.MaxJobs = n
 		}
 	case "directorypackages", "packages":
-		cfg.RepositoryPath = value
 		cfg.PackagesPath = value
+	case "directoryrepository", "repository":
+		cfg.RepositoryPath = value
 	case "directorybuildbase", "buildbase":
 		cfg.BuildBase = value
 	case "directoryportsdir", "portsdir", "dportsdir":
@@ -206,144 +249,33 @@ func (cfg *Config) setConfigValue(key, value string) {
 		cfg.OptionsPath = value
 	case "directorylogs", "logs":
 		cfg.LogsPath = value
-	case "systempath":
+	case "directorysystem", "systempath":
 		cfg.SystemPath = value
-	case "ccachedir", "ccache":
+	case "directoryccache", "ccachedir", "ccache":
 		cfg.CCachePath = value
 		cfg.UseCCache = true
 	case "useccache":
 		cfg.UseCCache = parseBool(value)
 	case "useusrsrc":
 		cfg.UseUsrSrc = parseBool(value)
-	case "usetmpfs":
-		cfg.UseTmpfs = parseBool(value)
+	case "usetmpfs", "tmpfsworkdir", "tmpfslocalbase":
+		cfg.UseTmpfs = cfg.UseTmpfs || parseBool(value)
 	case "usevkernel":
 		cfg.UseVKernel = parseBool(value)
 	case "usepkgdepend":
 		cfg.UsePKGDepend = parseBool(value)
-	case "tmpfsworksize":
-		cfg.TmpfsWorkSize = value
-	case "tmpfslocalbasesize":
-		cfg.TmpfsLocalbaseSize = value
-	case "tmpfsusrlocalsize":
-		cfg.TmpfsUsrLocalSize = value
-	case "numamask":
-		cfg.NumaMask = value
+	case "operatingsystem":
+		// Informational only, ignore
+	case "packagesuffix":
+		// TODO: Store package suffix if needed
+	case "displaywithncurses":
+		cfg.DisableUI = !parseBool(value)
+	case "leverageprebuilt":
+		// TODO: Implement if needed
 	}
 }
 
-func parseBool(value string) bool {
-	value = strings.ToLower(value)
-	return value == "yes" || value == "true" || value == "1" || value == "on"
-}
-
-// WriteDefaultConfig writes a default configuration file
-func WriteDefaultConfig(filename string, cfg *Config) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	fmt.Fprintln(file, "# dsynth configuration file")
-	fmt.Fprintln(file, "# See dsynth(1) for details")
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "[Global Configuration]")
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# Number of builders (workers)")
-	fmt.Fprintf(file, "Number_of_builders=%d\n", cfg.MaxWorkers)
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# Maximum jobs per builder")
-	fmt.Fprintf(file, "Max_jobs=%d\n", cfg.MaxJobs)
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# Directory paths")
-	fmt.Fprintf(file, "Directory_packages=%s\n", cfg.RepositoryPath)
-	fmt.Fprintf(file, "Directory_buildbase=%s\n", cfg.BuildBase)
-	fmt.Fprintf(file, "Directory_portsdir=%s\n", cfg.DPortsPath)
-	fmt.Fprintf(file, "Directory_distfiles=%s\n", cfg.DistFilesPath)
-	fmt.Fprintf(file, "Directory_options=%s\n", cfg.OptionsPath)
-	fmt.Fprintf(file, "Directory_logs=%s\n", cfg.LogsPath)
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# System path (use / for native)")
-	fmt.Fprintf(file, "System_path=%s\n", cfg.SystemPath)
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# Use tmpfs for work directories")
-	fmt.Fprintf(file, "Use_tmpfs=%v\n", cfg.UseTmpfs)
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# Tmpfs sizes")
-	fmt.Fprintf(file, "Tmpfs_worksize=%s\n", cfg.TmpfsWorkSize)
-	fmt.Fprintf(file, "Tmpfs_localbasesize=%s\n", cfg.TmpfsLocalbaseSize)
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# Use ccache")
-	fmt.Fprintf(file, "Use_ccache=%v\n", cfg.UseCCache)
-	if cfg.UseCCache {
-		fmt.Fprintf(file, "Ccache_dir=%s\n", cfg.CCachePath)
-	}
-	fmt.Fprintln(file, "")
-	fmt.Fprintln(file, "# Use /usr/src")
-	fmt.Fprintf(file, "Use_usrsrc=%v\n", cfg.UseUsrSrc)
-	fmt.Fprintln(file, "")
-
-	return nil
-}
-
-// Validate checks configuration validity
-func (cfg *Config) Validate() error {
-	// Check required paths exist or can be created
-	requiredDirs := map[string]string{
-		"BuildBase":      cfg.BuildBase,
-		"DPortsPath":     cfg.DPortsPath,
-		"RepositoryPath": cfg.RepositoryPath,
-		"DistFilesPath":  cfg.DistFilesPath,
-	}
-
-	for name, path := range requiredDirs {
-		if path == "" {
-			return fmt.Errorf("%s is not configured", name)
-		}
-
-		// Check if exists or is creatable
-		info, err := os.Stat(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				// Try to create it
-				if err := os.MkdirAll(path, 0755); err != nil {
-					return fmt.Errorf("%s directory %s cannot be created: %w", name, path, err)
-				}
-			} else {
-				return fmt.Errorf("%s directory %s: %w", name, path, err)
-			}
-		} else if !info.IsDir() {
-			return fmt.Errorf("%s path %s is not a directory", name, path)
-		}
-	}
-
-	// Validate workers count
-	if cfg.MaxWorkers < 1 {
-		return fmt.Errorf("MaxWorkers must be at least 1")
-	}
-	if cfg.MaxWorkers > 1024 {
-		return fmt.Errorf("MaxWorkers is too large (max 1024)")
-	}
-
-	return nil
-}
-
-// GetSystemInfo returns system information
-func GetSystemInfo() (osname, osversion, arch string, ncpus int) {
-	// Get OS information
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err == nil {
-		osname = string(utsname.Sysname[:])
-		osversion = string(utsname.Release[:])
-		arch = string(utsname.Machine[:])
-		// Trim null bytes
-		osname = strings.TrimRight(osname, "\x00")
-		osversion = strings.TrimRight(osversion, "\x00")
-		arch = strings.TrimRight(arch, "\x00")
-	}
-
-	ncpus = runtime.NumCPU()
-
-	return
+func parseBool(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return s == "true" || s == "yes" || s == "1" || s == "on"
 }

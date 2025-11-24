@@ -26,8 +26,9 @@ func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Conf
 		args = append(args, "FLAVOR="+p.Flavor)
 	}
 
-	// Add common overrides
+	// Add common overrides - CRITICAL: Set PORTSDIR to where we mounted ports
 	args = append(args,
+		"PORTSDIR=/xports",
 		"WRKDIRPREFIX=/construction",
 		"DISTDIR=/distfiles",
 		"PACKAGES=/packages",
@@ -102,7 +103,7 @@ func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Conf
 
 // installDependencyPackages installs required dependency packages
 func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Config, logger *log.PackageLogger) error {
-	// Collect all dependency packages
+	// Collect all dependency packages (just the filenames)
 	depPkgs := make(map[string]bool)
 
 	for _, link := range p.IDependOn {
@@ -118,6 +119,7 @@ func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Confi
 			continue
 		}
 
+		// PkgFile should already be just the filename
 		depPkgs[dep.PkgFile] = true
 	}
 
@@ -127,9 +129,10 @@ func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Confi
 
 	logger.WritePhase("Installing dependency packages")
 
-	// Install each package
+	// Install each package from /packages/All/ (C dsynth convention)
 	for pkgFile := range depPkgs {
-		pkgPath := filepath.Join("/packages", pkgFile)
+		// Package path inside chroot - use /packages/All/ like C dsynth
+		pkgPath := filepath.Join("/packages/All", pkgFile)
 
 		cmd := exec.Command("chroot", worker.Mount.BaseDir, "pkg", "add", pkgPath)
 		output, err := cmd.CombinedOutput()
@@ -148,22 +151,14 @@ func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Confi
 
 // extractPackage extracts a successfully built package to the repository
 func extractPackage(worker *Worker, p *pkg.Package, cfg *config.Config) error {
-	// Package was built in /construction
-	// Need to copy it to /packages (which is mounted from repository)
-
-	constructionPath := filepath.Join(worker.Mount.BaseDir, "construction")
-	workDir := filepath.Join(constructionPath, p.Category, p.Name)
-	pkgPath := filepath.Join(workDir, p.PkgFile)
-
-	// Check if package exists
+	// The package was built by make and should be in /packages/All already
+	// (since we set PACKAGES=/packages which is mounted from the host)
+	
+	// Just verify the package exists
+	pkgPath := filepath.Join(cfg.PackagesPath, "All", p.PkgFile)
+	
 	if _, err := os.Stat(pkgPath); err != nil {
-		return fmt.Errorf("package file not found: %w", err)
-	}
-
-	// Copy to repository
-	destPath := filepath.Join(cfg.RepositoryPath, p.PkgFile)
-	if err := copyFile(pkgPath, destPath); err != nil {
-		return fmt.Errorf("failed to copy package: %w", err)
+		return fmt.Errorf("package file not found: %s (%w)", pkgPath, err)
 	}
 
 	return nil
@@ -188,7 +183,8 @@ func cleanupWorkDir(worker *Worker, p *pkg.Package) error {
 // installMissingPackages installs packages that are missing but required
 func installMissingPackages(worker *Worker, requiredPkgs []string, cfg *config.Config, logger *log.PackageLogger) error {
 	for _, pkgFile := range requiredPkgs {
-		pkgPath := filepath.Join("/packages", pkgFile)
+		// Use /packages/All/ like C dsynth
+		pkgPath := filepath.Join("/packages/All", pkgFile)
 
 		// Check if already installed
 		checkCmd := exec.Command("chroot", worker.Mount.BaseDir, "pkg", "info", "-e", pkgFile)

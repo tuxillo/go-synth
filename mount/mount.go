@@ -1,14 +1,13 @@
 package mount
 
 import (
+	"dsynth/config"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"dsynth/config"
 
 	"golang.org/x/sys/unix"
 )
@@ -54,14 +53,39 @@ func DoWorkerMounts(work *Worker, cfg *config.Config) error {
 	// Mount root tmpfs
 	doMount(work, cfg, TmpfsRW, "dummy", "", "")
 
-	// Create /usr structure
-	dirs := []string{
-		filepath.Join(work.BaseDir, "usr"),
-		filepath.Join(work.BaseDir, "usr/packages"),
-		filepath.Join(work.BaseDir, "boot"),
-		filepath.Join(work.BaseDir, "boot/modules.local"),
+	// Create all mount point directories upfront
+	mountPoints := []string{
+		"usr",
+		"usr/packages",
+		"boot",
+		"boot/modules.local",
+		"bin",
+		"sbin",
+		"lib",
+		"libexec",
+		"usr/bin",
+		"usr/include",
+		"usr/lib",
+		"usr/libdata",
+		"usr/libexec",
+		"usr/sbin",
+		"usr/share",
+		"usr/games",
+		"usr/src",
+		"xports",
+		"options",
+		"packages",
+		"distfiles",
+		"construction",
+		"usr/local",
+		"ccache",
+		"tmp",
+		"dev",
+		"proc",
 	}
-	for _, dir := range dirs {
+
+	for _, mp := range mountPoints {
+		dir := filepath.Join(work.BaseDir, mp)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "mkdir %s failed: %v\n", dir, err)
 			work.MountError++
@@ -189,6 +213,17 @@ func doMount(work *Worker, cfg *config.Config, mountType int, spath, dpath, disc
 		return
 	}
 
+	// Verify directory exists
+	if stat, err := os.Stat(target); err != nil {
+		fmt.Fprintf(os.Stderr, "target directory does not exist after mkdir: %s (error: %v)\n", target, err)
+		work.MountError++
+		return
+	} else if !stat.IsDir() {
+		fmt.Fprintf(os.Stderr, "target is not a directory: %s\n", target)
+		work.MountError++
+		return
+	}
+
 	// Determine mount options
 	rwOpt := "ro"
 	if mountType&MountTypeRW != 0 {
@@ -211,7 +246,7 @@ func doMount(work *Worker, cfg *config.Config, mountType int, spath, dpath, disc
 		}
 
 	case MountTypeNullfs:
-		fstype = "nullfs"
+		fstype = "null"
 		opts = []string{rwOpt}
 
 	case MountTypeDevfs:
@@ -229,12 +264,15 @@ func doMount(work *Worker, cfg *config.Config, mountType int, spath, dpath, disc
 	}
 
 	// Execute mount command
-	// Note: On Linux this would use unix.Mount(), on BSDs we exec mount(8)
 	optStr := strings.Join(opts, ",")
 	cmd := exec.Command("mount", "-t", fstype, "-o", optStr, source, target)
-	if err := cmd.Run(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "mount failed: %v (mount -t %s -o %s %s %s)\n",
 			err, fstype, optStr, source, target)
+		if len(output) > 0 {
+			fmt.Fprintf(os.Stderr, "mount error output: %s\n", string(output))
+		}
 		work.MountError++
 	}
 }
@@ -252,3 +290,4 @@ func doUnmount(work *Worker, rpath string) {
 		}
 	}
 }
+
