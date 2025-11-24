@@ -7,6 +7,11 @@ This document outlines potential architectural improvements and features for go-
 - [Build Identification & Database](#build-identification--database)
 - [API Design](#api-design)
 - [Benefits & Use Cases](#benefits--use-cases)
+- [Development Workflow](#development-workflow)
+- [Migration Path](#migration-path)
+- [Testing Strategy](#testing-strategy)
+- [Open Questions](#open-questions)
+- [Next Steps](#next-steps)
 
 ---
 
@@ -126,48 +131,48 @@ Current CRC database only tracks "latest" state. No history, no audit trail, no 
 type BuildID struct {
     // Unique identifier
     UUID        string    // Random UUID for this specific build attempt
-    
+
     // Package identity
     PortDir     string    // "editors/vim"
     Version     string    // "9.1.1199"
     Flavor      string    // Optional flavor
-    
+
     // Build environment
     PortsCRC    uint32    // CRC of port directory
     PortsCommit string    // Git commit of ports tree
     SystemVer   string    // "DragonFly 6.4"
-    
+
     // Build context
     BuildTime   time.Time // When build started
     WorkerID    int       // Which worker built it
     Options     string    // Build options hash
-    
+
     // Composite key for lookups
     Key         string    // "editors/vim@9.1.1199"
 }
 
 type BuildRecord struct {
     ID          BuildID
-    
+
     // Build status
     Status      string    // "success", "failed", "running"
     StartTime   time.Time
     EndTime     time.Time
     Duration    time.Duration
-    
+
     // Package info
     PkgFile     string    // "vim-9.1.1199.pkg"
     PkgSize     int64
     PkgChecksum string    // SHA256 of package
-    
+
     // Dependencies (what was actually used)
     DepVersions map[string]string  // "devel/pkgconf" -> "2.3.0"
-    
+
     // Build artifacts
     LogFile     string    // Path to build log
     Phase       string    // Last completed phase
     ErrorMsg    string    // If failed
-    
+
     // Reproducibility
     EnvVars     map[string]string
     MakeArgs    []string
@@ -267,16 +272,16 @@ type API struct {
 
 #### 1. Build Control
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/builds` | Start new build |
-| `GET` | `/api/v1/builds` | List builds (with filters) |
-| `GET` | `/api/v1/builds/:id` | Get build details |
-| `DELETE` | `/api/v1/builds/:id` | Cancel running build |
-| `POST` | `/api/v1/builds/:id/retry` | Retry failed build |
-| `POST` | `/api/v1/queue` | Add to build queue |
-| `GET` | `/api/v1/queue` | Show build queue |
-| `DELETE` | `/api/v1/queue/:id` | Remove from queue |
+| Method  | Endpoint                 | Description                |
+|---------|--------------------------|----------------------------|
+| `POST`  | `/api/v1/builds`         | Start new build            |
+| `GET`   | `/api/v1/builds`         | List builds (with filters) |
+| `GET`   | `/api/v1/builds/:id`     | Get build details          |
+| `DELETE`| `/api/v1/builds/:id`     | Cancel running build       |
+| `POST`  | `/api/v1/builds/:id/retry`| Retry failed build        |
+| `POST`  | `/api/v1/queue`          | Add to build queue         |
+| `GET`   | `/api/v1/queue`          | Show build queue           |
+| `DELETE`| `/api/v1/queue/:id`      | Remove from queue          |
 
 **Example Request:**
 ```bash
@@ -303,19 +308,18 @@ curl -X POST http://localhost:8080/api/v1/builds \
 
 #### 2. Package Information
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/packages` | List all packages |
-| `GET` | `/api/v1/packages/:portdir` | Get package info |
-| `GET` | `/api/v1/packages/:portdir/deps` | Get dependencies |
-| `GET` | `/api/v1/packages/:portdir/history` | Build history |
-| `GET` | `/api/v1/packages/:portdir/status` | Current build status |
+| Method | Endpoint                         | Description              |
+|--------|----------------------------------|--------------------------|
+| `GET`  | `/api/v1/packages`               | List all packages        |
+| `GET`  | `/api/v1/packages/:portdir`      | Get package info         |
+| `GET`  | `/api/v1/packages/:portdir/deps` | Get dependencies         |
+| `GET`  | `/api/v1/packages/:portdir/history`| Build history           |
+| `GET`  | `/api/v1/packages/:portdir/status` | Current build status    |
 
 **Example:**
 ```bash
 curl http://localhost:8080/api/v1/packages/editors/vim
 ```
-
 ```json
 {
   "status": "success",
@@ -338,19 +342,18 @@ curl http://localhost:8080/api/v1/packages/editors/vim
 
 #### 3. Workers
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/workers` | List workers |
-| `GET` | `/api/v1/workers/:id` | Worker details |
-| `POST` | `/api/v1/workers/:id/pause` | Pause worker |
-| `POST` | `/api/v1/workers/:id/resume` | Resume worker |
-| `GET` | `/api/v1/workers/:id/log` | Worker log stream |
+| Method | Endpoint                    | Description        |
+|--------|-----------------------------|--------------------|
+| `GET`  | `/api/v1/workers`           | List workers       |
+| `GET`  | `/api/v1/workers/:id`       | Worker details     |
+| `POST` | `/api/v1/workers/:id/pause` | Pause worker       |
+| `POST` | `/api/v1/workers/:id/resume`| Resume worker      |
+| `GET`  | `/api/v1/workers/:id/log`   | Worker log stream  |
 
 **Example:**
 ```bash
 curl http://localhost:8080/api/v1/workers
 ```
-
 ```json
 {
   "status": "success",
@@ -384,18 +387,17 @@ curl http://localhost:8080/api/v1/workers
 
 #### 4. Status & Statistics
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/status` | Overall system status |
-| `GET` | `/api/v1/stats` | Build statistics |
-| `GET` | `/api/v1/stats/today` | Today's stats |
-| `GET` | `/api/v1/stats/package/:portdir` | Per-package stats |
+| Method | Endpoint                             | Description             |
+|--------|--------------------------------------|-------------------------|
+| `GET`  | `/api/v1/status`                     | Overall system status   |
+| `GET`  | `/api/v1/stats`                      | Build statistics        |
+| `GET`  | `/api/v1/stats/today`                | Today's stats           |
+| `GET`  | `/api/v1/stats/package/:portdir`     | Per-package stats       |
 
 **Example:**
 ```bash
 curl http://localhost:8080/api/v1/stats
 ```
-
 ```json
 {
   "status": "success",
@@ -418,17 +420,16 @@ curl http://localhost:8080/api/v1/stats
 
 #### 5. Logs & Artifacts
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/logs/:build_id` | Get build log |
-| `GET` | `/api/v1/logs/:build_id/stream` | Stream log (SSE) |
-| `GET` | `/api/v1/artifacts/:build_id` | Download package |
+| Method | Endpoint                           | Description        |
+|--------|------------------------------------|--------------------|
+| `GET`  | `/api/v1/logs/:build_id`           | Get build log      |
+| `GET`  | `/api/v1/logs/:build_id/stream`    | Stream log (SSE)   |
+| `GET`  | `/api/v1/artifacts/:build_id`      | Download package   |
 
 **Example (Server-Sent Events):**
 ```bash
 curl -N http://localhost:8080/api/v1/logs/abc-123/stream
 ```
-
 ```
 data: {"line": "===>  Configuring for vim-9.1.1199", "timestamp": "2025-01-15T10:30:01Z"}
 
@@ -439,21 +440,21 @@ data: {"line": "checking whether cc accepts -g... yes", "timestamp": "2025-01-15
 
 #### 6. Configuration
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/config` | Get config |
-| `PUT` | `/api/v1/config` | Update config |
-| `GET` | `/api/v1/config/profiles` | List profiles |
-| `POST` | `/api/v1/config/profiles` | Create profile |
+| Method | Endpoint                  | Description        |
+|--------|---------------------------|--------------------|
+| `GET`  | `/api/v1/config`          | Get config         |
+| `PUT`  | `/api/v1/config`          | Update config      |
+| `GET`  | `/api/v1/config/profiles` | List profiles      |
+| `POST` | `/api/v1/config/profiles` | Create profile     |
 
 #### 7. Database Operations
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/database/stats` | Database stats |
-| `POST` | `/api/v1/database/rebuild` | Rebuild CRC database |
-| `POST` | `/api/v1/database/clean` | Clean stale entries |
-| `GET` | `/api/v1/database/export` | Export database |
+| Method | Endpoint                      | Description             |
+|--------|-------------------------------|-------------------------|
+| `GET`  | `/api/v1/database/stats`      | Database stats          |
+| `POST` | `/api/v1/database/rebuild`    | Rebuild CRC database    |
+| `POST` | `/api/v1/database/clean`      | Clean stale entries     |
+| `GET`  | `/api/v1/database/export`     | Export database         |
 
 ### WebSocket Events (Real-time)
 
@@ -660,7 +661,9 @@ curl -H "X-API-Key: your-api-key-here" \
 - Mirror synchronization
 - Cleanup old packages
 
-### Development Workflow
+---
+
+## Development Workflow
 
 **Phase 1: Library Extraction**
 1. Extract `pkg` into pure library
@@ -685,7 +688,9 @@ curl -H "X-API-Key: your-api-key-here" \
 2. Linux containers
 3. Cloud integration (AWS, GCP)
 
-### Migration Path
+---
+
+## Migration Path
 
 **Backwards Compatibility:**
 - Keep existing CLI interface working
@@ -693,7 +698,10 @@ curl -H "X-API-Key: your-api-key-here" \
 - Database migration tools for new format
 - Gradual refactoring, no "big bang" rewrite
 
-**Testing Strategy:**
+---
+
+## Testing Strategy
+
 - Unit tests for each package
 - Integration tests for API
 - End-to-end tests with actual builds
@@ -712,18 +720,63 @@ curl -H "X-API-Key: your-api-key-here" \
 6. **Distributed Builds**: Architecture for worker coordination?
 7. **Package Repository**: Integrate with pkg repo tools or stay independent?
 
+---
+
 ## Next Steps
 
-- [ ] Review and refine architecture
-- [ ] Prototype `builddb` package with BoltDB
-- [ ] Design environment abstraction interface
-- [ ] Create API specification (OpenAPI)
-- [ ] Build proof-of-concept web UI
-- [ ] Performance testing of database backends
-- [ ] Security review of API design
+The following reflect both the original design and a prioritized roadmap developed in 2025:
+
+### Priority Tasks (2025 Roadmap)
+- **Review and refine architecture** _(done in recent session)_
+- **Prototype `builddb` package with BoltDB**
+  - Replace custom binary with transactional backend
+  - Start tracking full build history and status
+- **Design environment abstraction interface**
+  - Decouple platform-specific mount/jail/container code into pluggable backends
+- **Create API specification (OpenAPI)**
+  - Define full REST API contract, endpoints, objects, and errors
+- **Build proof-of-concept web UI**
+  - Dashboard for monitoring, controlling, and visualizing builds
+- **Performance testing of database backends**
+  - Compare BoltDB, BadgerDB, SQLite, evaluate scalability and reliability
+- **Security review of API design**
+  - Evaluate authentication (API keys, JWT, mTLS, OAuth2), plan access controls
+
+### Detailed Development Phases
+
+**Phase 1: Library Extraction (Foundation)**
+- Extract `pkg` into a pure library (separating CRC, registry, graph resolution)
+- Create the new `builddb` package for build record/history storage
+- Abstract `builder` package from mount/environment platform specifics
+- Define a robust `environment` interface for all isolation backends
+
+**Phase 2: API Development**
+- Implement REST API with full controllers/routing
+- Add WebSocket support for real-time updates and log streaming
+- Integrate authentication and authorization
+- Publish OpenAPI/Swagger docs/specs
+
+**Phase 3: Advanced Features**
+- Enable distributed builds (controller/worker architecture)
+- Build web UI integrating API and live data
+- Integrate metrics (Prometheus/Grafana support)
+- Develop advanced scheduling/load balancing features
+
+**Phase 4: Platform Support**
+- Add FreeBSD jail backend
+- Add Linux container backend
+- Explore cloud and cluster/multi-host support
+
+### Migration & Testing Strategy
+
+- Maintain CLI compatibility throughout refactor
+- API is additive and won't break current usage
+- Provide migration tools/scripts for database upgrades
+- Ensure unit/integration/end-to-end tests for each milestone
+- Performance and chaos testing for robustness
 
 ---
 
 **Document Status**: Draft  
-**Last Updated**: 2025-01-15  
+**Last Updated**: 2025-11-24  
 **Author**: Architecture Planning Session
