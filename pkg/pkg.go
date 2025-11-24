@@ -14,18 +14,18 @@ import (
 
 // Package flags
 const (
-	PkgFManualSel    = 0x00000001 // Manually selected
-	PkgFMeta         = 0x00000002 // Meta port (no build)
-	PkgFDummy        = 0x00000004 // Dummy package
-	PkgFSuccess      = 0x00000008 // Build succeeded
-	PkgFFailed       = 0x00000010 // Build failed
-	PkgFSkipped      = 0x00000020 // Skipped
-	PkgFIgnored      = 0x00000040 // Ignored
+	PkgFManualSel     = 0x00000001 // Manually selected
+	PkgFMeta          = 0x00000002 // Meta port (no build)
+	PkgFDummy         = 0x00000004 // Dummy package
+	PkgFSuccess       = 0x00000008 // Build succeeded
+	PkgFFailed        = 0x00000010 // Build failed
+	PkgFSkipped       = 0x00000020 // Skipped
+	PkgFIgnored       = 0x00000040 // Ignored
 	PkgFNoBuildIgnore = 0x00000080 // Don't build (ignored)
-	PkgFNotFound     = 0x00000100 // Port not found
-	PkgFCorrupt      = 0x00000200 // Port corrupted
-	PkgFPackaged     = 0x00000400 // Package exists
-	PkgFRunning      = 0x00000800 // Currently building
+	PkgFNotFound      = 0x00000100 // Port not found
+	PkgFCorrupt       = 0x00000200 // Port corrupted
+	PkgFPackaged      = 0x00000400 // Package exists
+	PkgFRunning       = 0x00000800 // Currently building
 )
 
 // Dependency types
@@ -40,13 +40,13 @@ const (
 
 // Package represents a port/package
 type Package struct {
-	PortDir    string // e.g., "editors/vim"
-	Category   string
-	Name       string
-	Flavor     string
-	Version    string
-	PkgFile    string // Package filename
-	Flags      int
+	PortDir  string // e.g., "editors/vim"
+	Category string
+	Name     string
+	Flavor   string
+	Version  string
+	PkgFile  string // Package filename
+	Flags    int
 
 	// Dependencies
 	FetchDeps   string
@@ -57,10 +57,10 @@ type Package struct {
 	RunDeps     string
 
 	// Dependency graph
-	IDependOn    []*PkgLink // Packages I depend on
-	DependsOnMe  []*PkgLink // Packages that depend on me
-	DepiCount    int        // Number of packages that depend on me
-	DepiDepth    int        // Maximum dependency depth
+	IDependOn   []*PkgLink // Packages I depend on
+	DependsOnMe []*PkgLink // Packages that depend on me
+	DepiCount   int        // Number of packages that depend on me
+	DepiDepth   int        // Maximum dependency depth
 
 	// Build info
 	IgnoreReason string

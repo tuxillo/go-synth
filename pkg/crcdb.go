@@ -23,13 +23,13 @@ type CRCDatabase struct {
 
 // CRCEntry represents a single package entry in the CRC database
 type CRCEntry struct {
-	PortDir    string
-	CRC        uint32
-	Version    string
-	PkgFile    string
-	Size       int64
-	Mtime      int64
-	BuildTime  int64
+	PortDir   string
+	CRC       uint32
+	Version   string
+	PkgFile   string
+	Size      int64
+	Mtime     int64
+	BuildTime int64
 }
 
 // Global CRC database instance

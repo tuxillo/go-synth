@@ -13,16 +13,16 @@ import (
 
 // Logger manages multiple log files for dsynth
 type Logger struct {
-	cfg           *config.Config
-	resultsFile   *os.File
-	successFile   *os.File
-	failureFile   *os.File
-	ignoredFile   *os.File
-	skippedFile   *os.File
-	abnormalFile  *os.File
-	obsoleteFile  *os.File
-	debugFile     *os.File
-	mu            sync.Mutex
+	cfg          *config.Config
+	resultsFile  *os.File
+	successFile  *os.File
+	failureFile  *os.File
+	ignoredFile  *os.File
+	skippedFile  *os.File
+	abnormalFile *os.File
+	obsoleteFile *os.File
+	debugFile    *os.File
+	mu           sync.Mutex
 }
 
 // NewLogger creates a new logger

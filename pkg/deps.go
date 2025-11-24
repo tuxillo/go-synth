@@ -11,13 +11,13 @@ import (
 func resolveDependencies(head *Package, cfg *config.Config) error {
 	// Phase 1: Collect all dependencies recursively
 	fmt.Println("Resolving dependencies...")
-	
+
 	bq := newBulkQueue(cfg, cfg.MaxWorkers)
 	defer bq.Close()
 
 	// Track what we've already queued to avoid duplicates
 	queued := make(map[string]bool)
-	
+
 	// Process initial package list
 	toProcess := make([]*Package, 0)
 	for pkg := head; pkg != nil; pkg = pkg.Next {
@@ -105,9 +105,10 @@ type depOrigin struct {
 
 // parseDependencyString parses a dependency string from a Makefile
 // Format examples:
-//   "tool:path/to/port"
-//   "/path/to/ports/category/port:category/port"
-//   "lib.so:category/port"
+//
+//	"tool:path/to/port"
+//	"/path/to/ports/category/port:category/port"
+//	"lib.so:category/port"
 func parseDependencyString(depStr string, cfg *config.Config) []depOrigin {
 	if depStr == "" {
 		return nil

@@ -18,17 +18,17 @@ var Version = "2.0.0"
 func main() {
 	// Parse global flags
 	var (
-		debug        = flag.Bool("d", false, "Debug verbosity")
-		force        = flag.Bool("f", false, "Force operations")
-		yesAll       = flag.Bool("y", false, "Answer yes to all prompts")
-		_            = flag.String("m", "", "Package dependency memory target (GB)") // Reserved for future use
-		profile      = flag.String("p", "", "Override profile selection")
-		slowStart    = flag.Int("s", 0, "Initial worker count (slow start)")
-		configDir    = flag.String("C", "", "Config base directory")
-		devMode      = flag.Bool("D", false, "Developer mode")
-		checkPlist   = flag.Bool("P", false, "Check plist")
-		disableUI    = flag.Bool("S", false, "Disable ncurses")
-		niceValue    = flag.Int("N", 0, "Nice value")
+		debug      = flag.Bool("d", false, "Debug verbosity")
+		force      = flag.Bool("f", false, "Force operations")
+		yesAll     = flag.Bool("y", false, "Answer yes to all prompts")
+		_          = flag.String("m", "", "Package dependency memory target (GB)") // Reserved for future use
+		profile    = flag.String("p", "", "Override profile selection")
+		slowStart  = flag.Int("s", 0, "Initial worker count (slow start)")
+		configDir  = flag.String("C", "", "Config base directory")
+		devMode    = flag.Bool("D", false, "Developer mode")
+		checkPlist = flag.Bool("P", false, "Check plist")
+		disableUI  = flag.Bool("S", false, "Disable ncurses")
+		niceValue  = flag.Int("N", 0, "Nice value")
 	)
 
 	flag.Parse()

@@ -39,9 +39,9 @@ type Config struct {
 	UsePKGDepend bool
 
 	// Sizes
-	TmpfsWorkSize     string
+	TmpfsWorkSize      string
 	TmpfsLocalbaseSize string
-	TmpfsUsrLocalSize string
+	TmpfsUsrLocalSize  string
 
 	// Behavior
 	Debug      bool
@@ -58,17 +58,17 @@ type Config struct {
 // LoadConfig loads configuration from file
 func LoadConfig(configDir string, profile string) (*Config, error) {
 	cfg := &Config{
-		MaxWorkers: runtime.NumCPU() / 2,
-		MaxJobs:    runtime.NumCPU(),
-		SlowStart:  0,
-		Profile:    profile,
-		SystemPath: "/",
-		UseUsrSrc:  false,
-		UseCCache:  false,
-		UseTmpfs:   true,
-		TmpfsWorkSize: "64g",
+		MaxWorkers:         runtime.NumCPU() / 2,
+		MaxJobs:            runtime.NumCPU(),
+		SlowStart:          0,
+		Profile:            profile,
+		SystemPath:         "/",
+		UseUsrSrc:          false,
+		UseCCache:          false,
+		UseTmpfs:           true,
+		TmpfsWorkSize:      "64g",
 		TmpfsLocalbaseSize: "16g",
-		TmpfsUsrLocalSize: "16g",
+		TmpfsUsrLocalSize:  "16g",
 	}
 
 	if cfg.MaxWorkers < 1 {
