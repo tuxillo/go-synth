@@ -269,11 +269,11 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) error {
 	}
 
 	pkg.PkgFile = strings.TrimSpace(lines[2])
-	
+
 	// Check if it's a meta port BEFORE setting default
 	// Meta ports don't produce a package file
 	isMeta := pkg.PkgFile == ""
-	
+
 	if pkg.PkgFile == "" {
 		pkgname := strings.TrimSpace(lines[0])
 		if pkgname == "" {
