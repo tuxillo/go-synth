@@ -91,11 +91,14 @@ func resolveDependencies(head *Package, cfg *config.Config) error {
 
 		// Collect results from this batch
 		for bq.Pending() > 0 {
-			pkg, err := bq.GetResult()
+			pkg, initialFlags, err := bq.GetResult()
 			if err != nil {
 				fmt.Printf("Warning: dependency resolution failed: %v\n", err)
 				continue
 			}
+
+			// Apply initial flags (from bulk queue)
+			pkg.Flags |= initialFlags
 
 			// Add to registry
 			existingPkg := globalRegistry.Enter(pkg)

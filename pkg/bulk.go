@@ -25,8 +25,9 @@ type bulkWork struct {
 }
 
 type bulkResult struct {
-	pkg *Package
-	err error
+	pkg          *Package
+	err          error
+	initialFlags int // Flags that should be set on this package
 }
 
 func newBulkQueue(cfg *config.Config, maxBulk int) *BulkQueue {
@@ -56,15 +57,16 @@ func (bq *BulkQueue) worker() {
 	for work := range bq.workChan {
 		pkg, err := getPackageInfo(work.category, work.name, work.flavor, bq.cfg)
 
+		initialFlags := 0
 		if err == nil && work.flags != "x" {
-			pkg.Flags |= PkgFManualSel
+			initialFlags |= PkgFManualSel
 		}
 
 		if err == nil && work.flags == "d" {
-			pkg.Flags |= PkgFManualSel // Debug stop mode
+			initialFlags |= PkgFManualSel // Debug stop mode
 		}
 
-		bq.resultChan <- &bulkResult{pkg: pkg, err: err}
+		bq.resultChan <- &bulkResult{pkg: pkg, err: err, initialFlags: initialFlags}
 	}
 }
 
@@ -81,14 +83,14 @@ func (bq *BulkQueue) Queue(category, name, flavor, flags string) {
 	}
 }
 
-func (bq *BulkQueue) GetResult() (*Package, error) {
+func (bq *BulkQueue) GetResult() (*Package, int, error) {
 	result := <-bq.resultChan
 
 	bq.mu.Lock()
 	bq.active--
 	bq.mu.Unlock()
 
-	return result.pkg, result.err
+	return result.pkg, result.initialFlags, result.err
 }
 
 func (bq *BulkQueue) Close() {

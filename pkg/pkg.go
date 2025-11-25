@@ -157,14 +157,14 @@ func ParsePortList(portList []string, cfg *config.Config) (*Package, error) {
 
 	// Collect results
 	for bq.Pending() > 0 {
-		pkg, err := bq.GetResult()
+		pkg, initialFlags, err := bq.GetResult()
 		if err != nil {
 			fmt.Printf("Warning: failed to get package info: %v\n", err)
 			continue
 		}
 
-		// Mark as manually selected
-		pkg.Flags |= PkgFManualSel
+		// Apply initial flags (from bulk queue)
+		pkg.Flags |= initialFlags
 
 		// Add to linked list
 		if head == nil {
