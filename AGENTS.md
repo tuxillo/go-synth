@@ -36,6 +36,13 @@ This document provides essential information for agents and developers working w
 
 ## Development Commands
 
+### Contribution Workflow (Local Agents)
+- Each completed step (e.g. API change, test addition, doc update) must be committed locally.
+- Do NOT push to any remote during iterative Phase work unless explicitly requested.
+- Group related minimal changes per commit; avoid large mixed commits.
+- Document rationale briefly in commit message (focus on why).
+- Keep repository history clean for later Cobra/architecture migration.
+
 ### Building
 
 ```bash

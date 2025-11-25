@@ -459,3 +459,18 @@ func GetAllPorts(cfg *config.Config) ([]string, error) {
 
 	return ports, nil
 }
+
+// Parse is a thin alias for ParsePortList for Phase 1 API compatibility
+func Parse(portSpecs []string, cfg *config.Config) (*Package, error) {
+	return ParsePortList(portSpecs, cfg)
+}
+
+// Resolve wraps ResolveDependencies for Phase 1 API compatibility
+func Resolve(head *Package, cfg *config.Config) error {
+	return ResolveDependencies(head, cfg)
+}
+
+// TopoOrder wraps GetBuildOrder for Phase 1 API compatibility
+func TopoOrder(head *Package) []*Package {
+	return GetBuildOrder(head)
+}

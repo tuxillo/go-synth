@@ -99,7 +99,7 @@ func resolveDependencies(head *Package, cfg *config.Config) error {
 
 			// Add to registry
 			existingPkg := globalRegistry.Enter(pkg)
-			
+
 			// Add to linked list if it's a new package
 			if existingPkg == pkg {
 				// New package, add to tail
@@ -352,7 +352,7 @@ func GetBuildOrder(head *Package) []*Package {
 	if len(result) != len(packages) {
 		fmt.Printf("Warning: circular dependencies detected (%d/%d packages in order)\n",
 			len(result), len(packages))
-		
+
 		// Debug: show which packages are stuck
 		fmt.Fprintf(os.Stderr, "DEBUG: Packages not in result:\n")
 		for pkg, degree := range inDegree {
@@ -365,4 +365,18 @@ func GetBuildOrder(head *Package) []*Package {
 	fmt.Fprintf(os.Stderr, "DEBUG: Final result: %d packages\n", len(result))
 
 	return result
+}
+
+// TopoOrderStrict returns the topological order and an error if a cycle is detected.
+func TopoOrderStrict(head *Package) ([]*Package, error) {
+	order := GetBuildOrder(head)
+	// Count packages in linked list
+	count := 0
+	for p := head; p != nil; p = p.Next {
+		count++
+	}
+	if len(order) != count {
+		return order, fmt.Errorf("cycle detected: only %d of %d packages ordered", len(order), count)
+	}
+	return order, nil
 }
