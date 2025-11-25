@@ -244,6 +244,7 @@ This project follows a phased development approach with comprehensive design doc
 
 ### Development Resources
 
+- **[Development Guide](DEVELOPMENT.md)** - Complete phase tracking, status, and contribution workflow
 - **[Agent Guide](docs/design/AGENTS.md)** - Essential information for developers and AI agents working on the codebase
 - **[Quick Start](QUICKSTART.md)** - Practical getting-started guide for users
 
@@ -296,7 +297,8 @@ Contributions welcome! Please:
 4. Submit a pull request
 
 **For Contributors:**
-- Read [AGENTS.md](docs/design/AGENTS.md) for development workflow
+- Read [DEVELOPMENT.md](DEVELOPMENT.md) for complete phase tracking and workflow
+- Read [AGENTS.md](docs/design/AGENTS.md) for detailed development guidelines
 - Check [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for current tasks
 - Follow the commit guidelines in AGENTS.md
 
