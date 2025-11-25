@@ -1,14 +1,14 @@
-# Development Guide
+# 📚 Development Guide
 
 This document provides an overview of the development process, phase tracking, and contribution guidelines for the go-synth project.
 
-## Quick Links
+## 🔗 Quick Links
 
 - **[Agent Guide](docs/design/AGENTS.md)** - Essential information for developers and AI agents
 - **[Architecture & Ideas](docs/design/IDEAS.md)** - Comprehensive architectural vision
 - **[MVP Scope](docs/design/IDEAS_MVP.md)** - Minimum Viable Product definition
 
-## Development Philosophy
+## 💡 Development Philosophy
 
 This project follows a **phased development approach** where each phase builds upon the previous one. Each phase has:
 - Clear goals and scope
@@ -20,7 +20,7 @@ The goal is to maintain a working, compilable codebase at every step while progr
 
 ---
 
-## Phase Tracking
+## 📊 Phase Tracking
 
 ### Phase Status Legend
 - 🟢 **Complete** - All exit criteria met, ready for next phase
@@ -37,12 +37,12 @@ The goal is to maintain a working, compilable codebase at every step while progr
 **Timeline**: Started 2025-11-21 | Target: TBD  
 **Owner**: Core Team
 
-### Goals
+### 🎯 Goals
 - Isolate package metadata and dependency resolution into a pure library
 - Provide stable API for parsing port specs and generating build order
 - Remove mixed concerns (build state, CRC tracking) from pkg package
 
-### Main Deliverables
+### 📦 Main Deliverables
 - ✅ Core API functions: `Parse()`, `Resolve()`, `TopoOrder()`
 - ✅ Cycle detection with `TopoOrderStrict()`
 - ✅ Basic unit tests (happy paths)
@@ -51,7 +51,7 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - ❌ Structured error types
 - ❌ Comprehensive documentation
 
-### Exit Criteria
+### ✓ Exit Criteria
 - ✅ TopoOrder returns correct, cycle-free ordering
 - ✅ All existing commands compile and run
 - ✅ CRC/build tracking separated into builddb package
@@ -100,18 +100,18 @@ The Package fields remain as a temporary bridge for the parsing layer. This allo
 - Write developer guide (~2-3h)
 - Add integration tests (~3-4h)
 
-### Documentation
+### 📖 Documentation
 - **[Phase 1 Overview](docs/design/PHASE_1_LIBRARY.md)** - Complete status and analysis
 - **[Phase 1 TODO](docs/design/PHASE_1_TODO.md)** - Detailed task breakdown (12 tasks, ~25-35h)
 - **[Phase 1 Analysis](docs/design/PHASE_1_ANALYSIS_SUMMARY.md)** - Findings and recommendations
 
-### Key Decisions
+### 🔑 Key Decisions
 - Use linked list for package traversal (preserve original dsynth design)
 - Kahn's algorithm for topological sorting
 - Separate builddb package for CRC tracking (prepare for BoltDB in Phase 2)
 - Wrapper functions maintain compatibility with existing code
 
-### Blockers
+### 🚧 Blockers
 None - all dependencies resolved
 
 ---
@@ -122,24 +122,24 @@ None - all dependencies resolved
 **Timeline**: Not started | Target: TBD  
 **Dependencies**: Phase 1 completion
 
-### Goals
+### 🎯 Goals
 - Add persistent tracking of build attempts and CRCs using BoltDB
 - Enable incremental builds by skipping unchanged ports
 - Replace file-based CRC database with structured database
 
-### Main Deliverables
+### 📦 Main Deliverables
 - BoltDB schema with three buckets: `builds`, `packages`, `crc_index`
 - BuildRecord API for CRUD operations
 - NeedsBuild() function using CRC comparison
 - Migration from file-based CRC to BoltDB
 
-### Exit Criteria
+### ✓ Exit Criteria
 - `NeedsBuild()` returns false when CRC unchanged
 - Successful build writes records to all three buckets
 - Migration handles existing CRC file data
 - Unit tests for all CRUD operations
 
-### Proposed API
+### 💻 Proposed API
 ```go
 type BuildRecord struct {
     UUID      string
@@ -157,10 +157,10 @@ func NeedsBuild(portDir string, crc uint32) bool
 func UpdateCRC(portDir string, crc uint32) error
 ```
 
-### Documentation
+### 📖 Documentation
 - **[Phase 2 Plan](docs/design/PHASE_2_BUILDDB.md)** - Complete specification
 
-### Key Decisions
+### 🔑 Key Decisions
 - BoltDB chosen for embedded, ACID-compliant storage
 - Package keys use `portdir@version` format
 - Lazy migration: populate database on first successful build
@@ -174,25 +174,25 @@ func UpdateCRC(portDir string, crc uint32) error
 **Timeline**: Not started | Target: TBD  
 **Dependencies**: Phases 1-2 completion
 
-### Goals
+### 🎯 Goals
 - Implement worker pool for parallel build execution
 - Execute essential build phases in correct order
 - Integrate with pkg (build order) and builddb (tracking)
 
-### Main Deliverables
+### 📦 Main Deliverables
 - Worker pool with configurable concurrency
 - Queue-based task distribution respecting topological order
 - Build phase execution (7 MVP phases: fetch, checksum, extract, patch, build, stage, package)
 - Error propagation to dependent packages
 - Build statistics tracking
 
-### Exit Criteria
+### ✓ Exit Criteria
 - Builds small set of ports with correct parallelism
 - Dependent packages skip when dependency fails
 - Statistics accurately reflect success/failed/skipped counts
 - CRC skip mechanism works across builds
 
-### Proposed API
+### 💻 Proposed API
 ```go
 type BuildStats struct { 
     Total, Success, Failed, Skipped int
@@ -208,10 +208,10 @@ type Builder struct {
 func (b *Builder) Run(pkgs []*pkg.Package) (*BuildStats, error)
 ```
 
-### Documentation
+### 📖 Documentation
 - **[Phase 3 Plan](docs/design/PHASE_3_BUILDER.md)** - Complete specification
 
-### Key Decisions
+### 🔑 Key Decisions
 - Channel-based worker queue
 - Topological order ensures dependencies build first
 - Graceful cleanup via defer/cleanup hooks
@@ -225,24 +225,24 @@ func (b *Builder) Run(pkgs []*pkg.Package) (*BuildStats, error)
 **Timeline**: Not started | Target: TBD  
 **Dependencies**: Phase 3 completion
 
-### Goals
+### 🎯 Goals
 - Define minimal environment interface for build isolation
 - Implement FreeBSD/DragonFly backend using existing dsynth conventions
 - Provide phase execution with chroot isolation
 
-### Main Deliverables
+### 📦 Main Deliverables
 - Environment interface with Setup/Execute/Cleanup methods
 - DragonFly/FreeBSD implementation using nullfs/tmpfs + chroot
 - Mount management and cleanup (even on failure)
 - Integration with Builder from Phase 3
 
-### Exit Criteria
+### ✓ Exit Criteria
 - Each phase runs in isolated chroot environment
 - Successful execution returns clean status
 - Failed execution cleans up mounts properly
 - Root privilege validation fails early
 
-### Proposed API
+### 💻 Proposed API
 ```go
 type Environment interface {
     Setup(workerID int, cfg *config.Config) error
@@ -251,10 +251,10 @@ type Environment interface {
 }
 ```
 
-### Documentation
+### 📖 Documentation
 - **[Phase 4 Plan](docs/design/PHASE_4_ENVIRONMENT.md)** - Complete specification
 
-### Key Decisions
+### 🔑 Key Decisions
 - Use existing nullfs/tmpfs + chroot (proven by original dsynth)
 - Map ports tree to `/xports` in chroot
 - Signal trapping for cleanup on interruption
@@ -268,24 +268,24 @@ type Environment interface {
 **Timeline**: Not started | Target: TBD  
 **Dependencies**: Phases 1-3 completion
 
-### Goals
+### 🎯 Goals
 - Provide simple HTTP API for build automation
 - Enable remote build triggering and status queries
 - Basic authentication with API keys
 
-### Main Deliverables
+### 📦 Main Deliverables
 - Three REST endpoints: POST /builds, GET /builds/:id, GET /builds
 - API key authentication middleware
 - JSON request/response formats
 - Integration with Builder and BuildDB
 
-### Exit Criteria
+### ✓ Exit Criteria
 - Can start build via POST /builds
 - Can poll build status via GET /builds/:id
 - Authentication rejects invalid API keys
 - Integration tests cover happy path
 
-### Proposed Endpoints
+### 🌐 Proposed Endpoints
 ```
 POST /api/v1/builds
   Body: { "packages": ["editors/vim"], "profile": "default" }
@@ -298,10 +298,10 @@ GET /api/v1/builds
   Response: { "items": [...], "next": "cursor" }
 ```
 
-### Documentation
+### 📖 Documentation
 - **[Phase 5 Plan](docs/design/PHASE_5_MIN_API.md)** - Complete specification
 
-### Key Decisions
+### 🔑 Key Decisions
 - Polling-based (no WebSocket/SSE for MVP)
 - Simple router, minimal dependencies
 - Optional phase - can be deferred if not needed
@@ -314,33 +314,33 @@ GET /api/v1/builds
 **Timeline**: Not started | Target: TBD  
 **Dependencies**: Phases 1-3 completion
 
-### Goals
+### 🎯 Goals
 - Ensure reliability of core libraries
 - Validate end-to-end build flow
 - Set up continuous integration
 
-### Main Deliverables
+### 📦 Main Deliverables
 - Comprehensive unit tests for pkg, builddb, builder
 - Integration tests for full build pipeline
 - Test fixtures (minimal test ports or mocks)
 - CI configuration (GitHub Actions or similar)
 
-### Exit Criteria
+### ✓ Exit Criteria
 - All packages have >80% test coverage
 - Integration test successfully builds 1-3 small ports
 - CI runs on every PR with race detector
 - Failure tests validate error propagation
 
-### Test Coverage
+### 🧪 Test Coverage
 - **pkg**: Parse, Resolve, TopoOrder, cycle detection
 - **builddb**: CRUD operations, NeedsBuild, CRC updates
 - **builder**: Worker lifecycle, failure propagation, stats
 - **Integration**: End-to-end build with real ports
 
-### Documentation
+### 📖 Documentation
 - **[Phase 6 Plan](docs/design/PHASE_6_TESTING.md)** - Complete specification
 
-### Key Decisions
+### 🔑 Key Decisions
 - Use standard `go test` with race detector
 - Minimal test ports or mocked execution
 - Out of scope: benchmarks, chaos testing (defer to post-MVP)
@@ -353,33 +353,33 @@ GET /api/v1/builds
 **Timeline**: Not started | Target: TBD  
 **Dependencies**: Phases 1-6 completion
 
-### Goals
+### 🎯 Goals
 - Wire all new components into existing CLI
 - Provide migration path from legacy CRC to BuildDB
 - Maintain backward compatibility during transition
 
-### Main Deliverables
+### 📦 Main Deliverables
 - Updated CLI commands using new pipeline
 - BuildDB initialization with fallback to legacy CRC
 - Migration tooling for existing installations
 - Updated logging with UUID tracking
 
-### Exit Criteria
+### ✓ Exit Criteria
 - End-to-end build via CLI works correctly
 - CRC skip validated across two consecutive runs
 - Migration from file-based CRC completes successfully
 - All existing CLI commands remain functional
 
-### CLI Mapping
+### ⚙️ CLI Mapping
 - `dsynth build [ports...]` → uses new pipeline
 - `dsynth force` → bypasses NeedsBuild check
 - `dsynth upgrade-system` → uses pkg for installed packages
 - Legacy commands continue to work
 
-### Documentation
+### 📖 Documentation
 - **[Phase 7 Plan](docs/design/PHASE_7_INTEGRATION.md)** - Complete specification
 
-### Key Decisions
+### 🔑 Key Decisions
 - BuildDB primary, legacy CRC fallback
 - Lazy migration: populate on successful builds
 - Keep existing log file structure
@@ -387,7 +387,7 @@ GET /api/v1/builds
 
 ---
 
-## Contributing Workflow
+## 🤝 Contributing Workflow
 
 ### For New Contributors
 
@@ -448,14 +448,14 @@ pkg: separate build state from Package struct
 Rationale: Package should contain only metadata, not build-time state
 ```
 
-### Testing Requirements
+### ✅ Testing Requirements
 
 - Add unit tests for new functions
 - Maintain or improve code coverage
 - Run `go test -v -race ./...` before committing
 - Add integration tests for end-to-end flows
 
-### Documentation Requirements
+### 📝 Documentation Requirements
 
 - Add godoc comments for exported functions
 - Update relevant phase documentation
@@ -464,7 +464,7 @@ Rationale: Package should contain only metadata, not build-time state
 
 ---
 
-## Project Status Summary
+## 📈 Project Status Summary
 
 ### Overall Progress
 - **Phase 1**: 🟡 43% complete (3/7 exit criteria met)
@@ -489,17 +489,17 @@ Rationale: Package should contain only metadata, not build-time state
 ### Known Issues
 See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for complete list.
 
-**Critical:**
+**⚠️ Critical:**
 - Package struct still contains build state fields (transitional - functionally separated)
 - Global state (globalRegistry) not yet removed
 - No structured error types
 
-**Medium:**
+**🔶 Medium:**
 - Incomplete godoc documentation
 - Missing integration tests
 - No developer guide yet
 
-**Low:**
+**🔹 Low:**
 - No context.Context support
 - BulkQueue implementation exposed
 - No benchmark tests
@@ -515,7 +515,7 @@ All build code successfully uses BuildStateRegistry instead.
 
 ---
 
-## Future Plans
+## 🚀 Future Plans
 
 See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for features deferred beyond Phase 7:
 
@@ -529,7 +529,7 @@ See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for features deferred bey
 
 ---
 
-## Getting Help
+## ❓ Getting Help
 
 - **Issues**: Check existing GitHub issues or create new ones
 - **Discussions**: Use GitHub Discussions for design questions
