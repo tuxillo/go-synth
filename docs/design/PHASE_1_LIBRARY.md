@@ -1,6 +1,6 @@
 # Phase 1: Library Extraction (pkg)
 
-**Status**: 🟡 60% Complete - Architecture Improving  
+**Status**: 🟡 65% Complete - Strong Progress  
 **Last Updated**: 2025-11-25
 
 ## Goals
@@ -89,10 +89,12 @@ func TopoOrder(head *Package) ([]*Package, error)
 - ❌ `globalCRCDB` - Package-level global CRC database instance
 - **Impact**: Makes testing harder, prevents concurrent independent uses
 
-**3. Missing Error Types**
-- ❌ No structured error types (uses `fmt.Errorf()` strings only)
-- ❌ Should have: `ErrCycleDetected`, `ErrInvalidSpec`, `ErrPortNotFound`
-- **Impact**: Error handling is less precise, harder to test
+**3. Missing Error Types** ✅ **RESOLVED (Task 3 Complete)**
+- ✅ ~~No structured error types~~ **FIXED** - Added 5 sentinel errors + 2 structured types
+- ✅ ~~Error handling imprecise~~ **FIXED** - Can now use `errors.Is()` and `errors.As()`
+- ✅ Added: `ErrCycleDetected`, `ErrInvalidSpec`, `ErrPortNotFound`, `ErrNoValidPorts`, `ErrEmptySpec`
+- ✅ Added: `*PortNotFoundError`, `*CycleError` with detailed context
+- **Status**: Error handling is now type-safe and testable ✅
 
 **4. Incomplete Documentation**
 - ❌ No godoc comments on exported functions
@@ -123,7 +125,7 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 3. ✅ ~~Basic unit tests~~ - DONE
 4. ✅ ~~**Separate build state from Package struct**~~ - **DONE (Task 1)**
 5. ✅ ~~**Move CRC database to separate package**~~ - **DONE (Task 2)**
-6. ❌ **Add structured error types** - HIGH (Task 3)
+6. ✅ ~~**Add structured error types**~~ - **DONE (Task 3)**
 7. ❌ **Remove global state** - HIGH (Task 4)
 
 ### Medium Priority (Quality & Usability)
@@ -148,9 +150,9 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 ### Incomplete
 - ✅ ~~Pure metadata-only Package struct~~ - **COMPLETE (Task 1)**
 - ✅ ~~Separated CRC/build tracking~~ - **COMPLETE (Task 2)**
+- ✅ ~~Structured error types~~ - **COMPLETE (Task 3)**
 - ❌ Comprehensive godoc comments
 - ❌ Minimal developer guide
-- ❌ Structured error types
 - ❌ Full test coverage (edge cases, errors, integration)
 
 ## Exit Criteria
@@ -162,11 +164,11 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 ### Additional Criteria for True "Pure Library" Goal
 - ✅ Package struct contains ONLY metadata (no build state/flags) - **ACHIEVED (Task 1)**
 - ✅ CRC/build tracking separated into different package - **ACHIEVED (Task 2)**
+- ✅ Structured errors for all failure modes - **ACHIEVED (Task 3)**
 - ❌ No global state in pkg package - **NOT ACHIEVED** (Task 4 remaining)
-- ❌ Structured errors for all failure modes - **NOT ACHIEVED** (Task 3 remaining)
 - ❌ Comprehensive documentation (godoc + guide) - **NOT ACHIEVED** (Tasks 5, 6, 9 remaining)
 
-**Phase 1 Status**: 60% complete. Major architectural improvements achieved - Package struct is now pure metadata and build concerns are properly separated. Remaining work focuses on API quality (errors, global state) and documentation.
+**Phase 1 Status**: 65% complete. Excellent architectural progress - Package struct is pure metadata, build concerns separated, and error handling is now type-safe. Only one critical task remains (global state removal), then quality improvements (documentation).
 
 ## Dependencies
 - None (foundation for later phases).

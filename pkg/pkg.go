@@ -185,7 +185,7 @@ func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRe
 	}
 
 	if head == nil {
-		return nil, fmt.Errorf("no valid ports found")
+		return nil, ErrNoValidPorts
 	}
 
 	return head, nil
@@ -230,7 +230,10 @@ func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package
 
 	// Check if port exists
 	if _, err := os.Stat(portPath); os.IsNotExist(err) {
-		return nil, PkgFNotFound, "", fmt.Errorf("port not found: %s", portDir)
+		return nil, PkgFNotFound, "", &PortNotFoundError{
+			PortSpec: portDir,
+			Path:     portPath,
+		}
 	}
 
 	pkg := &Package{

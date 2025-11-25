@@ -1,8 +1,10 @@
 package pkg
 
 import (
-	"dsynth/config"
+	"errors"
 	"testing"
+
+	"dsynth/config"
 )
 
 // createSimpleChain builds A->B->C where A depends on B and C
@@ -52,8 +54,15 @@ func TestTopoOrderSimple(t *testing.T) {
 func TestParseAliasNoPorts(t *testing.T) {
 	cfg := &config.Config{DPortsPath: "/nonexistent"}
 	registry := NewBuildStateRegistry()
-	if _, err := Parse([]string{}, cfg, registry); err == nil {
+	_, err := Parse([]string{}, cfg, registry)
+
+	if err == nil {
 		// ParsePortList returns error on no valid ports; ensure we handle it
 		t.Fatalf("expected error for empty spec list")
+	}
+
+	// Verify it's the right error type
+	if !errors.Is(err, ErrNoValidPorts) {
+		t.Errorf("expected ErrNoValidPorts, got: %v", err)
 	}
 }

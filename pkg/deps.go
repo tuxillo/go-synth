@@ -385,7 +385,11 @@ func TopoOrderStrict(head *Package) ([]*Package, error) {
 		count++
 	}
 	if len(order) != count {
-		return order, fmt.Errorf("cycle detected: only %d of %d packages ordered", len(order), count)
+		return order, &CycleError{
+			TotalPackages:   count,
+			OrderedPackages: len(order),
+			CyclePackages:   nil, // Could be enhanced to track specific cycle packages
+		}
 	}
 	return order, nil
 }

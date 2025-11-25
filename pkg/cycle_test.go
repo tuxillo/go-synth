@@ -1,6 +1,9 @@
 package pkg
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // createCycle builds A->B->C and introduces C depends on A forming a cycle
 func createCycle() *Package {
@@ -29,6 +32,26 @@ func TestTopoOrderStrictCycle(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected cycle detection error, got none (order len=%d)", len(order))
 	}
+
+	// Check that it's a CycleError with correct type
+	var cycleErr *CycleError
+	if !errors.As(err, &cycleErr) {
+		t.Fatalf("expected *CycleError, got %T: %v", err, err)
+	}
+
+	// Verify cycle error has correct info
+	if cycleErr.TotalPackages != 3 {
+		t.Errorf("expected TotalPackages=3, got %d", cycleErr.TotalPackages)
+	}
+	if cycleErr.OrderedPackages >= 3 {
+		t.Errorf("expected OrderedPackages < 3 (due to cycle), got %d", cycleErr.OrderedPackages)
+	}
+
+	// Verify we can also check with errors.Is()
+	if !errors.Is(err, ErrCycleDetected) {
+		t.Error("CycleError should be detected with errors.Is(err, ErrCycleDetected)")
+	}
+
 	if len(order) == 3 {
 		t.Fatalf("expected partial order, got full length 3")
 	}
