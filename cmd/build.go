@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TODO: Phase 3 - This is skeleton code for future cobra CLI
+// For now, main.go handles CLI directly
 var buildCmd = &cobra.Command{
 	Use:   "build [ports...]",
 	Short: "Build specified ports",
@@ -21,9 +23,10 @@ var buildCmd = &cobra.Command{
 	Run:   runBuild,
 }
 
-func init() {
-	rootCmd.AddCommand(buildCmd)
-}
+// Commented out until root.go is created in Phase 3
+// func init() {
+// 	rootCmd.AddCommand(buildCmd)
+// }
 
 func runBuild(cmd *cobra.Command, args []string) {
 	if len(args) == 0 {
@@ -32,7 +35,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	}
 
 	cfg := config.GetConfig()
-	logger := log.NewLogger(cfg)
+	logger, _ := log.NewLogger(cfg) // TODO: handle error in Phase 3
 
 	// Setup signal handler for cleanup
 	sigChan := make(chan os.Signal, 1)
@@ -57,8 +60,11 @@ func runBuild(cmd *cobra.Command, args []string) {
 	// Create build state registry
 	registry := pkg.NewBuildStateRegistry()
 
+	// Create package registry
+	pkgRegistry := pkg.NewPackageRegistry()
+
 	// Parse port list
-	head, err := pkg.ParsePortList(args, cfg, registry)
+	head, err := pkg.ParsePortList(args, cfg, registry, pkgRegistry)
 	if err != nil {
 		fmt.Printf("Error parsing port list: %v\n", err)
 		os.Exit(1)
@@ -66,7 +72,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 
 	// Resolve dependencies
 	fmt.Println("Resolving dependencies...")
-	if err := pkg.ResolveDependencies(head, cfg, registry); err != nil {
+	if err := pkg.ResolveDependencies(head, cfg, registry, pkgRegistry); err != nil {
 		fmt.Printf("Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
