@@ -4,7 +4,7 @@ This document provides an overview of the development process, phase tracking, a
 
 ## 🔗 Quick Links
 
-- **[Agent Guide](docs/design/AGENTS.md)** - Essential information for developers and AI agents
+- **[Agent Guide](AGENTS.md)** - Essential information for developers and AI agents
 - **[Architecture & Ideas](docs/design/IDEAS.md)** - Comprehensive architectural vision
 - **[MVP Scope](docs/design/IDEAS_MVP.md)** - Minimum Viable Product definition
 
@@ -392,7 +392,7 @@ GET /api/v1/builds
 ### For New Contributors
 
 1. **Read Essential Docs**
-   - [AGENTS.md](docs/design/AGENTS.md) - Development workflow and commit guidelines
+   - [AGENTS.md](AGENTS.md) - Development workflow and commit guidelines
    - [Phase 1 TODO](docs/design/PHASE_1_TODO.md) - Current task list
 
 2. **Pick a Task**

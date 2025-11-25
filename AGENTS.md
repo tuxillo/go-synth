@@ -85,6 +85,12 @@ gh pr create --repo otheruser/somerepo
 
 ### Contribution Workflow (Local Agents)
 - Each completed step (e.g. API change, test addition, doc update) must be committed locally.
+- **CRITICAL**: Every commit that makes a functional change MUST include updates to ALL relevant documentation files (.md) in the same commit.
+  - If you modify code behavior, update relevant docs in the same commit
+  - If you complete a task, update progress tracking docs (PHASE_1_TODO.md, PHASE_1_LIBRARY.md, README.md, etc.)
+  - If you add/remove features, update AGENTS.md, README.md, and any affected design docs
+  - Documentation updates are NOT optional - they are part of the change
+  - Never commit code changes without corresponding doc updates
 - Do NOT push to any remote during iterative Phase work unless explicitly requested.
 - Group related minimal changes per commit; avoid large mixed commits.
 - Document rationale briefly in commit message (focus on why).
