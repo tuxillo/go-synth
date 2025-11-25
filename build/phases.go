@@ -13,7 +13,7 @@ import (
 )
 
 // executePhase executes a single build phase
-func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Config, logger *log.PackageLogger) error {
+func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Config, registry *pkg.BuildStateRegistry, logger *log.PackageLogger) error {
 	// Build the make command
 	portPath := filepath.Join("/xports", p.Category, p.Name)
 
@@ -39,7 +39,7 @@ func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Conf
 	switch phase {
 	case "install-pkgs":
 		// Install dependency packages before building
-		return installDependencyPackages(worker, p, cfg, logger)
+		return installDependencyPackages(worker, p, cfg, registry, logger)
 
 	case "fetch":
 		args = append(args, "BATCH=yes", "fetch")
@@ -102,7 +102,7 @@ func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Conf
 }
 
 // installDependencyPackages installs required dependency packages
-func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Config, logger *log.PackageLogger) error {
+func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry, logger *log.PackageLogger) error {
 	// Collect all dependency packages (just the filenames)
 	depPkgs := make(map[string]bool)
 
@@ -110,12 +110,12 @@ func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Confi
 		dep := link.Pkg
 
 		// Only install packages that have been built
-		if dep.Flags&pkg.PkgFSuccess == 0 {
+		if !registry.HasFlags(dep, pkg.PkgFSuccess) {
 			continue
 		}
 
 		// Skip meta packages
-		if dep.Flags&pkg.PkgFMeta != 0 {
+		if registry.HasFlags(dep, pkg.PkgFMeta) {
 			continue
 		}
 
@@ -153,10 +153,10 @@ func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Confi
 func extractPackage(worker *Worker, p *pkg.Package, cfg *config.Config) error {
 	// The package was built by make and should be in /packages/All already
 	// (since we set PACKAGES=/packages which is mounted from the host)
-	
+
 	// Just verify the package exists
 	pkgPath := filepath.Join(cfg.PackagesPath, "All", p.PkgFile)
-	
+
 	if _, err := os.Stat(pkgPath); err != nil {
 		return fmt.Errorf("package file not found: %s (%w)", pkgPath, err)
 	}

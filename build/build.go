@@ -36,6 +36,7 @@ type Worker struct {
 type BuildContext struct {
 	cfg       *config.Config
 	logger    *log.Logger
+	registry  *pkg.BuildStateRegistry
 	workers   []*Worker
 	queue     chan *pkg.Package
 	stats     BuildStats
@@ -53,6 +54,7 @@ func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildS
 	ctx := &BuildContext{
 		cfg:       cfg,
 		logger:    logger,
+		registry:  pkg.NewBuildStateRegistry(),
 		queue:     make(chan *pkg.Package, 100),
 		startTime: time.Now(),
 	}
@@ -71,10 +73,10 @@ func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildS
 
 	// Count packages that need building
 	for _, p := range buildOrder {
-		if p.Flags&(pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) != 0 {
-			if p.Flags&pkg.PkgFSuccess != 0 {
+		if ctx.registry.HasAnyFlags(p, pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) {
+			if ctx.registry.HasFlags(p, pkg.PkgFSuccess) {
 				ctx.stats.Skipped++
-			} else if p.Flags&pkg.PkgFIgnored != 0 {
+			} else if ctx.registry.HasFlags(p, pkg.PkgFIgnored) {
 				ctx.stats.Ignored++
 			}
 		} else {
@@ -118,14 +120,14 @@ func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildS
 	go func() {
 		for _, p := range buildOrder {
 			// Skip packages that don't need building
-			if p.Flags&(pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) != 0 {
+			if ctx.registry.HasAnyFlags(p, pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) {
 				continue
 			}
 
 			// Wait for dependencies
 			if !ctx.waitForDependencies(p) {
 				// Dependency failed, mark as skipped
-				p.Flags |= pkg.PkgFSkipped
+				ctx.registry.AddFlags(p, pkg.PkgFSkipped)
 				ctx.statsMu.Lock()
 				ctx.stats.Skipped++
 				ctx.statsMu.Unlock()
@@ -161,7 +163,7 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 		worker.mu.Unlock()
 
 		// Mark as running
-		p.Flags |= pkg.PkgFRunning
+		ctx.registry.AddFlags(p, pkg.PkgFRunning)
 
 		// Build the package
 		success := ctx.buildPackage(worker, p)
@@ -170,14 +172,14 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 		ctx.statsMu.Lock()
 		if success {
 			ctx.stats.Success++
-			p.Flags |= pkg.PkgFSuccess
-			p.Flags &^= pkg.PkgFRunning
+			ctx.registry.AddFlags(p, pkg.PkgFSuccess)
+			ctx.registry.ClearFlags(p, pkg.PkgFRunning)
 			ctx.logger.Success(p.PortDir)
 		} else {
 			ctx.stats.Failed++
-			p.Flags |= pkg.PkgFFailed
-			p.Flags &^= pkg.PkgFRunning
-			ctx.logger.Failed(p.PortDir, p.LastPhase)
+			ctx.registry.AddFlags(p, pkg.PkgFFailed)
+			ctx.registry.ClearFlags(p, pkg.PkgFRunning)
+			ctx.logger.Failed(p.PortDir, ctx.registry.GetLastPhase(p))
 		}
 		ctx.statsMu.Unlock()
 
@@ -222,10 +224,10 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	startTime := time.Now()
 
 	for _, phase := range phases {
-		p.LastPhase = phase
+		ctx.registry.SetLastPhase(p, phase)
 		pkgLogger.WritePhase(phase)
 
-		if err := executePhase(worker, p, phase, ctx.cfg, pkgLogger); err != nil {
+		if err := executePhase(worker, p, phase, ctx.cfg, ctx.registry, pkgLogger); err != nil {
 			duration := time.Since(startTime)
 			pkgLogger.WriteFailure(duration, fmt.Sprintf("Phase %s failed: %v", phase, err))
 			return false
@@ -250,18 +252,18 @@ func (ctx *BuildContext) waitForDependencies(p *pkg.Package) bool {
 		for _, link := range p.IDependOn {
 			dep := link.Pkg
 
-			if dep.Flags&pkg.PkgFSuccess != 0 {
+			if ctx.registry.HasFlags(dep, pkg.PkgFSuccess) {
 				// Dependency succeeded
 				continue
 			}
 
-			if dep.Flags&pkg.PkgFFailed != 0 {
+			if ctx.registry.HasFlags(dep, pkg.PkgFFailed) {
 				// Dependency failed
 				anyFailed = true
 				break
 			}
 
-			if dep.Flags&pkg.PkgFSkipped != 0 {
+			if ctx.registry.HasFlags(dep, pkg.PkgFSkipped) {
 				// Dependency skipped
 				anyFailed = true
 				break

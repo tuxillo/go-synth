@@ -245,7 +245,7 @@ func doPrepareSystem(cfg *config.Config) {
 
 func doRebuildRepo(cfg *config.Config) {
 	fmt.Println("Rebuilding repository metadata...")
-	
+
 	// TODO: Implement pkg repo rebuild
 	fmt.Println("Repository rebuild not yet implemented")
 }
@@ -325,18 +325,18 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	// Setup signal handler for cleanup
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	
+
 	var buildCleanup func()
-	
+
 	// Goroutine to handle signals
 	go func() {
 		sig := <-sigChan
 		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
-		
+
 		if buildCleanup != nil {
 			buildCleanup()
 		}
-		
+
 		os.Exit(1)
 	}()
 
@@ -362,12 +362,24 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		os.Exit(1)
 	}
 
+	// Create build state registry and populate from Package.Flags
+	// (transitional - eventually MarkPackagesNeedingBuild will use registry)
+	registry := pkg.NewBuildStateRegistry()
+	for p := head; p != nil; p = p.Next {
+		if p.Flags != 0 {
+			registry.SetFlags(p, p.Flags)
+		}
+		if p.IgnoreReason != "" {
+			registry.SetIgnoreReason(p, p.IgnoreReason)
+		}
+	}
+
 	// DEBUG: Print what packages are marked for build vs skipped
 	fmt.Println("\nDEBUG: Package status (first 10):")
 	count := 0
 	for p := head; p != nil && count < 10; p = p.Next {
-		fmt.Printf("  %s: Flags=%08x PkgFile=%s\n", p.PortDir, p.Flags, p.PkgFile)
-		
+		fmt.Printf("  %s: Flags=%08x PkgFile=%s\n", p.PortDir, registry.GetFlags(p), p.PkgFile)
+
 		// Check if package file actually exists
 		pkgPath := filepath.Join(cfg.PackagesPath, "All", p.PkgFile)
 		if _, err := os.Stat(pkgPath); err == nil {
@@ -395,7 +407,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	// Execute build - NOW WITH 3 RETURN VALUES
 	stats, cleanup, err := build.DoBuild(head, cfg, logger)
 	buildCleanup = cleanup // Store cleanup function for signal handler
-	
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Build error: %v\n", err)
 		if cleanup != nil {
