@@ -238,6 +238,55 @@ On a 16-core system building 100 ports:
 - Check available space in build base directory
 - Consider disabling tmpfs for large ports
 
+## Design Documentation
+
+This project follows a phased development approach with comprehensive design documentation.
+
+### Development Resources
+
+- **[Agent Guide](docs/design/AGENTS.md)** - Essential information for developers and AI agents working on the codebase
+- **[Quick Start](QUICKSTART.md)** - Practical getting-started guide for users
+
+### Architecture & Planning
+
+- **[IDEAS.md](docs/design/IDEAS.md)** - Comprehensive architectural vision and planning (729 lines)
+- **[IDEAS_MVP.md](docs/design/IDEAS_MVP.md)** - Minimum Viable Product scope and goals
+- **[Future Backlog](docs/design/FUTURE_BACKLOG.md)** - Features deferred for future releases
+
+### Phase Development Plan
+
+The project is developed in phases, each with detailed documentation:
+
+| Phase | Focus | Status | Documentation |
+|-------|-------|--------|---------------|
+| **Phase 1** | Library Extraction (pkg) | 🟡 In Progress | [Overview](docs/design/PHASE_1_LIBRARY.md) · [Tasks](docs/design/PHASE_1_TODO.md) · [Analysis](docs/design/PHASE_1_ANALYSIS_SUMMARY.md) |
+| **Phase 2** | Build Database | 📋 Planned | [Plan](docs/design/PHASE_2_BUILDDB.md) |
+| **Phase 3** | Builder | 📋 Planned | [Plan](docs/design/PHASE_3_BUILDER.md) |
+| **Phase 4** | Environment | 📋 Planned | [Plan](docs/design/PHASE_4_ENVIRONMENT.md) |
+| **Phase 5** | Minimal API | 📋 Planned | [Plan](docs/design/PHASE_5_MIN_API.md) |
+| **Phase 6** | Testing | 📋 Planned | [Plan](docs/design/PHASE_6_TESTING.md) |
+| **Phase 7** | Integration | 📋 Planned | [Plan](docs/design/PHASE_7_INTEGRATION.md) |
+
+### Phase 1 Status
+
+**Goal:** Extract package metadata and dependency resolution into a pure library.
+
+**Current Status:** 🟡 Functionally Complete, Architecturally Incomplete (43%)
+
+**Completed:**
+- ✅ Parse, Resolve, TopoOrder functions implemented
+- ✅ Cycle detection working
+- ✅ Basic test coverage
+- ✅ CRC database separated into builddb/ package
+
+**In Progress:**
+- 🔄 Separate build state from Package struct
+- 🔄 Add structured error types
+- 🔄 Remove global state
+- 🔄 Comprehensive documentation
+
+See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed task list (12 tasks, ~25-35 hours remaining).
+
 ## Contributing
 
 Contributions welcome! Please:
@@ -245,6 +294,11 @@ Contributions welcome! Please:
 2. Create a feature branch
 3. Make your changes with tests
 4. Submit a pull request
+
+**For Contributors:**
+- Read [AGENTS.md](docs/design/AGENTS.md) for development workflow
+- Check [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for current tasks
+- Follow the commit guidelines in AGENTS.md
 
 ## License
 
