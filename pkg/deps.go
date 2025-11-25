@@ -9,7 +9,7 @@ import (
 )
 
 // resolveDependencies builds the complete dependency graph
-func resolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry) error {
+func resolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
 	// Phase 1: Collect all dependencies recursively
 	fmt.Println("Resolving dependencies...")
 
@@ -66,7 +66,7 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 					}
 
 					// Check if already in registry
-					if existing := globalRegistry.Find(origin.portDir); existing != nil {
+					if existing := pkgRegistry.Find(origin.portDir); existing != nil {
 						// Already in registry, add to linked list if not there
 						if existing.Next == nil && existing.Prev == nil && existing != head {
 							tail.Next = existing
@@ -107,7 +107,7 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 			}
 
 			// Add to registry
-			existingPkg := globalRegistry.Enter(pkg)
+			existingPkg := pkgRegistry.Enter(pkg)
 
 			// Add to linked list if it's a new package
 			if existingPkg == pkg {
@@ -134,7 +134,7 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 
 	// Phase 2: Build the dependency graph
 	fmt.Println("Building dependency graph...")
-	return buildDependencyGraph(head, cfg)
+	return buildDependencyGraph(head, cfg, pkgRegistry)
 }
 
 type depOrigin struct {
@@ -215,11 +215,11 @@ func parseDependencyString(depStr string, cfg *config.Config) []depOrigin {
 }
 
 // buildDependencyGraph creates the IDependOn and DependsOnMe links
-func buildDependencyGraph(head *Package, cfg *config.Config) error {
+func buildDependencyGraph(head *Package, cfg *config.Config, pkgRegistry *PackageRegistry) error {
 	// Process all packages
 	count := 0
 	for pkg := head; pkg != nil; pkg = pkg.Next {
-		if err := linkPackageDependencies(pkg, cfg); err != nil {
+		if err := linkPackageDependencies(pkg, cfg, pkgRegistry); err != nil {
 			return err
 		}
 		count++
@@ -238,7 +238,7 @@ func buildDependencyGraph(head *Package, cfg *config.Config) error {
 	return nil
 }
 
-func linkPackageDependencies(pkg *Package, cfg *config.Config) error {
+func linkPackageDependencies(pkg *Package, cfg *config.Config, pkgRegistry *PackageRegistry) error {
 	deps := []struct {
 		depStr  string
 		depType int
@@ -258,7 +258,7 @@ func linkPackageDependencies(pkg *Package, cfg *config.Config) error {
 
 		depOrigins := parseDependencyString(d.depStr, cfg)
 		for _, origin := range depOrigins {
-			depPkg := globalRegistry.Find(origin.portDir)
+			depPkg := pkgRegistry.Find(origin.portDir)
 			if depPkg == nil {
 				// This shouldn't happen if dependency resolution worked correctly
 				fmt.Printf("Warning: dependency not found: %s (required by %s)\n",

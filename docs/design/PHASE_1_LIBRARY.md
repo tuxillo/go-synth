@@ -1,6 +1,6 @@
 # Phase 1: Library Extraction (pkg)
 
-**Status**: 🟡 65% Complete - Strong Progress  
+**Status**: 🟢 75% Complete - All Critical Architecture Done!  
 **Last Updated**: 2025-11-25
 
 ## Goals
@@ -84,10 +84,12 @@ func TopoOrder(head *Package) ([]*Package, error)
 - ✅ ~~Build-time functions mixed with metadata~~ **FIXED** - CRC functions moved to builddb
 - **Status**: Package struct is now pure metadata ✅
 
-**2. Global State Issues**
-- ❌ `globalRegistry` - Package-level global, not thread-safe for independent operations
-- ❌ `globalCRCDB` - Package-level global CRC database instance
-- **Impact**: Makes testing harder, prevents concurrent independent uses
+**2. Global State Issues** ✅ **RESOLVED (Task 4 Complete)**
+- ✅ ~~`globalRegistry`~~ **FIXED** - Now passed as parameter to all functions
+- ✅ ~~Package-level global~~ **FIXED** - Created `NewPackageRegistry()` constructor
+- ✅ ~~Not thread-safe for independent operations~~ **FIXED** - Each caller creates own instance
+- ✅ Tested with 100 concurrent goroutines - no conflicts
+- **Status**: No global state remains in pkg package ✅
 
 **3. Missing Error Types** ✅ **RESOLVED (Task 3 Complete)**
 - ✅ ~~No structured error types~~ **FIXED** - Added 5 sentinel errors + 2 structured types
@@ -105,9 +107,9 @@ func TopoOrder(head *Package) ([]*Package, error)
 **5. Test Coverage Gaps**
 - ❌ No integration test for full Parse→Resolve→TopoOrder workflow
 - ❌ No error path tests (invalid inputs, missing ports)
-- ❌ No tests for global registry behavior
+- ✅ ~~No tests for global registry behavior~~ **FIXED** - Added 3 PackageRegistry tests including concurrent test
 - ❌ No benchmark tests for large graphs
-- **Impact**: Unknown edge case behavior, performance characteristics
+- **Impact**: Unknown edge case behavior, performance characteristics (but concurrency proven safe)
 
 **6. API Design Issues**
 - ❌ `BulkQueue` implementation detail exposed in `pkg/` package
@@ -126,7 +128,7 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 4. ✅ ~~**Separate build state from Package struct**~~ - **DONE (Task 1)**
 5. ✅ ~~**Move CRC database to separate package**~~ - **DONE (Task 2)**
 6. ✅ ~~**Add structured error types**~~ - **DONE (Task 3)**
-7. ❌ **Remove global state** - HIGH (Task 4)
+7. ✅ ~~**Remove global state**~~ - **DONE (Task 4)** 🎉
 
 ### Medium Priority (Quality & Usability)
 8. ❌ Add comprehensive godoc comments
@@ -151,6 +153,7 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 - ✅ ~~Pure metadata-only Package struct~~ - **COMPLETE (Task 1)**
 - ✅ ~~Separated CRC/build tracking~~ - **COMPLETE (Task 2)**
 - ✅ ~~Structured error types~~ - **COMPLETE (Task 3)**
+- ✅ ~~No global state~~ - **COMPLETE (Task 4)**
 - ❌ Comprehensive godoc comments
 - ❌ Minimal developer guide
 - ❌ Full test coverage (edge cases, errors, integration)
@@ -165,10 +168,10 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 - ✅ Package struct contains ONLY metadata (no build state/flags) - **ACHIEVED (Task 1)**
 - ✅ CRC/build tracking separated into different package - **ACHIEVED (Task 2)**
 - ✅ Structured errors for all failure modes - **ACHIEVED (Task 3)**
-- ❌ No global state in pkg package - **NOT ACHIEVED** (Task 4 remaining)
+- ✅ No global state in pkg package - **ACHIEVED (Task 4)** 🎉
 - ❌ Comprehensive documentation (godoc + guide) - **NOT ACHIEVED** (Tasks 5, 6, 9 remaining)
 
-**Phase 1 Status**: 65% complete. Excellent architectural progress - Package struct is pure metadata, build concerns separated, and error handling is now type-safe. Only one critical task remains (global state removal), then quality improvements (documentation).
+**Phase 1 Status**: 75% complete. 🎉 **ALL CRITICAL ARCHITECTURE COMPLETE!** - Package struct is pure metadata, build concerns separated, error handling is type-safe, and no global state remains. Only quality/documentation improvements remain (Tasks 5-12).
 
 ## Dependencies
 - None (foundation for later phases).

@@ -260,7 +260,7 @@ The project is developed in phases, each with detailed documentation:
 
 | Phase | Focus | Status | Documentation |
 |-------|-------|--------|---------------|
-| **Phase 1** | Library Extraction (pkg) | 🟡 In Progress | [Overview](docs/design/PHASE_1_LIBRARY.md) · [Tasks](docs/design/PHASE_1_TODO.md) · [Analysis](docs/design/PHASE_1_ANALYSIS_SUMMARY.md) |
+| **Phase 1** | Library Extraction (pkg) | 🟢 75% Complete | [Overview](docs/design/PHASE_1_LIBRARY.md) · [Tasks](docs/design/PHASE_1_TODO.md) · [Analysis](docs/design/PHASE_1_ANALYSIS_SUMMARY.md) |
 | **Phase 2** | Build Database | 📋 Planned | [Plan](docs/design/PHASE_2_BUILDDB.md) |
 | **Phase 3** | Builder | 📋 Planned | [Plan](docs/design/PHASE_3_BUILDER.md) |
 | **Phase 4** | Environment | 📋 Planned | [Plan](docs/design/PHASE_4_ENVIRONMENT.md) |
@@ -272,22 +272,27 @@ The project is developed in phases, each with detailed documentation:
 
 **Goal:** Extract package metadata and dependency resolution into a pure library.
 
-**Current Status:** 🟡 65% Complete - Strong Architectural Progress
+**Current Status:** 🟢 75% Complete - All Critical Architecture Done! 🎉
 
 **Completed:**
 - ✅ Parse, Resolve, TopoOrder functions implemented
 - ✅ Cycle detection working
-- ✅ Basic test coverage (23 tests passing)
+- ✅ Test coverage (26 tests passing, including concurrent tests)
 - ✅ CRC database separated into builddb/ package (Task 2)
 - ✅ Build state separated from Package struct (Task 1)
 - ✅ Package struct is now pure metadata
 - ✅ Structured error types with type-safe error handling (Task 3)
+- ✅ **No global state - fully thread-safe library (Task 4)** 🎉
 
-**In Progress:**
-- 🔄 Remove global state (Task 4) - Last critical task!
-- 🔄 Comprehensive documentation (Tasks 5, 6, 9)
+**Remaining (Documentation & Quality):**
+- 🔄 Comprehensive godoc comments (Task 5)
+- 🔄 Developer guide (Task 6)
+- 🔄 Integration tests (Task 7)
+- 🔄 README API examples (Task 9)
 
-See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed task list (12 tasks, ~25-35 hours remaining).
+**Critical Milestone:** All 4 critical architectural tasks complete! The pkg library is now a true pure library with no global state, no build concerns, and type-safe error handling. Only documentation and quality improvements remain.
+
+See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed task list (8 tasks remaining, ~11-18 hours estimated).
 
 ## Contributing
 

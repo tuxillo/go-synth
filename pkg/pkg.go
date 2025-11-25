@@ -105,15 +105,17 @@ func (p *Package) GetPkgFile() string {
 	return p.PkgFile
 }
 
-// Global package registry
-var globalRegistry = &PackageRegistry{
-	packages: make(map[string]*Package),
-}
-
 // PackageRegistry maintains all packages
 type PackageRegistry struct {
 	mu       sync.RWMutex
 	packages map[string]*Package
+}
+
+// NewPackageRegistry creates a new package registry
+func NewPackageRegistry() *PackageRegistry {
+	return &PackageRegistry{
+		packages: make(map[string]*Package),
+	}
 }
 
 // Enter adds a package to the registry
@@ -137,7 +139,7 @@ func (r *PackageRegistry) Find(portDir string) *Package {
 }
 
 // ParsePortList parses a list of port specifications
-func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRegistry) (*Package, error) {
+func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) (*Package, error) {
 	var head, tail *Package
 
 	bq := newBulkQueue(cfg, cfg.MaxWorkers)
@@ -181,7 +183,7 @@ func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRe
 		}
 
 		// Register package
-		globalRegistry.Enter(pkg)
+		pkgRegistry.Enter(pkg)
 	}
 
 	if head == nil {
@@ -346,8 +348,8 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (int, stri
 }
 
 // ResolveDependencies resolves all dependencies
-func ResolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry) error {
-	return resolveDependencies(head, cfg, registry)
+func ResolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
+	return resolveDependencies(head, cfg, registry, pkgRegistry)
 }
 
 // MarkPackagesNeedingBuild analyzes which packages need rebuilding
@@ -499,13 +501,13 @@ func GetAllPorts(cfg *config.Config) ([]string, error) {
 }
 
 // Parse is a thin alias for ParsePortList for Phase 1 API compatibility
-func Parse(portSpecs []string, cfg *config.Config, registry *BuildStateRegistry) (*Package, error) {
-	return ParsePortList(portSpecs, cfg, registry)
+func Parse(portSpecs []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) (*Package, error) {
+	return ParsePortList(portSpecs, cfg, registry, pkgRegistry)
 }
 
 // Resolve wraps ResolveDependencies for Phase 1 API compatibility
-func Resolve(head *Package, cfg *config.Config, registry *BuildStateRegistry) error {
-	return ResolveDependencies(head, cfg, registry)
+func Resolve(head *Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
+	return ResolveDependencies(head, cfg, registry, pkgRegistry)
 }
 
 // TopoOrder wraps GetBuildOrder for Phase 1 API compatibility

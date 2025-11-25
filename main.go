@@ -345,15 +345,18 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	// Create build state registry
 	registry := pkg.NewBuildStateRegistry()
 
+	// Create package registry
+	pkgRegistry := pkg.NewPackageRegistry()
+
 	// Parse port specifications into package list
-	head, err := pkg.ParsePortList(portList, cfg, registry)
+	head, err := pkg.ParsePortList(portList, cfg, registry, pkgRegistry)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing port list: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Resolve all dependencies
-	if err := pkg.ResolveDependencies(head, cfg, registry); err != nil {
+	if err := pkg.ResolveDependencies(head, cfg, registry, pkgRegistry); err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}

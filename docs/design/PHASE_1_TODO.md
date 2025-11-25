@@ -152,63 +152,55 @@ Define custom error types for common failure modes.
 
 ---
 
-### Task 4: Remove Global State from pkg Package
+### Task 4: Remove Global State from pkg Package ✅ COMPLETE
 
 **Priority**: HIGH  
-**Estimated Effort**: 2-3 hours  
+**Estimated Effort**: 2-3 hours → **Actual: ~1.5 hours**  
+**Status**: ✅ **COMPLETE** (2025-11-25)
 
 **Problem**:
-- `globalRegistry` is package-level global
-- `globalCRCDB` is package-level global (will be moved in Task 2)
-- Makes concurrent use impossible
-- Makes testing harder (shared state)
+- `globalRegistry` was package-level global
+- Made concurrent use impossible
+- Made testing harder (shared state)
 
 **Solution**:
-Make registry instance-based, pass as parameter or context.
+Made registry instance-based, pass as parameter to all functions.
 
-**Steps**:
-- [ ] 4.1. Add `Registry` field to Config or create Context struct:
-  ```go
-  type Context struct {
-      Config   *config.Config
-      Registry *PackageRegistry
-  }
-  ```
-- [ ] 4.2. Update `Parse()` signature:
-  ```go
-  func Parse(portSpecs []string, ctx *Context) (*Package, error)
-  ```
-- [ ] 4.3. Update `Resolve()` signature:
-  ```go
-  func Resolve(head *Package, ctx *Context) error
-  ```
-- [ ] 4.4. Pass registry through call chain:
-  - `ParsePortList()` takes registry parameter
-  - `resolveDependencies()` takes registry parameter
-  - `BulkQueue` takes registry parameter
-- [ ] 4.5. Update all callers in main.go and cmd/build.go
-- [ ] 4.6. Remove `globalRegistry` variable
-- [ ] 4.7. Update tests to create isolated registries
-- [ ] 4.8. Add test for concurrent operations
+**Completed Steps**:
+- [x] 4.1. Add `NewPackageRegistry()` constructor function
+- [x] 4.2. Update `ParsePortList()` signature to accept pkgRegistry parameter
+- [x] 4.3. Update `ResolveDependencies()` signature to accept pkgRegistry parameter  
+- [x] 4.4. Update `Parse()` and `Resolve()` wrapper signatures
+- [x] 4.5. Update `resolveDependencies()` in deps.go to accept pkgRegistry
+- [x] 4.6. Update `buildDependencyGraph()` and `linkPackageDependencies()` to accept pkgRegistry
+- [x] 4.7. Replace all `globalRegistry` references with pkgRegistry parameter (5 locations)
+- [x] 4.8. Remove `globalRegistry` variable declaration from pkg.go
+- [x] 4.9. Update main.go to create pkgRegistry instance and pass to functions (2 locations)
+- [x] 4.10. Update cmd/build.go to create pkgRegistry instance and pass to functions (2 locations)
+- [x] 4.11. Update pkg/topo_test.go to use pkgRegistry parameter
+- [x] 4.12. No changes needed to pkg/cycle_test.go (doesn't call Parse/Resolve)
+- [x] 4.13. Create pkg/pkg_test.go with 3 comprehensive tests
+- [x] 4.14. Run all tests - all 26 tests passing ✅
 
-**Alternative approach** (simpler, less breaking):
-- [ ] 4.1. Keep global registry but add `NewRegistry()` function
-- [ ] 4.2. Add `SetRegistry()` for dependency injection
-- [ ] 4.3. Add `ResetRegistry()` for tests
-- [ ] 4.4. Document that global registry is for convenience only
+**Files Created**:
+- `pkg/pkg_test.go` - 3 tests for PackageRegistry (NEW)
+  - TestPackageRegistry_Concurrent (100 goroutines × 10 packages)
+  - TestPackageRegistry_EnterDuplicate
+  - TestPackageRegistry_FindNonexistent
 
-**Files to modify**:
-- `pkg/pkg.go` (add Context or modify signatures)
-- `pkg/deps.go` (pass registry through)
-- `pkg/bulk.go` (pass registry through)
-- `main.go` (create/pass context)
-- `cmd/build.go` (create/pass context)
-- All test files (create isolated registries)
+**Files Modified**:
+- `pkg/pkg.go` - Added NewPackageRegistry(), updated 5 function signatures, removed globalRegistry variable
+- `pkg/deps.go` - Updated 3 function signatures, replaced 3 globalRegistry references
+- `main.go` - Created pkgRegistry instance, passed to ParsePortList and ResolveDependencies
+- `cmd/build.go` - Created pkgRegistry instance, passed to ParsePortList and ResolveDependencies
+- `pkg/topo_test.go` - Updated TestParseAliasNoPorts to pass pkgRegistry parameter
 
-**Acceptance Criteria**:
-- No package-level global registry (or properly managed)
-- Tests can run in parallel without interference
-- Concurrent uses don't conflict
+**Acceptance Criteria**: ✅ ALL MET
+- ✅ No package-level global registry variable
+- ✅ All functions accept pkgRegistry as parameter
+- ✅ Tests can run in parallel without interference (concurrent test proves this)
+- ✅ Concurrent uses don't conflict (100 goroutines test passes)
+- ✅ All 26 tests passing (23 existing + 3 new PackageRegistry tests)
 
 ---
 
@@ -618,20 +610,21 @@ Add benchmark tests for key operations.
 ## Summary Statistics
 
 **Total Tasks**: 12  
-**Completed**: 3 tasks (Task 1 ✅, Task 2 ✅, Task 3 ✅)  
-**Critical (Blocking)**: 1 task remaining (Task 4)  
+**Completed**: 4 tasks (Task 1 ✅, Task 2 ✅, Task 3 ✅, Task 4 ✅)  
+**Critical (Blocking)**: 0 tasks remaining 🎉  
 **High Priority**: 0 tasks  
 **Medium Priority**: 5 tasks  
 **Low Priority**: 3 tasks  
 
 **Estimated Total Effort**: 25-35 hours  
-**Completed Effort**: ~9-12 hours  
-**Remaining Effort**: ~16-23 hours
+**Completed Effort**: ~14-17 hours  
+**Remaining Effort**: ~11-18 hours
 
 **Completion Status**:
-- ✅ Completed: 5 items (Task 1 ✅, Task 2 ✅, Task 3 ✅, core functions, cycle detection, basic tests)
-- ❌ Remaining: 10 items
-- 📊 Progress: ~35% complete by effort
+- ✅ Completed: 4 critical tasks + core functions + cycle detection + tests
+- ❌ Remaining: 8 tasks (all documentation/quality improvements)
+- 📊 Progress: ~50% complete by effort
+- 🎉 **ALL CRITICAL ARCHITECTURAL WORK COMPLETE!**
 
 ---
 
@@ -639,11 +632,11 @@ Add benchmark tests for key operations.
 
 For efficient completion, tackle tasks in this order:
 
-1. **Week 1 - Critical Architecture** (~~12-16 hours~~ **2-3 hours remaining**)
+1. **Week 1 - Critical Architecture** (~~12-16 hours~~ **✅ COMPLETE!**)
    - ~~Task 2: Extract CRC Database (3-4h)~~ ✅ COMPLETE
    - ~~Task 1: Separate Build State (4-6h)~~ ✅ COMPLETE
    - ~~Task 3: Add Structured Errors (1-2h)~~ ✅ COMPLETE
-   - Task 4: Remove Global State (2-3h) ⬅️ **NEXT RECOMMENDED**
+   - ~~Task 4: Remove Global State (2-3h)~~ ✅ COMPLETE
 
 2. **Week 2 - Documentation & Quality** (8-12 hours)
    - Task 5: Add Godoc Comments (2-3h)
@@ -673,7 +666,7 @@ Phase 1 can be considered **complete** when:
 - ✅ Package struct contains ONLY metadata (no build state) - **Task 1 COMPLETE**
 - ✅ CRC/build concerns in separate package - **Task 2 COMPLETE**
 - ✅ Clean API with typed errors - **Task 3 COMPLETE**
-- ❌ No global state in pkg package - **Task 4 remaining**
+- ✅ No global state in pkg package - **Task 4 COMPLETE** 🎉
 
 ### Quality Requirements
 - ❌ Comprehensive godoc comments
