@@ -1,0 +1,753 @@
+# Phase 1 TODO List - Complete Library Separation
+
+**Created**: 2025-11-25  
+**Status**: 🟡 In Progress  
+**Goal**: Complete Phase 1 by creating a truly pure `pkg` library with no build concerns
+
+## Overview
+
+This document tracks the remaining work to properly complete Phase 1. While the core functionality is working (Parse, Resolve, TopoOrder), the library still has mixed concerns that violate the "pure library" goal.
+
+---
+
+## 🔴 CRITICAL - Blocking Phase 1 Exit
+
+### Task 1: Separate Build State from Package Struct
+
+**Priority**: CRITICAL  
+**Estimated Effort**: 4-6 hours  
+**Blocking**: Phase 1 completion
+
+**Problem**: 
+- `Package` struct contains build-time flags and state
+- Makes the library not reusable for pure metadata operations
+- Violates single responsibility principle
+
+**Solution**:
+Create separate `BuildState` struct to track build-specific information.
+
+**Steps**:
+- [ ] 1.1. Create new file `pkg/buildstate.go`
+- [ ] 1.2. Define `BuildState` struct:
+  ```go
+  type BuildState struct {
+      Pkg          *Package
+      Flags        int
+      IgnoreReason string
+      LastPhase    string
+      LastStatus   string
+  }
+  ```
+- [ ] 1.3. Create `BuildStateRegistry` to map `*Package -> *BuildState`
+- [ ] 1.4. Remove these fields from `Package` struct:
+  - `Flags` (all PkgF* flags)
+  - `IgnoreReason`
+  - `LastPhase`
+  - `LastStatus`
+- [ ] 1.5. Update `bulk.go` to use BuildState instead of Package.Flags
+- [ ] 1.6. Update all callers in `main.go` to use BuildState
+- [ ] 1.7. Update all callers in `cmd/build.go` to use BuildState
+- [ ] 1.8. Run tests to ensure nothing breaks
+- [ ] 1.9. Update documentation comments
+
+**Files to modify**:
+- `pkg/pkg.go` (Package struct definition)
+- `pkg/bulk.go` (flag handling)
+- `main.go` (build flag checks)
+- `cmd/build.go` (build flag checks)
+- `build/build.go` (likely uses flags)
+
+**Acceptance Criteria**:
+- Package struct has zero build-state fields
+- All existing functionality still works
+- Tests pass
+
+---
+
+### Task 2: Extract CRC Database to Separate Package
+
+**Priority**: CRITICAL  
+**Estimated Effort**: 3-4 hours  
+**Blocking**: Phase 1 completion
+
+**Problem**:
+- CRC database code lives in `pkg/` package
+- CRC tracking is build-time concern, not metadata
+- Prevents pkg from being a pure metadata library
+
+**Solution**:
+Move CRC database to its own package (prepare for Phase 2 BuildDB).
+
+**Steps**:
+- [ ] 2.1. Create new directory `builddb/`
+- [ ] 2.2. Create `builddb/crc.go` and move CRC database code:
+  - Move `CRCDatabase` struct
+  - Move `CRCEntry` struct
+  - Move all CRC methods
+  - Move `globalCRCDB` variable
+- [ ] 2.3. Create `builddb/helpers.go` and move helper functions:
+  - Move `computePortCRC()`
+  - Move `readString()` / `writeString()`
+  - Move rebuild/clean/export functions
+- [ ] 2.4. Update package declaration to `package builddb`
+- [ ] 2.5. Update imports in `pkg/pkg.go`:
+  - Remove CRC database code
+  - Import `dsynth/builddb` where needed
+- [ ] 2.6. Update `MarkPackagesNeedingBuild()`:
+  - Move to `builddb` package OR
+  - Keep in pkg but use builddb.CRCDatabase
+- [ ] 2.7. Update all callers:
+  - `main.go` - use `builddb.InitCRCDatabase()`
+  - `main.go` - use `builddb.SaveCRCDatabase()`
+- [ ] 2.8. Run tests to ensure nothing breaks
+- [ ] 2.9. Update go.mod if needed
+
+**Files to create**:
+- `builddb/crc.go`
+- `builddb/helpers.go`
+
+**Files to modify**:
+- `pkg/pkg.go` (remove CRC methods)
+- `pkg/crcdb.go` (DELETE - moved to builddb)
+- `pkg/crcdb_helpers.go` (DELETE - moved to builddb)
+- `main.go` (update imports)
+- `cmd/build.go` (update imports)
+
+**Acceptance Criteria**:
+- No CRC code remains in pkg/ directory
+- CRC functionality still works
+- Tests pass
+- `pkg` package has no knowledge of CRC tracking
+
+---
+
+### Task 3: Add Structured Error Types
+
+**Priority**: HIGH  
+**Estimated Effort**: 1-2 hours  
+
+**Problem**:
+- All errors use `fmt.Errorf()` string formatting
+- Cannot distinguish error types programmatically
+- Harder to test specific error conditions
+
+**Solution**:
+Define custom error types for common failure modes.
+
+**Steps**:
+- [ ] 3.1. Create new file `pkg/errors.go`
+- [ ] 3.2. Define error types:
+  ```go
+  package pkg
+  
+  import "errors"
+  
+  var (
+      // ErrCycleDetected is returned when a circular dependency is found
+      ErrCycleDetected = errors.New("circular dependency detected")
+      
+      // ErrInvalidSpec is returned when a port specification is malformed
+      ErrInvalidSpec = errors.New("invalid port specification")
+      
+      // ErrPortNotFound is returned when a port doesn't exist
+      ErrPortNotFound = errors.New("port not found in ports tree")
+      
+      // ErrNoValidPorts is returned when no valid ports found in input
+      ErrNoValidPorts = errors.New("no valid ports found")
+      
+      // ErrEmptySpec is returned when empty port spec list provided
+      ErrEmptySpec = errors.New("empty port specification list")
+  )
+  
+  // PortNotFoundError wraps port-specific not found errors
+  type PortNotFoundError struct {
+      PortSpec string
+      Path     string
+  }
+  
+  func (e *PortNotFoundError) Error() string {
+      return fmt.Sprintf("port not found: %s (path: %s)", e.PortSpec, e.Path)
+  }
+  
+  // CycleError wraps cycle detection with details
+  type CycleError struct {
+      TotalPackages   int
+      OrderedPackages int
+      CyclePackages   []*Package
+  }
+  
+  func (e *CycleError) Error() string {
+      return fmt.Sprintf("cycle detected: only %d of %d packages ordered", 
+          e.OrderedPackages, e.TotalPackages)
+  }
+  ```
+- [ ] 3.3. Update `TopoOrderStrict()` to return `*CycleError`
+- [ ] 3.4. Update `ParsePortList()` to return typed errors
+- [ ] 3.5. Update `getPackageInfo()` to return `*PortNotFoundError`
+- [ ] 3.6. Update error handling in tests
+- [ ] 3.7. Add godoc comments for all error types
+
+**Files to create**:
+- `pkg/errors.go`
+
+**Files to modify**:
+- `pkg/pkg.go` (use typed errors)
+- `pkg/deps.go` (use typed errors)
+- `pkg/topo_test.go` (check error types)
+- `pkg/cycle_test.go` (check error types)
+
+**Acceptance Criteria**:
+- All public functions return typed errors
+- Tests can check error types with `errors.Is()` and `errors.As()`
+- Error messages are still informative
+
+---
+
+### Task 4: Remove Global State from pkg Package
+
+**Priority**: HIGH  
+**Estimated Effort**: 2-3 hours  
+
+**Problem**:
+- `globalRegistry` is package-level global
+- `globalCRCDB` is package-level global (will be moved in Task 2)
+- Makes concurrent use impossible
+- Makes testing harder (shared state)
+
+**Solution**:
+Make registry instance-based, pass as parameter or context.
+
+**Steps**:
+- [ ] 4.1. Add `Registry` field to Config or create Context struct:
+  ```go
+  type Context struct {
+      Config   *config.Config
+      Registry *PackageRegistry
+  }
+  ```
+- [ ] 4.2. Update `Parse()` signature:
+  ```go
+  func Parse(portSpecs []string, ctx *Context) (*Package, error)
+  ```
+- [ ] 4.3. Update `Resolve()` signature:
+  ```go
+  func Resolve(head *Package, ctx *Context) error
+  ```
+- [ ] 4.4. Pass registry through call chain:
+  - `ParsePortList()` takes registry parameter
+  - `resolveDependencies()` takes registry parameter
+  - `BulkQueue` takes registry parameter
+- [ ] 4.5. Update all callers in main.go and cmd/build.go
+- [ ] 4.6. Remove `globalRegistry` variable
+- [ ] 4.7. Update tests to create isolated registries
+- [ ] 4.8. Add test for concurrent operations
+
+**Alternative approach** (simpler, less breaking):
+- [ ] 4.1. Keep global registry but add `NewRegistry()` function
+- [ ] 4.2. Add `SetRegistry()` for dependency injection
+- [ ] 4.3. Add `ResetRegistry()` for tests
+- [ ] 4.4. Document that global registry is for convenience only
+
+**Files to modify**:
+- `pkg/pkg.go` (add Context or modify signatures)
+- `pkg/deps.go` (pass registry through)
+- `pkg/bulk.go` (pass registry through)
+- `main.go` (create/pass context)
+- `cmd/build.go` (create/pass context)
+- All test files (create isolated registries)
+
+**Acceptance Criteria**:
+- No package-level global registry (or properly managed)
+- Tests can run in parallel without interference
+- Concurrent uses don't conflict
+
+---
+
+## 🟡 MEDIUM PRIORITY - Quality & Usability
+
+### Task 5: Add Comprehensive Godoc Comments
+
+**Priority**: MEDIUM  
+**Estimated Effort**: 2-3 hours  
+
+**Problem**:
+- Many exported functions lack documentation
+- Package-level comment missing
+- Users don't know how to use the API
+
+**Solution**:
+Add proper godoc comments to all exported symbols.
+
+**Steps**:
+- [ ] 5.1. Add package-level comment to `pkg/pkg.go`:
+  ```go
+  // Package pkg provides package metadata parsing and dependency resolution
+  // for BSD ports. It supports parsing port specifications, resolving
+  // dependency graphs, and computing topological build order.
+  //
+  // Basic usage:
+  //   head, err := pkg.Parse([]string{"editors/vim"}, cfg)
+  //   if err != nil { ... }
+  //   
+  //   err = pkg.Resolve(head, cfg)
+  //   if err != nil { ... }
+  //   
+  //   order, err := pkg.TopoOrder(head)
+  //   if err != nil { ... }
+  package pkg
+  ```
+- [ ] 5.2. Add godoc to `Package` struct explaining each field
+- [ ] 5.3. Add godoc to `Parse()` function
+- [ ] 5.4. Add godoc to `Resolve()` function
+- [ ] 5.5. Add godoc to `TopoOrder()` function
+- [ ] 5.6. Add godoc to `TopoOrderStrict()` function
+- [ ] 5.7. Add godoc to `PkgLink` struct
+- [ ] 5.8. Add godoc to `PackageRegistry` type and methods
+- [ ] 5.9. Run `go doc` to verify formatting
+- [ ] 5.10. Generate HTML docs with `godoc -http=:6060` and review
+
+**Files to modify**:
+- `pkg/pkg.go`
+- `pkg/deps.go`
+- `pkg/bulk.go`
+
+**Acceptance Criteria**:
+- All exported symbols have godoc comments
+- Package overview is clear
+- Examples are included where helpful
+
+---
+
+### Task 6: Create Developer Guide
+
+**Priority**: MEDIUM  
+**Estimated Effort**: 3-4 hours  
+
+**Problem**:
+- No documentation on how to use pkg library
+- Developers have to read source code
+- Phase 1 deliverable missing
+
+**Solution**:
+Create `PHASE_1_DEVELOPER_GUIDE.md` with examples.
+
+**Steps**:
+- [ ] 6.1. Create file `PHASE_1_DEVELOPER_GUIDE.md`
+- [ ] 6.2. Write overview section explaining pkg library purpose
+- [ ] 6.3. Write "Quick Start" section with basic example
+- [ ] 6.4. Document Package struct and its fields
+- [ ] 6.5. Document Parse() function with examples
+- [ ] 6.6. Document Resolve() function with examples
+- [ ] 6.7. Document TopoOrder() function with examples
+- [ ] 6.8. Add error handling section
+- [ ] 6.9. Add advanced usage section (flavors, large graphs)
+- [ ] 6.10. Add "Common Patterns" section
+- [ ] 6.11. Add troubleshooting section
+- [ ] 6.12. Link from main README.md
+
+**Content outline**:
+```markdown
+# Phase 1 Developer Guide - Using the pkg Library
+
+## Overview
+## Installation
+## Quick Start
+## Core Concepts
+  - Package Struct
+  - Dependency Graph
+  - Topological Ordering
+## API Reference
+  - Parse()
+  - Resolve()
+  - TopoOrder()
+  - TopoOrderStrict()
+## Error Handling
+## Advanced Usage
+  - Flavors
+  - Custom Registries
+  - Large Dependency Graphs
+## Common Patterns
+## Troubleshooting
+## Examples
+```
+
+**Files to create**:
+- `PHASE_1_DEVELOPER_GUIDE.md`
+
+**Files to modify**:
+- `README.md` (add link to developer guide)
+
+**Acceptance Criteria**:
+- Guide is comprehensive and clear
+- Examples are tested and working
+- Covers common use cases
+
+---
+
+### Task 7: Add Integration Tests
+
+**Priority**: MEDIUM  
+**Estimated Effort**: 2-3 hours  
+
+**Problem**:
+- Only unit tests exist
+- No end-to-end workflow tests
+- Cannot verify Parse→Resolve→TopoOrder pipeline
+
+**Solution**:
+Add integration tests for complete workflows.
+
+**Steps**:
+- [ ] 7.1. Create file `pkg/integration_test.go`
+- [ ] 7.2. Add test for Parse→Resolve→TopoOrder workflow:
+  ```go
+  func TestFullWorkflow(t *testing.T) {
+      cfg := &config.Config{DPortsPath: "/usr/ports"}
+      
+      // Parse
+      head, err := Parse([]string{"editors/vim"}, cfg)
+      if err != nil { t.Fatal(err) }
+      
+      // Resolve
+      err = Resolve(head, cfg)
+      if err != nil { t.Fatal(err) }
+      
+      // Order
+      order, err := TopoOrder(head)
+      if err != nil { t.Fatal(err) }
+      
+      // Verify order is valid
+      if len(order) == 0 {
+          t.Fatal("expected non-empty order")
+      }
+  }
+  ```
+- [ ] 7.3. Add test for multiple packages with shared dependencies
+- [ ] 7.4. Add test for packages with flavors
+- [ ] 7.5. Add test for error propagation through pipeline
+- [ ] 7.6. Add test with mock port directory (no filesystem dependency)
+- [ ] 7.7. Document how to run integration tests
+
+**Files to create**:
+- `pkg/integration_test.go`
+
+**Acceptance Criteria**:
+- Tests cover full Parse→Resolve→TopoOrder workflow
+- Tests can run without real ports tree (using mocks)
+- Tests verify correctness of build order
+
+---
+
+### Task 8: Improve Error Path Test Coverage
+
+**Priority**: MEDIUM  
+**Estimated Effort**: 2-3 hours  
+
+**Problem**:
+- Tests only cover happy paths
+- Error handling not tested
+- Edge cases not covered
+
+**Solution**:
+Add tests for error conditions and edge cases.
+
+**Steps**:
+- [ ] 8.1. Add test for invalid port specs:
+  ```go
+  func TestParseInvalidSpec(t *testing.T) {
+      cfg := &config.Config{DPortsPath: "/usr/ports"}
+      _, err := Parse([]string{"invalid"}, cfg)
+      if !errors.Is(err, ErrInvalidSpec) {
+          t.Errorf("expected ErrInvalidSpec, got %v", err)
+      }
+  }
+  ```
+- [ ] 8.2. Add test for non-existent port
+- [ ] 8.3. Add test for empty port spec list
+- [ ] 8.4. Add test for port with missing Makefile
+- [ ] 8.5. Add test for port with invalid dependency syntax
+- [ ] 8.6. Add test for very large dependency graph (performance)
+- [ ] 8.7. Add test for self-dependency (should fail)
+- [ ] 8.8. Add test for multiple dependency cycles
+- [ ] 8.9. Run test coverage analysis: `go test -cover ./pkg`
+- [ ] 8.10. Aim for >80% coverage on pkg package
+
+**Files to modify**:
+- `pkg/topo_test.go` (add error cases)
+- `pkg/dep_parse_test.go` (add error cases)
+- `pkg/cycle_test.go` (add more cycle scenarios)
+
+**Files to create**:
+- `pkg/errors_test.go` (test error types)
+
+**Acceptance Criteria**:
+- Error paths are tested
+- Edge cases are covered
+- Test coverage >80% in pkg package
+
+---
+
+### Task 9: Update README with API Examples
+
+**Priority**: MEDIUM  
+**Estimated Effort**: 1-2 hours  
+
+**Problem**:
+- README doesn't document Phase 1 API
+- Users don't know the library exists
+- No examples of programmatic usage
+
+**Solution**:
+Add "Library Usage" section to README.
+
+**Steps**:
+- [ ] 9.1. Add new section to README.md after "Quick Start"
+- [ ] 9.2. Section: "## Library Usage (Phase 1 API)"
+- [ ] 9.3. Add example of using pkg library programmatically:
+  ```go
+  package main
+  
+  import (
+      "fmt"
+      "dsynth/config"
+      "dsynth/pkg"
+  )
+  
+  func main() {
+      cfg, _ := config.LoadConfig("", "default")
+      
+      // Parse port specs
+      head, err := pkg.Parse([]string{"editors/vim"}, cfg)
+      if err != nil {
+          panic(err)
+      }
+      
+      // Resolve dependencies
+      err = pkg.Resolve(head, cfg)
+      if err != nil {
+          panic(err)
+      }
+      
+      // Get build order
+      order, err := pkg.TopoOrder(head)
+      if err != nil {
+          panic(err)
+      }
+      
+      // Print build order
+      for _, p := range order {
+          fmt.Printf("Build: %s\n", p.PortDir)
+      }
+  }
+  ```
+- [ ] 9.4. Link to developer guide
+- [ ] 9.5. Add note about Phase 1 status
+- [ ] 9.6. Update architecture diagram to show pkg library
+
+**Files to modify**:
+- `README.md`
+
+**Acceptance Criteria**:
+- README clearly explains library can be used programmatically
+- Example code is tested and works
+- Links to developer guide
+
+---
+
+## 🟢 LOW PRIORITY - Nice to Have
+
+### Task 10: Add context.Context Support
+
+**Priority**: LOW  
+**Estimated Effort**: 2-3 hours  
+
+**Problem**:
+- Operations cannot be cancelled
+- No timeout support
+- Not idiomatic Go for long operations
+
+**Solution**:
+Add context.Context parameter to main functions.
+
+**Steps**:
+- [ ] 10.1. Update function signatures:
+  ```go
+  func Parse(ctx context.Context, portSpecs []string, cfg *config.Config) (*Package, error)
+  func Resolve(ctx context.Context, head *Package, cfg *config.Config) error
+  ```
+- [ ] 10.2. Check context cancellation in loops:
+  ```go
+  select {
+  case <-ctx.Done():
+      return ctx.Err()
+  default:
+      // continue work
+  }
+  ```
+- [ ] 10.3. Pass context through to goroutines in BulkQueue
+- [ ] 10.4. Update all callers to pass context
+- [ ] 10.5. Add test for cancellation
+- [ ] 10.6. Add test for timeout
+
+**Files to modify**:
+- `pkg/pkg.go`
+- `pkg/deps.go`
+- `pkg/bulk.go`
+- `main.go`
+- `cmd/build.go`
+
+**Acceptance Criteria**:
+- Operations can be cancelled via context
+- Cancellation is quick (not waiting for full operation)
+
+---
+
+### Task 11: Make BulkQueue Internal
+
+**Priority**: LOW  
+**Estimated Effort**: 1 hour  
+
+**Problem**:
+- `BulkQueue` is an implementation detail
+- Shouldn't be part of public API
+- Currently uppercase (exported)
+
+**Solution**:
+Make BulkQueue internal/private.
+
+**Steps**:
+- [ ] 11.1. Rename `BulkQueue` to `bulkQueue` (lowercase)
+- [ ] 11.2. Rename all methods to lowercase
+- [ ] 11.3. Move to separate internal file or keep in bulk.go
+- [ ] 11.4. Verify no external packages use it
+- [ ] 11.5. Update comments to reflect internal status
+
+**Files to modify**:
+- `pkg/bulk.go`
+
+**Acceptance Criteria**:
+- BulkQueue is not exported
+- No external packages can access it
+
+---
+
+### Task 12: Add Benchmark Tests
+
+**Priority**: LOW  
+**Estimated Effort**: 2 hours  
+
+**Problem**:
+- Unknown performance characteristics
+- Cannot detect performance regressions
+- No data for optimization decisions
+
+**Solution**:
+Add benchmark tests for key operations.
+
+**Steps**:
+- [ ] 12.1. Create file `pkg/benchmark_test.go`
+- [ ] 12.2. Add benchmark for Parse with 10 packages
+- [ ] 12.3. Add benchmark for Parse with 100 packages
+- [ ] 12.4. Add benchmark for Resolve with 10 packages
+- [ ] 12.5. Add benchmark for Resolve with 100 packages
+- [ ] 12.6. Add benchmark for TopoOrder with various graph sizes
+- [ ] 12.7. Add benchmark for cycle detection
+- [ ] 12.8. Run benchmarks: `go test -bench=. ./pkg`
+- [ ] 12.9. Document baseline performance in PHASE_1_LIBRARY.md
+- [ ] 12.10. Set up benchmark tracking for future changes
+
+**Files to create**:
+- `pkg/benchmark_test.go`
+
+**Acceptance Criteria**:
+- Benchmarks run successfully
+- Baseline performance documented
+- Can detect regressions with `benchcmp`
+
+---
+
+## Summary Statistics
+
+**Total Tasks**: 12  
+**Critical (Blocking)**: 4 tasks  
+**High Priority**: 0 tasks  
+**Medium Priority**: 5 tasks  
+**Low Priority**: 3 tasks  
+
+**Estimated Total Effort**: 25-35 hours
+
+**Completion Status**:
+- ✅ Completed: 3 items (core functions, cycle detection, basic tests)
+- ❌ Remaining: 12 items
+- 📊 Progress: ~20% complete by effort
+
+---
+
+## Suggested Order of Execution
+
+For efficient completion, tackle tasks in this order:
+
+1. **Week 1 - Critical Architecture** (12-16 hours)
+   - Task 2: Extract CRC Database (3-4h)
+   - Task 1: Separate Build State (4-6h)
+   - Task 3: Add Structured Errors (1-2h)
+   - Task 4: Remove Global State (2-3h)
+
+2. **Week 2 - Documentation & Quality** (8-12 hours)
+   - Task 5: Add Godoc Comments (2-3h)
+   - Task 6: Create Developer Guide (3-4h)
+   - Task 9: Update README (1-2h)
+   - Task 7: Add Integration Tests (2-3h)
+
+3. **Week 3 - Polish** (5-7 hours)
+   - Task 8: Improve Error Test Coverage (2-3h)
+   - Task 11: Make BulkQueue Internal (1h)
+   - Task 12: Add Benchmark Tests (2h)
+   - Task 10: Add context.Context (optional) (2-3h)
+
+---
+
+## Definition of Done for Phase 1
+
+Phase 1 can be considered **complete** when:
+
+### Functional Requirements
+- ✅ Parse() correctly parses port specs including flavors
+- ✅ Resolve() builds complete dependency graph
+- ✅ TopoOrder() returns valid build order with cycle detection
+- ✅ All existing commands work with the API
+
+### Architectural Requirements
+- ❌ Package struct contains ONLY metadata (no build state)
+- ❌ CRC/build concerns in separate package
+- ❌ No global state in pkg package
+- ❌ Clean API with typed errors
+
+### Quality Requirements
+- ❌ Comprehensive godoc comments
+- ❌ Developer guide exists
+- ❌ >80% test coverage
+- ❌ Integration tests pass
+- ❌ Error paths tested
+
+### Documentation Requirements
+- ❌ README documents library usage
+- ❌ Developer guide with examples
+- ❌ PHASE_1_LIBRARY.md reflects reality
+- ❌ API examples are tested
+
+---
+
+## Notes
+
+- Keep backward compatibility where possible
+- Deprecate old functions rather than removing them immediately
+- Run tests after each task
+- Commit work incrementally (each completed task = 1 commit)
+- Update PHASE_1_LIBRARY.md status as tasks complete
+- Document any deviations from this plan
+
+---
+
+**Last Updated**: 2025-11-25  
+**Next Review**: After completing Week 1 tasks
