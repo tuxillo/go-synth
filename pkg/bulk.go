@@ -27,7 +27,9 @@ type bulkWork struct {
 type bulkResult struct {
 	pkg          *Package
 	err          error
-	initialFlags int // Flags that should be set on this package
+	initialFlags int    // Flags from manual selection, debug mode, etc.
+	parseFlags   int    // Flags from queryMakefile (PkgFIgnored, PkgFMeta, PkgFCorrupt)
+	ignoreReason string // Ignore reason from queryMakefile
 }
 
 func newBulkQueue(cfg *config.Config, maxBulk int) *BulkQueue {
@@ -55,18 +57,26 @@ func (bq *BulkQueue) worker() {
 	defer bq.wg.Done()
 
 	for work := range bq.workChan {
-		pkg, err := getPackageInfo(work.category, work.name, work.flavor, bq.cfg)
+		pkg, parseFlags, ignoreReason, err := getPackageInfo(work.category, work.name, work.flavor, bq.cfg)
 
 		initialFlags := 0
-		if err == nil && work.flags != "x" {
-			initialFlags |= PkgFManualSel
+		if err == nil {
+			// Add selection flags
+			if work.flags != "x" {
+				initialFlags |= PkgFManualSel
+			}
+			if work.flags == "d" {
+				initialFlags |= PkgFManualSel // Debug stop mode
+			}
 		}
 
-		if err == nil && work.flags == "d" {
-			initialFlags |= PkgFManualSel // Debug stop mode
+		bq.resultChan <- &bulkResult{
+			pkg:          pkg,
+			err:          err,
+			initialFlags: initialFlags,
+			parseFlags:   parseFlags,
+			ignoreReason: ignoreReason,
 		}
-
-		bq.resultChan <- &bulkResult{pkg: pkg, err: err, initialFlags: initialFlags}
 	}
 }
 
@@ -83,14 +93,14 @@ func (bq *BulkQueue) Queue(category, name, flavor, flags string) {
 	}
 }
 
-func (bq *BulkQueue) GetResult() (*Package, int, error) {
+func (bq *BulkQueue) GetResult() (*Package, int, int, string, error) {
 	result := <-bq.resultChan
 
 	bq.mu.Lock()
 	bq.active--
 	bq.mu.Unlock()
 
-	return result.pkg, result.initialFlags, result.err
+	return result.pkg, result.initialFlags, result.parseFlags, result.ignoreReason, result.err
 }
 
 func (bq *BulkQueue) Close() {

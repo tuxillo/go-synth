@@ -39,7 +39,8 @@ const (
 	DepTypeRun     = 6
 )
 
-// Package represents a port/package
+// Package represents a port/package metadata
+// Build-time state (flags, ignore reason, phase) is tracked separately in BuildStateRegistry
 type Package struct {
 	PortDir  string // e.g., "editors/vim"
 	Category string
@@ -47,7 +48,6 @@ type Package struct {
 	Flavor   string
 	Version  string
 	PkgFile  string // Package filename (just the basename, e.g., "vim-9.0.pkg")
-	Flags    int
 
 	// Dependencies
 	FetchDeps   string
@@ -63,10 +63,8 @@ type Package struct {
 	DepiCount   int        // Number of packages that depend on me
 	DepiDepth   int        // Maximum dependency depth
 
-	// Build info
-	IgnoreReason string
-	LastPhase    string
-	LastStatus   string
+	// Status tracking (not build state)
+	LastStatus string
 
 	// Linked list
 	Next *Package
@@ -139,7 +137,7 @@ func (r *PackageRegistry) Find(portDir string) *Package {
 }
 
 // ParsePortList parses a list of port specifications
-func ParsePortList(portList []string, cfg *config.Config) (*Package, error) {
+func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRegistry) (*Package, error) {
 	var head, tail *Package
 
 	bq := newBulkQueue(cfg, cfg.MaxWorkers)
@@ -157,14 +155,20 @@ func ParsePortList(portList []string, cfg *config.Config) (*Package, error) {
 
 	// Collect results
 	for bq.Pending() > 0 {
-		pkg, initialFlags, err := bq.GetResult()
+		pkg, initialFlags, parseFlags, ignoreReason, err := bq.GetResult()
 		if err != nil {
 			fmt.Printf("Warning: failed to get package info: %v\n", err)
 			continue
 		}
 
-		// Apply initial flags (from bulk queue)
-		pkg.Flags |= initialFlags
+		// Store all flags in registry
+		allFlags := initialFlags | parseFlags
+		if allFlags != 0 {
+			registry.AddFlags(pkg, allFlags)
+		}
+		if ignoreReason != "" {
+			registry.SetIgnoreReason(pkg, ignoreReason)
+		}
 
 		// Add to linked list
 		if head == nil {
@@ -214,7 +218,9 @@ func parsePortSpec(spec string, cfg *config.Config) (category, name, flavor stri
 }
 
 // getPackageInfo fetches package information from the port Makefile
-func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package, error) {
+// getPackageInfo returns a package and its flags/ignoreReason
+// Returns: (pkg, flags, ignoreReason, error)
+func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package, int, string, error) {
 	portDir := category + "/" + name
 	if flavor != "" {
 		portDir += "@" + flavor
@@ -224,7 +230,7 @@ func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package
 
 	// Check if port exists
 	if _, err := os.Stat(portPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("port not found: %s", portDir)
+		return nil, PkgFNotFound, "", fmt.Errorf("port not found: %s", portDir)
 	}
 
 	pkg := &Package{
@@ -237,16 +243,10 @@ func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package
 	// Query port Makefile for metadata
 	flags, ignoreReason, err := queryMakefile(pkg, portPath, cfg)
 	if err != nil {
-		pkg.Flags |= PkgFCorrupt
-		pkg.IgnoreReason = ""
-		return pkg, err
+		return pkg, PkgFCorrupt, "", err
 	}
 
-	// Set the computed flags and ignore reason
-	pkg.Flags = flags
-	pkg.IgnoreReason = ignoreReason
-
-	return pkg, nil
+	return pkg, flags, ignoreReason, nil
 }
 
 // queryMakefile extracts information from port Makefile
@@ -343,8 +343,8 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (int, stri
 }
 
 // ResolveDependencies resolves all dependencies
-func ResolveDependencies(head *Package, cfg *config.Config) error {
-	return resolveDependencies(head, cfg)
+func ResolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry) error {
+	return resolveDependencies(head, cfg, registry)
 }
 
 // MarkPackagesNeedingBuild analyzes which packages need rebuilding
@@ -496,13 +496,13 @@ func GetAllPorts(cfg *config.Config) ([]string, error) {
 }
 
 // Parse is a thin alias for ParsePortList for Phase 1 API compatibility
-func Parse(portSpecs []string, cfg *config.Config) (*Package, error) {
-	return ParsePortList(portSpecs, cfg)
+func Parse(portSpecs []string, cfg *config.Config, registry *BuildStateRegistry) (*Package, error) {
+	return ParsePortList(portSpecs, cfg, registry)
 }
 
 // Resolve wraps ResolveDependencies for Phase 1 API compatibility
-func Resolve(head *Package, cfg *config.Config) error {
-	return ResolveDependencies(head, cfg)
+func Resolve(head *Package, cfg *config.Config, registry *BuildStateRegistry) error {
+	return ResolveDependencies(head, cfg, registry)
 }
 
 // TopoOrder wraps GetBuildOrder for Phase 1 API compatibility

@@ -9,7 +9,7 @@ import (
 )
 
 // resolveDependencies builds the complete dependency graph
-func resolveDependencies(head *Package, cfg *config.Config) error {
+func resolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry) error {
 	// Phase 1: Collect all dependencies recursively
 	fmt.Println("Resolving dependencies...")
 
@@ -91,14 +91,20 @@ func resolveDependencies(head *Package, cfg *config.Config) error {
 
 		// Collect results from this batch
 		for bq.Pending() > 0 {
-			pkg, initialFlags, err := bq.GetResult()
+			pkg, initialFlags, parseFlags, ignoreReason, err := bq.GetResult()
 			if err != nil {
 				fmt.Printf("Warning: dependency resolution failed: %v\n", err)
 				continue
 			}
 
-			// Apply initial flags (from bulk queue)
-			pkg.Flags |= initialFlags
+			// Store all flags in registry
+			allFlags := initialFlags | parseFlags
+			if allFlags != 0 {
+				registry.AddFlags(pkg, allFlags)
+			}
+			if ignoreReason != "" {
+				registry.SetIgnoreReason(pkg, ignoreReason)
+			}
 
 			// Add to registry
 			existingPkg := globalRegistry.Enter(pkg)

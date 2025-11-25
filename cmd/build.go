@@ -37,25 +37,28 @@ func runBuild(cmd *cobra.Command, args []string) {
 	// Setup signal handler for cleanup
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	
+
 	// Track build context for cleanup
 	var buildCleanup func()
-	
+
 	// Goroutine to handle signals
 	go func() {
 		sig := <-sigChan
 		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
-		
+
 		// Call cleanup if available
 		if buildCleanup != nil {
 			buildCleanup()
 		}
-		
+
 		os.Exit(1)
 	}()
 
+	// Create build state registry
+	registry := pkg.NewBuildStateRegistry()
+
 	// Parse port list
-	head, err := pkg.ParsePortList(args, cfg)
+	head, err := pkg.ParsePortList(args, cfg, registry)
 	if err != nil {
 		fmt.Printf("Error parsing port list: %v\n", err)
 		os.Exit(1)
@@ -63,13 +66,13 @@ func runBuild(cmd *cobra.Command, args []string) {
 
 	// Resolve dependencies
 	fmt.Println("Resolving dependencies...")
-	if err := pkg.ResolveDependencies(head, cfg); err != nil {
+	if err := pkg.ResolveDependencies(head, cfg, registry); err != nil {
 		fmt.Printf("Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Mark packages needing build
-	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg)
+	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg, registry)
 	if err != nil {
 		fmt.Printf("Error checking packages: %v\n", err)
 		os.Exit(1)
@@ -92,7 +95,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	// Execute build with cleanup function
 	stats, cleanupFunc, err := build.DoBuild(head, cfg, logger)
 	buildCleanup = cleanupFunc
-	
+
 	if err != nil {
 		fmt.Printf("Build error: %v\n", err)
 		if cleanupFunc != nil {

@@ -51,7 +51,8 @@ func TestTopoOrderSimple(t *testing.T) {
 
 func TestParseAliasNoPorts(t *testing.T) {
 	cfg := &config.Config{DPortsPath: "/nonexistent"}
-	if _, err := Parse([]string{}, cfg); err == nil {
+	registry := NewBuildStateRegistry()
+	if _, err := Parse([]string{}, cfg, registry); err == nil {
 		// ParsePortList returns error on no valid ports; ensure we handle it
 		t.Fatalf("expected error for empty spec list")
 	}

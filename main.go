@@ -342,28 +342,20 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 
 	fmt.Printf("Building %d port(s)...\n", len(portList))
 
+	// Create build state registry
+	registry := pkg.NewBuildStateRegistry()
+
 	// Parse port specifications into package list
-	head, err := pkg.ParsePortList(portList, cfg)
+	head, err := pkg.ParsePortList(portList, cfg, registry)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing port list: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Resolve all dependencies
-	if err := pkg.ResolveDependencies(head, cfg); err != nil {
+	if err := pkg.ResolveDependencies(head, cfg, registry); err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving dependencies: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Create build state registry and populate from parsing
-	registry := pkg.NewBuildStateRegistry()
-	for p := head; p != nil; p = p.Next {
-		if p.Flags != 0 {
-			registry.SetFlags(p, p.Flags)
-		}
-		if p.IgnoreReason != "" {
-			registry.SetIgnoreReason(p, p.IgnoreReason)
-		}
 	}
 
 	// Check which packages need building (CRC-based)
