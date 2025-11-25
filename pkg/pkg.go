@@ -235,16 +235,23 @@ func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package
 	}
 
 	// Query port Makefile for metadata
-	if err := queryMakefile(pkg, portPath, cfg); err != nil {
+	flags, ignoreReason, err := queryMakefile(pkg, portPath, cfg)
+	if err != nil {
 		pkg.Flags |= PkgFCorrupt
+		pkg.IgnoreReason = ""
 		return pkg, err
 	}
+
+	// Set the computed flags and ignore reason
+	pkg.Flags = flags
+	pkg.IgnoreReason = ignoreReason
 
 	return pkg, nil
 }
 
 // queryMakefile extracts information from port Makefile
-func queryMakefile(pkg *Package, portPath string, cfg *config.Config) error {
+// Returns: error, flags to set, ignoreReason
+func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (int, string, error) {
 	// Build make command to extract variables
 	vars := []string{
 		"PKGNAME",
@@ -280,12 +287,12 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("make query failed: %w", err)
+		return 0, "", fmt.Errorf("make query failed: %w", err)
 	}
 
 	lines := strings.Split(out.String(), "\n")
 	if len(lines) < len(vars) {
-		return fmt.Errorf("insufficient output from make")
+		return 0, "", fmt.Errorf("insufficient output from make")
 	}
 
 	// Parse output
@@ -320,18 +327,19 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) error {
 	pkg.LibDeps = strings.TrimSpace(lines[7])
 	pkg.RunDeps = strings.TrimSpace(lines[8])
 
+	// Compute flags based on metadata
+	flags := 0
 	ignoreReason := strings.TrimSpace(lines[9])
 	if ignoreReason != "" {
-		pkg.Flags |= PkgFIgnored | PkgFNoBuildIgnore
-		pkg.IgnoreReason = ignoreReason
+		flags |= PkgFIgnored | PkgFNoBuildIgnore
 	}
 
 	// Mark meta ports
 	if isMeta {
-		pkg.Flags |= PkgFMeta
+		flags |= PkgFMeta
 	}
 
-	return nil
+	return flags, ignoreReason, nil
 }
 
 // ResolveDependencies resolves all dependencies
@@ -340,7 +348,7 @@ func ResolveDependencies(head *Package, cfg *config.Config) error {
 }
 
 // MarkPackagesNeedingBuild analyzes which packages need rebuilding
-func MarkPackagesNeedingBuild(head *Package, cfg *config.Config) (int, error) {
+func MarkPackagesNeedingBuild(head *Package, cfg *config.Config, registry *BuildStateRegistry) (int, error) {
 	// Initialize CRC database
 	crcDB, err := builddb.InitCRCDatabase(cfg)
 	if err != nil {
@@ -361,20 +369,20 @@ func MarkPackagesNeedingBuild(head *Package, cfg *config.Config) (int, error) {
 		checked++
 
 		// Skip packages marked with errors
-		if pkg.Flags&(PkgFNotFound|PkgFCorrupt) != 0 {
-			pkg.Flags |= PkgFNoBuildIgnore
+		if registry.HasAnyFlags(pkg, PkgFNotFound|PkgFCorrupt) {
+			registry.AddFlags(pkg, PkgFNoBuildIgnore)
 			continue
 		}
 
 		// Skip meta packages
-		if pkg.Flags&PkgFMeta != 0 {
-			pkg.Flags |= PkgFSuccess // Don't build metaports
+		if registry.HasFlags(pkg, PkgFMeta) {
+			registry.AddFlags(pkg, PkgFSuccess) // Don't build metaports
 			continue
 		}
 
 		// Skip ignored packages
-		if pkg.Flags&PkgFIgnored != 0 {
-			pkg.Flags |= PkgFNoBuildIgnore
+		if registry.HasFlags(pkg, PkgFIgnored) {
+			registry.AddFlags(pkg, PkgFNoBuildIgnore)
 			continue
 		}
 
@@ -384,7 +392,7 @@ func MarkPackagesNeedingBuild(head *Package, cfg *config.Config) (int, error) {
 			fmt.Printf("  %s: needs rebuild\n", pkg.PortDir)
 		} else {
 			// Mark as already successful (no build needed)
-			pkg.Flags |= PkgFSuccess | PkgFPackaged
+			registry.AddFlags(pkg, PkgFSuccess|PkgFPackaged)
 			fmt.Printf("  %s: up-to-date\n", pkg.PortDir)
 		}
 

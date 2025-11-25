@@ -355,15 +355,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		os.Exit(1)
 	}
 
-	// Check which packages need building (CRC-based)
-	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error checking build status: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Create build state registry and populate from Package.Flags
-	// (transitional - eventually MarkPackagesNeedingBuild will use registry)
+	// Create build state registry and populate from parsing
 	registry := pkg.NewBuildStateRegistry()
 	for p := head; p != nil; p = p.Next {
 		if p.Flags != 0 {
@@ -372,6 +364,13 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		if p.IgnoreReason != "" {
 			registry.SetIgnoreReason(p, p.IgnoreReason)
 		}
+	}
+
+	// Check which packages need building (CRC-based)
+	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg, registry)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error checking build status: %v\n", err)
+		os.Exit(1)
 	}
 
 	// DEBUG: Print what packages are marked for build vs skipped
