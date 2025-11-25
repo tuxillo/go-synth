@@ -272,19 +272,20 @@ The project is developed in phases, each with detailed documentation:
 
 **Goal:** Extract package metadata and dependency resolution into a pure library.
 
-**Current Status:** 🟡 Functionally Complete, Architecturally Incomplete (43%)
+**Current Status:** 🟡 60% Complete - Major Architecture Improvements
 
 **Completed:**
 - ✅ Parse, Resolve, TopoOrder functions implemented
 - ✅ Cycle detection working
 - ✅ Basic test coverage
-- ✅ CRC database separated into builddb/ package
+- ✅ CRC database separated into builddb/ package (Task 2)
+- ✅ Build state separated from Package struct (Task 1)
+- ✅ Package struct is now pure metadata
 
 **In Progress:**
-- 🔄 Separate build state from Package struct
-- 🔄 Add structured error types
-- 🔄 Remove global state
-- 🔄 Comprehensive documentation
+- 🔄 Add structured error types (Task 3)
+- 🔄 Remove global state (Task 4)
+- 🔄 Comprehensive documentation (Tasks 5, 6, 9)
 
 See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed task list (12 tasks, ~25-35 hours remaining).
 

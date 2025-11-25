@@ -1,6 +1,6 @@
 # Phase 1: Library Extraction (pkg)
 
-**Status**: 🟡 Functionally Complete, Architecturally Incomplete  
+**Status**: 🟡 60% Complete - Architecture Improving  
 **Last Updated**: 2025-11-25
 
 ## Goals
@@ -77,12 +77,12 @@ func TopoOrder(head *Package) ([]*Package, error)
 
 ### ⚠️ Issues Identified
 
-**1. Mixed Concerns (CRITICAL - Violates Phase 1 Goal)**
-- ❌ `Package` struct contains build state flags (`Flags`, `PkgFManualSel`, `PkgFSuccess`, etc.)
-- ❌ `Package` struct contains build tracking fields (`IgnoreReason`, `LastPhase`, `LastStatus`)
-- ❌ CRC database code lives in `pkg/` package (`crcdb.go`, `crcdb_helpers.go`)
-- ❌ Build-time functions mixed with metadata (`MarkPackagesNeedingBuild()`, `UpdateCRCAfterBuild()`)
-- **Impact**: Library is not reusable, tightly coupled to build system
+**1. Mixed Concerns** ✅ **RESOLVED (Tasks 1 & 2 Complete)**
+- ✅ ~~`Package` struct contains build state flags~~ **FIXED** - Moved to `BuildStateRegistry`
+- ✅ ~~`Package` struct contains build tracking fields~~ **FIXED** - `Flags`, `IgnoreReason`, `LastPhase` removed
+- ✅ ~~CRC database code lives in `pkg/` package~~ **FIXED** - Moved to `builddb/` package
+- ✅ ~~Build-time functions mixed with metadata~~ **FIXED** - CRC functions moved to builddb
+- **Status**: Package struct is now pure metadata ✅
 
 **2. Global State Issues**
 - ❌ `globalRegistry` - Package-level global, not thread-safe for independent operations
@@ -121,10 +121,10 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 1. ✅ ~~Implement core Parse/Resolve/TopoOrder functions~~ - DONE
 2. ✅ ~~Add cycle detection~~ - DONE
 3. ✅ ~~Basic unit tests~~ - DONE
-4. ❌ **Separate build state from Package struct** - CRITICAL
-5. ❌ **Move CRC database to separate package** - CRITICAL
-6. ❌ **Add structured error types** - HIGH
-7. ❌ **Remove global state** - HIGH
+4. ✅ ~~**Separate build state from Package struct**~~ - **DONE (Task 1)**
+5. ✅ ~~**Move CRC database to separate package**~~ - **DONE (Task 2)**
+6. ❌ **Add structured error types** - HIGH (Task 3)
+7. ❌ **Remove global state** - HIGH (Task 4)
 
 ### Medium Priority (Quality & Usability)
 8. ❌ Add comprehensive godoc comments
@@ -146,8 +146,8 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 - ✅ Core API functions (Parse, Resolve, TopoOrder)
 
 ### Incomplete
-- ❌ Pure metadata-only Package struct (still has build state)
-- ❌ Separated CRC/build tracking (still in pkg/)
+- ✅ ~~Pure metadata-only Package struct~~ - **COMPLETE (Task 1)**
+- ✅ ~~Separated CRC/build tracking~~ - **COMPLETE (Task 2)**
 - ❌ Comprehensive godoc comments
 - ❌ Minimal developer guide
 - ❌ Structured error types
@@ -160,13 +160,13 @@ See `PHASE_1_TODO.md` for detailed task breakdown.
 - ✅ All existing commands compile and run with new API - **ACHIEVED**
 
 ### Additional Criteria for True "Pure Library" Goal
-- ❌ Package struct contains ONLY metadata (no build state/flags) - **NOT ACHIEVED**
-- ❌ CRC/build tracking separated into different package - **NOT ACHIEVED**
-- ❌ No global state in pkg package - **NOT ACHIEVED**
-- ❌ Structured errors for all failure modes - **NOT ACHIEVED**
-- ❌ Comprehensive documentation (godoc + guide) - **NOT ACHIEVED**
+- ✅ Package struct contains ONLY metadata (no build state/flags) - **ACHIEVED (Task 1)**
+- ✅ CRC/build tracking separated into different package - **ACHIEVED (Task 2)**
+- ❌ No global state in pkg package - **NOT ACHIEVED** (Task 4 remaining)
+- ❌ Structured errors for all failure modes - **NOT ACHIEVED** (Task 3 remaining)
+- ❌ Comprehensive documentation (godoc + guide) - **NOT ACHIEVED** (Tasks 5, 6, 9 remaining)
 
-**Phase 1 Status**: Functionally complete but architecturally incomplete. The library works but doesn't meet the "pure library" separation goal stated in the phase objectives.
+**Phase 1 Status**: 60% complete. Major architectural improvements achieved - Package struct is now pure metadata and build concerns are properly separated. Remaining work focuses on API quality (errors, global state) and documentation.
 
 ## Dependencies
 - None (foundation for later phases).
