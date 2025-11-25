@@ -2,6 +2,53 @@
 
 This document provides essential information for agents and developers working with the go-synth codebase.
 
+## ⚠️ CRITICAL SAFETY DIRECTIVES
+
+### 1. GitHub Account Restrictions
+**IMPORTANT**: All GitHub write operations (creating branches, PRs, issues, comments, etc.) must ONLY be performed on the `tuxillo` account.
+
+- ✅ **Allowed**: Read operations on any repository
+- ✅ **Allowed**: Write operations on `github.com/tuxillo/*` repositories
+- ❌ **FORBIDDEN**: Write operations on any other GitHub accounts or organizations
+- ❌ **FORBIDDEN**: Creating/modifying repositories outside `tuxillo` account
+
+**Examples:**
+```bash
+# ✅ ALLOWED - Read from any repo
+gh repo view someuser/somerepo
+
+# ✅ ALLOWED - Write to tuxillo repos
+gh pr create --repo tuxillo/go-synth
+
+# ❌ FORBIDDEN - Write to other accounts
+gh pr create --repo otheruser/somerepo
+```
+
+### 2. System Safety Restrictions
+**IMPORTANT**: Do NOT execute commands that could potentially harm the host system or its installed operating system.
+
+**Forbidden Operations:**
+- ❌ Package manager operations that modify system packages (`apt install`, `pkg install`, `yum install`, etc.)
+- ❌ System service modifications (`systemctl`, `service`, daemon operations)
+- ❌ Kernel or bootloader modifications
+- ❌ System-wide configuration changes outside the project directory
+- ❌ Disk partitioning or formatting operations
+- ❌ System user/group modifications
+- ❌ Network configuration changes
+- ❌ Firewall rule modifications
+- ❌ Recursive deletions outside project directory (especially `rm -rf /`)
+- ❌ chmod/chown on system directories
+
+**Allowed Operations:**
+- ✅ Building and testing within the project directory (`/home/antonioh/s/go-synth`)
+- ✅ Reading system information (`uname`, `ps`, `df`, `mount` with no arguments)
+- ✅ Go toolchain commands (`go build`, `go test`, `go mod`, etc.)
+- ✅ Git operations within the project
+- ✅ File operations within the project directory
+- ✅ Project-specific make targets
+
+**When in doubt, ASK before executing any system-level command.**
+
 ## Project Overview
 
 **go-synth** is a Go implementation of dsynth, the DragonFly BSD ports build system. It's a parallel package building tool that:
