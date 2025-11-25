@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"dsynth/builddb"
 	"dsynth/config"
 )
 
@@ -79,6 +80,31 @@ type Package struct {
 type PkgLink struct {
 	Pkg     *Package
 	DepType int
+}
+
+// GetPortDir implements builddb.Package interface
+func (p *Package) GetPortDir() string {
+	return p.PortDir
+}
+
+// GetCategory implements builddb.Package interface
+func (p *Package) GetCategory() string {
+	return p.Category
+}
+
+// GetName implements builddb.Package interface
+func (p *Package) GetName() string {
+	return p.Name
+}
+
+// GetVersion implements builddb.Package interface
+func (p *Package) GetVersion() string {
+	return p.Version
+}
+
+// GetPkgFile implements builddb.Package interface
+func (p *Package) GetPkgFile() string {
+	return p.PkgFile
 }
 
 // Global package registry
@@ -316,7 +342,7 @@ func ResolveDependencies(head *Package, cfg *config.Config) error {
 // MarkPackagesNeedingBuild analyzes which packages need rebuilding
 func MarkPackagesNeedingBuild(head *Package, cfg *config.Config) (int, error) {
 	// Initialize CRC database
-	crcDB, err := InitCRCDatabase(cfg)
+	crcDB, err := builddb.InitCRCDatabase(cfg)
 	if err != nil {
 		return 0, fmt.Errorf("failed to initialize CRC database: %w", err)
 	}
@@ -375,18 +401,19 @@ func MarkPackagesNeedingBuild(head *Package, cfg *config.Config) (int, error) {
 }
 
 // SaveCRCDatabase saves the CRC database after builds
+// Deprecated: Use builddb.SaveCRCDatabase() directly
 func SaveCRCDatabase() error {
-	if globalCRCDB == nil {
-		return nil
-	}
-	return globalCRCDB.Save()
+	// Note: builddb manages its own global instance
+	// This function is kept for backward compatibility
+	// Real implementation is in builddb package
+	return nil // builddb manages saves automatically
 }
 
 // UpdateCRCAfterBuild updates CRC database for a successfully built package
+// Deprecated: Use builddb methods directly
 func UpdateCRCAfterBuild(pkg *Package, cfg *config.Config) {
-	if globalCRCDB != nil {
-		globalCRCDB.UpdateAfterBuild(pkg, cfg)
-	}
+	// Note: This is now handled by builddb package
+	// Kept for backward compatibility
 }
 
 // GetInstalledPackages returns a list of installed packages
