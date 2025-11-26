@@ -69,9 +69,6 @@ type Package struct {
 	// Linked list
 	Next *Package
 	Prev *Package
-
-	// Synchronization
-	mu sync.Mutex
 }
 
 // PkgLink represents a dependency link
