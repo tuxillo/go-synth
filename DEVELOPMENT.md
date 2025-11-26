@@ -84,6 +84,7 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - **Phase 1 Task 3**: Structured error types (80 lines, 4 tests)
 - **Phase 1 Task 4**: Removed global state - pkgRegistry now passed as parameter
 - **Phase 1 Task 5**: Comprehensive godoc documentation (package, types, functions)
+- **Phase 1 Task 6**: Developer guide with 5 examples (PHASE_1_DEVELOPER_GUIDE.md, 1057 lines)
 
 **Clean Architecture Achieved:**
 - ✅ Package struct is now pure metadata (no build state)
@@ -94,8 +95,8 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - ✅ Comprehensive API documentation with godoc
 
 **Remaining Work:**
-- Write developer guide (~2-3h)
-- Add integration tests (~3-4h)
+- Add integration tests (~2-3h)
+- Improve error test coverage (~2-3h)
 
 ### 📖 Documentation
 - **[Phase 1 Overview](docs/design/PHASE_1_LIBRARY.md)** - Complete status and analysis
@@ -538,6 +539,7 @@ Rationale: Package should contain only metadata, not build-time state
 - **Total Estimated Remaining**: ~5-8 hours for Phase 1 documentation, then ~50-70 hours for Phases 2-7
 
 ### Recent Milestones
+- ✅ 2025-11-26: Phase 1 Task 6 complete - Developer guide with 5 runnable examples
 - ✅ 2025-11-26: Phase 1 Task 5 complete - Comprehensive godoc documentation added
 - ✅ 2025-11-25: Phase 1 Task 4 complete - Removed global state, pkgRegistry now parameter-based
 - ✅ 2025-11-25: Phase 1 Task 3 complete - Structured error types with 4 tests
@@ -556,10 +558,9 @@ Rationale: Package should contain only metadata, not build-time state
 - ✅ 2025-11-21: Cycle detection implemented and tested
 
 ### Next Milestones
-- 🎯 Task 6: Create developer guide (~2-3h)
 - 🎯 Task 7: Add integration tests (~2-3h)
-- 🎯 Task 9: Update README with library usage (~1-2h)
-- 🎯 Phase 1 documentation tasks completion
+- 🎯 Task 8: Improve error test coverage (~2-3h)
+- 🎯 Phase 1 quality tasks completion
 
 ### Known Issues
 See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for complete list.
@@ -569,8 +570,7 @@ See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for complete list.
 
 **🔶 Medium:**
 - Missing integration tests
-- No developer guide yet
-- README doesn't document library usage
+- Error path test coverage incomplete
 
 **🔹 Low:**
 - No context.Context support

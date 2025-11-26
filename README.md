@@ -238,6 +238,58 @@ On a 16-core system building 100 ports:
 - Check available space in build base directory
 - Consider disabling tmpfs for large ports
 
+## For Developers
+
+### Using the pkg Library
+
+The `pkg` package provides a pure Go library for parsing port specifications, resolving dependencies, and computing build order. It's fully documented and ready to use in your own projects.
+
+**Quick Example:**
+
+```go
+import (
+    "dsynth/config"
+    "dsynth/pkg"
+)
+
+func main() {
+    cfg, _ := config.LoadConfig("", "default")
+    pkgRegistry := pkg.NewPackageRegistry()
+    bsRegistry := pkg.NewBuildStateRegistry()
+    
+    // Parse ports
+    packages, _ := pkg.ParsePortList([]string{"editors/vim"}, cfg, bsRegistry, pkgRegistry)
+    
+    // Resolve dependencies
+    pkg.ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+    
+    // Get build order
+    buildOrder := pkg.GetBuildOrder(packages)
+    
+    for _, p := range buildOrder {
+        fmt.Println(p.PortDir)
+    }
+}
+```
+
+### Documentation & Examples
+
+- **[Phase 1 Developer Guide](PHASE_1_DEVELOPER_GUIDE.md)** - Complete guide to using the pkg library
+  - Installation & setup
+  - API reference
+  - Error handling
+  - Advanced usage patterns
+  - Troubleshooting guide
+- **[examples/](examples/)** - 5 standalone, runnable examples
+  - `01_simple_parse` - Basic port parsing
+  - `02_resolve_deps` - Dependency resolution
+  - `03_build_order` - Topological ordering
+  - `04_cycle_detection` - Handling circular dependencies
+  - `05_dependency_tree` - Tree visualization
+- **godoc** - Run `godoc -http=:6060` for full API documentation
+
+---
+
 ## Design Documentation
 
 This project follows a phased development approach with comprehensive design documentation.
@@ -287,9 +339,9 @@ The project is developed in phases, each with detailed documentation:
 - ✅ **Comprehensive godoc documentation (Task 5)** 🎉
 
 **Remaining (Documentation & Quality):**
-- 🔄 Developer guide (Task 6)
+- ✅ **Developer guide (Task 6)** 🎉
 - 🔄 Integration tests (Task 7)
-- 🔄 README API examples (Task 9)
+- 🔄 Error test coverage (Task 8)
 
 **Critical Milestone:** All 9 exit criteria met! The pkg library is complete as a pure, well-documented, thread-safe library with no global state, no build concerns, and comprehensive API documentation. Only additional documentation and quality improvements remain.
 
