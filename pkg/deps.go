@@ -3,6 +3,7 @@ package pkg
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"dsynth/config"
@@ -299,6 +300,35 @@ func calculateDepthRecursive(pkg *Package) int {
 	return pkg.DepiDepth
 }
 
+// sortQueueByPriority sorts packages in the queue to optimize build order.
+// Packages are prioritized by:
+//  1. DepiDepth (higher = more critical, deeper in dependency tree)
+//  2. Number of dependents (higher = more packages unlocked when built)
+//  3. PortDir (lexicographic for determinism)
+//
+// This ensures that building high-fanout packages early maximizes parallelism
+// potential and provides faster feedback for typical workflows.
+func sortQueueByPriority(queue []*Package) {
+	sort.Slice(queue, func(i, j int) bool {
+		pi, pj := queue[i], queue[j]
+
+		// Primary: DepiDepth (higher depth = more critical)
+		if pi.DepiDepth != pj.DepiDepth {
+			return pi.DepiDepth > pj.DepiDepth
+		}
+
+		// Secondary: Number of dependents (higher fanout = more packages unlocked)
+		iDeps := len(pi.DependsOnMe)
+		jDeps := len(pj.DependsOnMe)
+		if iDeps != jDeps {
+			return iDeps > jDeps
+		}
+
+		// Tertiary: PortDir (deterministic tie-breaker)
+		return pi.PortDir < pj.PortDir
+	})
+}
+
 // GetBuildOrder computes a topological ordering of packages using Kahn's
 // algorithm, ensuring dependencies are built before packages that depend
 // on them.
@@ -311,6 +341,17 @@ func calculateDepthRecursive(pkg *Package) int {
 //  3. Processing packages in order, removing edges and adding newly
 //     zero-dependency packages to the queue
 //  4. Continuing until all packages are processed or a cycle is detected
+//
+// # Priority Ordering
+//
+// When multiple packages have the same in-degree (i.e., are ready to build
+// simultaneously), they are prioritized by:
+//  1. DepiDepth (descending) - packages with deeper dependency trees first
+//  2. Number of dependents (descending) - high-fanout packages first
+//  3. PortDir (ascending) - deterministic tie-breaker
+//
+// This optimization ensures that packages with many dependents (like devel/pkgconf)
+// are built as early as possible, maximizing parallelism in the build system.
 //
 // If the dependency graph contains cycles, some packages will remain unordered
 // and a warning is printed. The function returns successfully with a partial
@@ -366,6 +407,9 @@ func GetBuildOrder(packages []*Package) []*Package {
 		}
 	}
 
+	// Sort initial queue by priority (high-fanout packages first)
+	sortQueueByPriority(queue)
+
 	fmt.Fprintf(os.Stderr, "DEBUG: Queue start size: %d\n", len(queue))
 
 	// Process queue
@@ -379,14 +423,21 @@ func GetBuildOrder(packages []*Package) []*Package {
 		fmt.Fprintf(os.Stderr, "DEBUG: Processing %s, queue size now %d\n", pkg.PortDir, len(queue))
 
 		// Reduce in-degree for dependents
+		newlyReady := make([]*Package, 0)
 		for _, link := range pkg.DependsOnMe {
 			dep := link.Pkg
 			inDegree[dep]--
 			fmt.Fprintf(os.Stderr, "DEBUG:   Reduced %s to in-degree=%d\n", dep.PortDir, inDegree[dep])
 			if inDegree[dep] == 0 {
-				queue = append(queue, dep)
+				newlyReady = append(newlyReady, dep)
 				fmt.Fprintf(os.Stderr, "DEBUG:   Added %s to queue\n", dep.PortDir)
 			}
+		}
+
+		// Sort newly ready packages by priority before adding to queue
+		if len(newlyReady) > 0 {
+			sortQueueByPriority(newlyReady)
+			queue = append(queue, newlyReady...)
 		}
 	}
 
