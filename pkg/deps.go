@@ -302,8 +302,8 @@ func calculateDepthRecursive(pkg *Package) int {
 
 // sortQueueByPriority sorts packages in the queue to optimize build order.
 // Packages are prioritized by:
-//  1. DepiDepth (higher = more critical, deeper in dependency tree)
-//  2. Number of dependents (higher = more packages unlocked when built)
+//  1. Number of dependents (higher = more packages unlocked when built)
+//  2. DepiDepth (higher = more critical, deeper in dependency tree)
 //  3. PortDir (lexicographic for determinism)
 //
 // This ensures that building high-fanout packages early maximizes parallelism
@@ -312,16 +312,16 @@ func sortQueueByPriority(queue []*Package) {
 	sort.Slice(queue, func(i, j int) bool {
 		pi, pj := queue[i], queue[j]
 
-		// Primary: DepiDepth (higher depth = more critical)
-		if pi.DepiDepth != pj.DepiDepth {
-			return pi.DepiDepth > pj.DepiDepth
-		}
-
-		// Secondary: Number of dependents (higher fanout = more packages unlocked)
+		// Primary: Number of dependents (higher fanout = more packages unlocked)
 		iDeps := len(pi.DependsOnMe)
 		jDeps := len(pj.DependsOnMe)
 		if iDeps != jDeps {
 			return iDeps > jDeps
+		}
+
+		// Secondary: DepiDepth (higher depth = more critical)
+		if pi.DepiDepth != pj.DepiDepth {
+			return pi.DepiDepth > pj.DepiDepth
 		}
 
 		// Tertiary: PortDir (deterministic tie-breaker)
@@ -346,8 +346,8 @@ func sortQueueByPriority(queue []*Package) {
 //
 // When multiple packages have the same in-degree (i.e., are ready to build
 // simultaneously), they are prioritized by:
-//  1. DepiDepth (descending) - packages with deeper dependency trees first
-//  2. Number of dependents (descending) - high-fanout packages first
+//  1. Number of dependents (descending) - high-fanout packages first
+//  2. DepiDepth (descending) - packages with deeper dependency trees first
 //  3. PortDir (ascending) - deterministic tie-breaker
 //
 // This optimization ensures that packages with many dependents (like devel/pkgconf)

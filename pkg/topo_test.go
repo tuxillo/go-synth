@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"dsynth/config"
@@ -163,6 +164,100 @@ func TestGetBuildOrderPriority(t *testing.T) {
 					pkg.PortDir, pkgPos, depLink.Pkg.PortDir, depPos)
 			}
 		}
+	}
+}
+
+// createDepiDepthVsFanoutGraph tests that fanout takes priority over DepiDepth:
+//
+// Zero-dependency packages (will be ready at same time):
+//   - base1: 0 deps, 1 dependent (low fanout, but will have high DepiDepth)
+//   - base2: 0 deps, 100 dependents (high fanout, but will have low DepiDepth)
+//
+// Chain from base1 (creates high DepiDepth):
+//   - chain1 -> chain2 -> chain3 -> chain4 -> chain5
+//
+// Wide tree from base2 (creates low DepiDepth but high fanout):
+//   - wide1, wide2, wide3, ... wide100
+//
+// Expected: base2 should come BEFORE base1 despite base1 having higher DepiDepth
+func createDepiDepthVsFanoutGraph() []*Package {
+	base1 := &Package{PortDir: "devel/base1", Category: "devel", Name: "base1"}
+	base2 := &Package{PortDir: "devel/base2", Category: "devel", Name: "base2"}
+
+	// Create deep chain from base1
+	chain1 := &Package{PortDir: "devel/chain1", Category: "devel", Name: "chain1"}
+	chain2 := &Package{PortDir: "devel/chain2", Category: "devel", Name: "chain2"}
+	chain3 := &Package{PortDir: "devel/chain3", Category: "devel", Name: "chain3"}
+	chain4 := &Package{PortDir: "devel/chain4", Category: "devel", Name: "chain4"}
+	chain5 := &Package{PortDir: "devel/chain5", Category: "devel", Name: "chain5"}
+
+	chain1.IDependOn = []*PkgLink{{Pkg: base1, DepType: DepTypeBuild}}
+	chain2.IDependOn = []*PkgLink{{Pkg: chain1, DepType: DepTypeBuild}}
+	chain3.IDependOn = []*PkgLink{{Pkg: chain2, DepType: DepTypeBuild}}
+	chain4.IDependOn = []*PkgLink{{Pkg: chain3, DepType: DepTypeBuild}}
+	chain5.IDependOn = []*PkgLink{{Pkg: chain4, DepType: DepTypeBuild}}
+
+	base1.DependsOnMe = []*PkgLink{{Pkg: chain1, DepType: DepTypeBuild}}
+	chain1.DependsOnMe = []*PkgLink{{Pkg: chain2, DepType: DepTypeBuild}}
+	chain2.DependsOnMe = []*PkgLink{{Pkg: chain3, DepType: DepTypeBuild}}
+	chain3.DependsOnMe = []*PkgLink{{Pkg: chain4, DepType: DepTypeBuild}}
+	chain4.DependsOnMe = []*PkgLink{{Pkg: chain5, DepType: DepTypeBuild}}
+
+	// Create wide fanout from base2 (just 5 to keep test simple)
+	widePackages := make([]*Package, 5)
+	base2.DependsOnMe = make([]*PkgLink, 5)
+	for i := 0; i < 5; i++ {
+		widePackages[i] = &Package{
+			PortDir:  fmt.Sprintf("devel/wide%d", i),
+			Category: "devel",
+			Name:     fmt.Sprintf("wide%d", i),
+		}
+		widePackages[i].IDependOn = []*PkgLink{{Pkg: base2, DepType: DepTypeBuild}}
+		base2.DependsOnMe[i] = &PkgLink{Pkg: widePackages[i], DepType: DepTypeBuild}
+	}
+
+	// Calculate depths
+	calculateDepthRecursive(base1)
+	calculateDepthRecursive(base2)
+	calculateDepthRecursive(chain1)
+	calculateDepthRecursive(chain2)
+	calculateDepthRecursive(chain3)
+	calculateDepthRecursive(chain4)
+	calculateDepthRecursive(chain5)
+	for _, p := range widePackages {
+		calculateDepthRecursive(p)
+	}
+
+	allPackages := []*Package{base1, base2, chain1, chain2, chain3, chain4, chain5}
+	allPackages = append(allPackages, widePackages...)
+	return allPackages
+}
+
+func TestPriorityFanoutOverDepth(t *testing.T) {
+	packages := createDepiDepthVsFanoutGraph()
+	order := GetBuildOrder(packages)
+
+	// Find positions of base1 and base2
+	base1Pos := -1
+	base2Pos := -1
+	for i, pkg := range order {
+		if pkg.Name == "base1" {
+			base1Pos = i
+		}
+		if pkg.Name == "base2" {
+			base2Pos = i
+		}
+	}
+
+	if base1Pos == -1 || base2Pos == -1 {
+		t.Fatalf("couldn't find base1 or base2 in build order")
+	}
+
+	// base2 (5 dependents) should come BEFORE base1 (1 dependent)
+	// even though base1 has higher DepiDepth
+	if base2Pos > base1Pos {
+		t.Errorf("base2 (5 dependents, pos %d) should come before base1 (1 dependent, pos %d) - fanout should take priority over DepiDepth",
+			base2Pos, base1Pos)
 	}
 }
 
