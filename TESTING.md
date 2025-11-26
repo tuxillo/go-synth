@@ -299,17 +299,31 @@ bash:shells/bash
 
 ### Creating Fixtures
 
-#### On BSD Systems
+#### On BSD Systems (Required)
+
+**IMPORTANT:** The fixture capture script requires BSD make and must run on FreeBSD or DragonFly BSD.
 
 ```bash
-# Capture a single port
-./scripts/capture-fixtures.sh editors/vim
+# On a BSD system with ports tree installed:
+cd /path/to/go-synth
 
-# Capture multiple ports
-./scripts/capture-fixtures.sh editors/vim devel/gmake lang/python39
+# Run the capture script (captures default set of common ports)
+./scripts/capture-fixtures.sh
+
+# Or specify a custom ports tree location
+./scripts/capture-fixtures.sh /usr/dports
 
 # Output goes to pkg/testdata/fixtures/
+# Script captures 10-11 common ports by default
 ```
+
+**If developing on Linux:**
+1. Copy the script to a BSD system: `scp scripts/capture-fixtures.sh user@bsd-host:`
+2. Run it on BSD: `ssh user@bsd-host './capture-fixtures.sh'`
+3. Copy fixtures back: `scp user@bsd-host:go-synth/pkg/testdata/fixtures/*.txt pkg/testdata/fixtures/`
+
+**Why BSD only?**
+The script uses BSD make's `-V VARNAME` flag to extract port variables. GNU make (Linux) doesn't support this flag.
 
 #### Manual Creation
 
