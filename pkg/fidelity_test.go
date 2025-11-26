@@ -47,16 +47,11 @@ func TestCFidelity_TopologicalSort(t *testing.T) {
 	c.DependsOnMe = []*PkgLink{{Pkg: b, DepType: DepTypeBuild}}
 	d.DependsOnMe = []*PkgLink{{Pkg: c, DepType: DepTypeBuild}}
 
-	// Linked list
-	a.Next = b
-	b.Prev = a
-	b.Next = c
-	c.Prev = b
-	c.Next = d
-	d.Prev = c
+	// Package slice
+	packages := []*Package{a, b, c, d}
 
 	// Get build order
-	order := GetBuildOrder(a)
+	order := GetBuildOrder(packages)
 
 	if len(order) != 4 {
 		t.Fatalf("expected 4 packages, got %d", len(order))
@@ -254,13 +249,10 @@ func TestCFidelity_CircularDependencyDetection(t *testing.T) {
 	b.DependsOnMe = []*PkgLink{{Pkg: a, DepType: DepTypeBuild}}
 	c.DependsOnMe = []*PkgLink{{Pkg: b, DepType: DepTypeBuild}}
 
-	a.Next = b
-	b.Prev = a
-	b.Next = c
-	c.Prev = b
+	packages := []*Package{a, b, c}
 
 	// GetBuildOrder should detect the cycle
-	order, err := TopoOrderStrict(a)
+	order, err := TopoOrderStrict(packages)
 
 	if err == nil {
 		t.Fatal("Expected cycle detection error")
@@ -308,15 +300,10 @@ func TestCFidelity_DiamondDependency(t *testing.T) {
 		{Pkg: c, DepType: DepTypeBuild},
 	}
 
-	// Linked list
-	a.Next = b
-	b.Prev = a
-	b.Next = c
-	c.Prev = b
-	c.Next = d
-	d.Prev = c
+	// Package slice
+	packages := []*Package{a, b, c, d}
 
-	order := GetBuildOrder(a)
+	order := GetBuildOrder(packages)
 
 	if len(order) != 4 {
 		t.Fatalf("expected 4 packages, got %d", len(order))
@@ -431,14 +418,6 @@ func TestCFidelity_DepiCountAndDepth(t *testing.T) {
 	if d.DepiCount != 1 {
 		t.Errorf("D.DepiCount should be 1, got %d", d.DepiCount)
 	}
-
-	// Build linked list
-	a.Next = b
-	b.Prev = a
-	b.Next = c
-	c.Prev = b
-	c.Next = d
-	d.Prev = c
 
 	// Calculate depth
 	calculateDepthRecursive(a)

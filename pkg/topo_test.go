@@ -8,7 +8,7 @@ import (
 )
 
 // createSimpleChain builds A->B->C where A depends on B and C
-func createSimpleChain() *Package {
+func createSimpleChain() []*Package {
 	c := &Package{PortDir: "cat/C", Category: "cat", Name: "C"}
 	b := &Package{PortDir: "cat/B", Category: "cat", Name: "B"}
 	a := &Package{PortDir: "cat/A", Category: "cat", Name: "A"}
@@ -21,18 +21,12 @@ func createSimpleChain() *Package {
 	b.DependsOnMe = []*PkgLink{{Pkg: a, DepType: DepTypeBuild}}
 	c.DependsOnMe = []*PkgLink{{Pkg: a, DepType: DepTypeBuild}, {Pkg: b, DepType: DepTypeBuild}}
 
-	// Build linked list a->b->c
-	a.Next = b
-	b.Prev = a
-	b.Next = c
-	c.Prev = b
-
-	return a
+	return []*Package{a, b, c}
 }
 
 func TestTopoOrderSimple(t *testing.T) {
-	head := createSimpleChain()
-	order := TopoOrder(head)
+	packages := createSimpleChain()
+	order := TopoOrder(packages)
 	if len(order) != 3 {
 		t.Fatalf("expected 3 packages, got %d", len(order))
 	}

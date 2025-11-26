@@ -160,10 +160,6 @@ type Package struct {
 
 	// Status tracking (not build state)
 	LastStatus string
-
-	// Linked list
-	Next *Package
-	Prev *Package
 }
 
 // PkgLink represents a dependency link
@@ -231,8 +227,8 @@ func (r *PackageRegistry) Find(portDir string) *Package {
 }
 
 // ParsePortList parses a list of port specifications
-func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) (*Package, error) {
-	var head, tail *Package
+func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) ([]*Package, error) {
+	packages := make([]*Package, 0)
 
 	bq := newBulkQueue(cfg, cfg.MaxWorkers)
 	defer bq.Close()
@@ -264,25 +260,18 @@ func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRe
 			registry.SetIgnoreReason(pkg, ignoreReason)
 		}
 
-		// Add to linked list
-		if head == nil {
-			head = pkg
-			tail = pkg
-		} else {
-			tail.Next = pkg
-			pkg.Prev = tail
-			tail = pkg
-		}
+		// Add to slice
+		packages = append(packages, pkg)
 
 		// Register package
 		pkgRegistry.Enter(pkg)
 	}
 
-	if head == nil {
+	if len(packages) == 0 {
 		return nil, ErrNoValidPorts
 	}
 
-	return head, nil
+	return packages, nil
 }
 
 // parsePortSpec parses a port specification into category/name/flavor
@@ -440,12 +429,12 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (PackageFl
 }
 
 // ResolveDependencies resolves all dependencies
-func ResolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
-	return resolveDependencies(head, cfg, registry, pkgRegistry)
+func ResolveDependencies(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
+	return resolveDependencies(packages, cfg, registry, pkgRegistry)
 }
 
 // MarkPackagesNeedingBuild analyzes which packages need rebuilding
-func MarkPackagesNeedingBuild(head *Package, cfg *config.Config, registry *BuildStateRegistry) (int, error) {
+func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry *BuildStateRegistry) (int, error) {
 	// Initialize CRC database
 	crcDB, err := builddb.InitCRCDatabase(cfg)
 	if err != nil {
@@ -462,7 +451,7 @@ func MarkPackagesNeedingBuild(head *Package, cfg *config.Config, registry *Build
 	needBuild := 0
 	checked := 0
 
-	for pkg := head; pkg != nil; pkg = pkg.Next {
+	for _, pkg := range packages {
 		checked++
 
 		// Skip packages marked with errors
@@ -593,16 +582,16 @@ func GetAllPorts(cfg *config.Config) ([]string, error) {
 }
 
 // Parse is a thin alias for ParsePortList for Phase 1 API compatibility
-func Parse(portSpecs []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) (*Package, error) {
+func Parse(portSpecs []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) ([]*Package, error) {
 	return ParsePortList(portSpecs, cfg, registry, pkgRegistry)
 }
 
 // Resolve wraps ResolveDependencies for Phase 1 API compatibility
-func Resolve(head *Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
-	return ResolveDependencies(head, cfg, registry, pkgRegistry)
+func Resolve(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
+	return ResolveDependencies(packages, cfg, registry, pkgRegistry)
 }
 
 // TopoOrder wraps GetBuildOrder for Phase 1 API compatibility
-func TopoOrder(head *Package) []*Package {
-	return GetBuildOrder(head)
+func TopoOrder(packages []*Package) []*Package {
+	return GetBuildOrder(packages)
 }

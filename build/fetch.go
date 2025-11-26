@@ -18,12 +18,12 @@ type FetchStats struct {
 }
 
 // DoFetchOnly executes fetch-only mode (download distfiles without building)
-func DoFetchOnly(head *pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry) (*FetchStats, error) {
+func DoFetchOnly(packages []*pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry) (*FetchStats, error) {
 	stats := &FetchStats{}
 	var statsMu sync.Mutex
 
 	// Count packages
-	for p := head; p != nil; p = p.Next {
+	for _, p := range packages {
 		if !registry.HasAnyFlags(p, pkg.PkgFNotFound|pkg.PkgFCorrupt|pkg.PkgFMeta) {
 			stats.Total++
 		}
@@ -64,7 +64,7 @@ func DoFetchOnly(head *pkg.Package, cfg *config.Config, registry *pkg.BuildState
 
 	// Queue packages
 	go func() {
-		for p := head; p != nil; p = p.Next {
+		for _, p := range packages {
 			if !registry.HasAnyFlags(p, pkg.PkgFNotFound|pkg.PkgFCorrupt|pkg.PkgFMeta) {
 				queue <- p
 			}

@@ -349,20 +349,20 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	pkgRegistry := pkg.NewPackageRegistry()
 
 	// Parse port specifications into package list
-	head, err := pkg.ParsePortList(portList, cfg, registry, pkgRegistry)
+	packages, err := pkg.ParsePortList(portList, cfg, registry, pkgRegistry)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing port list: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Resolve all dependencies
-	if err := pkg.ResolveDependencies(head, cfg, registry, pkgRegistry); err != nil {
+	if err := pkg.ResolveDependencies(packages, cfg, registry, pkgRegistry); err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Check which packages need building (CRC-based)
-	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg, registry)
+	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, registry)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking build status: %v\n", err)
 		os.Exit(1)
@@ -370,8 +370,10 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 
 	// DEBUG: Print what packages are marked for build vs skipped
 	fmt.Println("\nDEBUG: Package status (first 10):")
-	count := 0
-	for p := head; p != nil && count < 10; p = p.Next {
+	for i, p := range packages {
+		if i >= 10 {
+			break
+		}
 		fmt.Printf("  %s: Flags=%08x PkgFile=%s\n", p.PortDir, registry.GetFlags(p), p.PkgFile)
 
 		// Check if package file actually exists
@@ -381,7 +383,6 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		} else {
 			fmt.Printf("    -> Package NOT FOUND at %s (err: %v)\n", pkgPath, err)
 		}
-		count++
 	}
 	fmt.Println()
 
@@ -399,7 +400,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	}
 
 	// Execute build - NOW WITH 3 RETURN VALUES
-	stats, cleanup, err := build.DoBuild(head, cfg, logger)
+	stats, cleanup, err := build.DoBuild(packages, cfg, logger)
 	buildCleanup = cleanup // Store cleanup function for signal handler
 
 	if err != nil {

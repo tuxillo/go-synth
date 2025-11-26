@@ -6,7 +6,7 @@ import (
 )
 
 // createCycle builds A->B->C and introduces C depends on A forming a cycle
-func createCycle() *Package {
+func createCycle() []*Package {
 	c := &Package{PortDir: "cat/C", Category: "cat", Name: "C"}
 	b := &Package{PortDir: "cat/B", Category: "cat", Name: "B"}
 	a := &Package{PortDir: "cat/A", Category: "cat", Name: "A"}
@@ -19,16 +19,12 @@ func createCycle() *Package {
 	c.DependsOnMe = []*PkgLink{{Pkg: b, DepType: DepTypeBuild}}
 	a.DependsOnMe = []*PkgLink{{Pkg: c, DepType: DepTypeBuild}}
 
-	a.Next = b
-	b.Prev = a
-	b.Next = c
-	c.Prev = b
-	return a
+	return []*Package{a, b, c}
 }
 
 func TestTopoOrderStrictCycle(t *testing.T) {
-	head := createCycle()
-	order, err := TopoOrderStrict(head)
+	packages := createCycle()
+	order, err := TopoOrderStrict(packages)
 	if err == nil {
 		t.Fatalf("expected cycle detection error, got none (order len=%d)", len(order))
 	}

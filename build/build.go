@@ -47,9 +47,9 @@ type BuildContext struct {
 
 // DoBuild executes the main build process
 // Returns stats, cleanup function, and error
-func DoBuild(head *pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildStats, func(), error) {
+func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
-	buildOrder := pkg.GetBuildOrder(head)
+	buildOrder := pkg.GetBuildOrder(packages)
 
 	ctx := &BuildContext{
 		cfg:       cfg,

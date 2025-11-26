@@ -9,7 +9,7 @@ import (
 )
 
 // resolveDependencies builds the complete dependency graph
-func resolveDependencies(head *Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
+func resolveDependencies(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
 	// Phase 1: Collect all dependencies recursively
 	fmt.Println("Resolving dependencies...")
 
@@ -21,7 +21,7 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 
 	// Process initial package list
 	toProcess := make([]*Package, 0)
-	for pkg := head; pkg != nil; pkg = pkg.Next {
+	for _, pkg := range packages {
 		toProcess = append(toProcess, pkg)
 		queued[pkg.PortDir] = true
 	}
@@ -29,10 +29,10 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 	processedCount := 0
 	totalQueued := len(toProcess)
 
-	// Track the tail of the linked list so we can append new packages
-	tail := head
-	for tail != nil && tail.Next != nil {
-		tail = tail.Next
+	// Track which packages we've added to the slice
+	inSlice := make(map[string]bool)
+	for _, pkg := range packages {
+		inSlice[pkg.PortDir] = true
 	}
 
 	// Iteratively resolve dependencies
@@ -67,11 +67,10 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 
 					// Check if already in registry
 					if existing := pkgRegistry.Find(origin.portDir); existing != nil {
-						// Already in registry, add to linked list if not there
-						if existing.Next == nil && existing.Prev == nil && existing != head {
-							tail.Next = existing
-							existing.Prev = tail
-							tail = existing
+						// Already in registry, add to slice if not there
+						if !inSlice[origin.portDir] {
+							packages = append(packages, existing)
+							inSlice[origin.portDir] = true
 						}
 						continue
 					}
@@ -109,21 +108,17 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 			// Add to registry
 			existingPkg := pkgRegistry.Enter(pkg)
 
-			// Add to linked list if it's a new package
+			// Add to slice if it's a new package
 			if existingPkg == pkg {
-				// New package, add to tail
-				if tail != nil {
-					tail.Next = pkg
-					pkg.Prev = tail
-					tail = pkg
-				}
+				// New package, add to slice
+				packages = append(packages, pkg)
+				inSlice[pkg.PortDir] = true
 				toProcess = append(toProcess, pkg)
 			} else {
-				// Existing package, make sure it's in the list
-				if existingPkg.Next == nil && existingPkg.Prev == nil && existingPkg != head {
-					tail.Next = existingPkg
-					existingPkg.Prev = tail
-					tail = existingPkg
+				// Existing package, add to slice if not there
+				if !inSlice[existingPkg.PortDir] {
+					packages = append(packages, existingPkg)
+					inSlice[existingPkg.PortDir] = true
 				}
 				toProcess = append(toProcess, existingPkg)
 			}
@@ -134,7 +129,7 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 
 	// Phase 2: Build the dependency graph
 	fmt.Println("Building dependency graph...")
-	return buildDependencyGraph(head, cfg, pkgRegistry)
+	return buildDependencyGraph(packages, cfg, pkgRegistry)
 }
 
 type depOrigin struct {
@@ -215,10 +210,10 @@ func parseDependencyString(depStr string, cfg *config.Config) []depOrigin {
 }
 
 // buildDependencyGraph creates the IDependOn and DependsOnMe links
-func buildDependencyGraph(head *Package, cfg *config.Config, pkgRegistry *PackageRegistry) error {
+func buildDependencyGraph(packages []*Package, cfg *config.Config, pkgRegistry *PackageRegistry) error {
 	// Process all packages
 	count := 0
-	for pkg := head; pkg != nil; pkg = pkg.Next {
+	for _, pkg := range packages {
 		if err := linkPackageDependencies(pkg, cfg, pkgRegistry); err != nil {
 			return err
 		}
@@ -231,7 +226,7 @@ func buildDependencyGraph(head *Package, cfg *config.Config, pkgRegistry *Packag
 
 	// Calculate recursive dependency counts
 	fmt.Println("Calculating dependency depths...")
-	for pkg := head; pkg != nil; pkg = pkg.Next {
+	for _, pkg := range packages {
 		calculateDepthRecursive(pkg)
 	}
 
@@ -305,14 +300,12 @@ func calculateDepthRecursive(pkg *Package) int {
 }
 
 // GetBuildOrder returns packages in topological order (dependencies first)
-func GetBuildOrder(head *Package) []*Package {
+func GetBuildOrder(packages []*Package) []*Package {
 	// Kahn's algorithm for topological sort
 	inDegree := make(map[*Package]int)
-	packages := make([]*Package, 0)
 
-	// Count in-degrees and collect all packages
-	for pkg := head; pkg != nil; pkg = pkg.Next {
-		packages = append(packages, pkg)
+	// Count in-degrees
+	for _, pkg := range packages {
 		inDegree[pkg] = len(pkg.IDependOn)
 	}
 
@@ -377,16 +370,11 @@ func GetBuildOrder(head *Package) []*Package {
 }
 
 // TopoOrderStrict returns the topological order and an error if a cycle is detected.
-func TopoOrderStrict(head *Package) ([]*Package, error) {
-	order := GetBuildOrder(head)
-	// Count packages in linked list
-	count := 0
-	for p := head; p != nil; p = p.Next {
-		count++
-	}
-	if len(order) != count {
+func TopoOrderStrict(packages []*Package) ([]*Package, error) {
+	order := GetBuildOrder(packages)
+	if len(order) != len(packages) {
 		return order, &CycleError{
-			TotalPackages:   count,
+			TotalPackages:   len(packages),
 			OrderedPackages: len(order),
 			CyclePackages:   nil, // Could be enhanced to track specific cycle packages
 		}
