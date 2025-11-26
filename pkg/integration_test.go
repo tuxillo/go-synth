@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"os"
 	"testing"
 
 	"dsynth/config"
@@ -361,6 +362,243 @@ func TestIntegration_MetaPort(t *testing.T) {
 	}
 
 	t.Logf("Meta port handled correctly: %s (flags: 0x%x)", metaPkg.PortDir, flags)
+}
+
+// TestIntegration_DeepDependencies tests resolution of ports with deep dependency trees
+// This test uses complex ports like Firefox or Chromium that have many transitive dependencies
+func TestIntegration_DeepDependencies(t *testing.T) {
+	// Note: This test requires fixtures for complex ports to be generated on BSD
+	// If fixtures don't exist, the test will be skipped
+
+	// Check if complex port fixtures exist
+	complexFixtures := map[string]string{
+		"www/firefox":        "testdata/fixtures/www__firefox.txt",
+		"x11/xorg-server":    "testdata/fixtures/x11__xorg-server.txt",
+		"graphics/mesa-libs": "testdata/fixtures/graphics__mesa-libs.txt",
+		"multimedia/ffmpeg":  "testdata/fixtures/multimedia__ffmpeg.txt",
+		// Add common dependencies that these would need
+		"devel/gmake":           "testdata/fixtures/devel__gmake.txt",
+		"devel/pkgconf":         "testdata/fixtures/devel__pkgconf.txt",
+		"devel/gettext-runtime": "testdata/fixtures/devel__gettext-runtime.txt",
+		"lang/python39":         "testdata/fixtures/lang__python39.txt",
+		"x11/libX11":            "testdata/fixtures/x11__libX11.txt",
+		"x11/libxcb":            "testdata/fixtures/x11__libxcb.txt",
+	}
+
+	// Check if at least one complex fixture exists
+	foundComplex := false
+	testPort := ""
+	for port, fixture := range complexFixtures {
+		if _, err := os.Stat(fixture); err == nil {
+			if port == "www/firefox" || port == "x11/xorg-server" || port == "multimedia/ffmpeg" {
+				foundComplex = true
+				testPort = port
+				break
+			}
+		}
+	}
+
+	if !foundComplex {
+		t.Skip("Skipping deep dependency test: no complex port fixtures found (run capture-fixtures.sh on BSD)")
+	}
+
+	restore := setTestQuerier(newTestFixtureQuerier(complexFixtures))
+	defer restore()
+
+	cfg := &config.Config{
+		DPortsPath: "/usr/ports",
+		MaxWorkers: 4,
+	}
+
+	pkgRegistry := NewPackageRegistry()
+	bsRegistry := NewBuildStateRegistry()
+
+	// Parse the complex port
+	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry)
+	if err != nil {
+		t.Fatalf("ParsePortList failed: %v", err)
+	}
+
+	// Resolve dependencies
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	if err != nil {
+		t.Fatalf("ResolveDependencies failed: %v", err)
+	}
+
+	allPackages := pkgRegistry.AllPackages()
+	t.Logf("Resolved %d total packages for %s", len(allPackages), testPort)
+
+	// Should have many packages (complex ports typically have 50+ dependencies)
+	if len(allPackages) < 5 {
+		t.Errorf("Expected at least 5 packages for complex port %s, got %d", testPort, len(allPackages))
+	}
+
+	// Get build order
+	buildOrder := GetBuildOrder(allPackages)
+
+	// Verify topological order is correct
+	pkgPositions := make(map[string]int)
+	for i, pkg := range buildOrder {
+		pkgPositions[pkg.PortDir] = i
+	}
+
+	violations := 0
+	for i, pkg := range buildOrder {
+		for _, dep := range pkg.IDependOn {
+			depPos, ok := pkgPositions[dep.Pkg.PortDir]
+			if !ok {
+				t.Errorf("Dependency %s not found in build order", dep.Pkg.PortDir)
+				violations++
+				continue
+			}
+			if depPos >= i {
+				t.Errorf("Dependency %s (pos %d) comes after %s (pos %d)",
+					dep.Pkg.PortDir, depPos, pkg.PortDir, i)
+				violations++
+			}
+		}
+	}
+
+	if violations == 0 {
+		t.Logf("Deep dependency test passed: %d packages in correct order", len(buildOrder))
+	} else {
+		t.Errorf("Found %d topological order violations", violations)
+	}
+
+	// Verify the requested port is last in the build order
+	lastPkg := buildOrder[len(buildOrder)-1]
+	if lastPkg.PortDir != testPort {
+		t.Errorf("Expected %s to be last in build order, got %s", testPort, lastPkg.PortDir)
+	}
+}
+
+// TestIntegration_LargeGraph tests handling of a large dependency graph with multiple root packages
+func TestIntegration_LargeGraph(t *testing.T) {
+	// This test combines multiple complex ports to create a large graph
+	// with shared dependencies, testing the registry's ability to handle
+	// deduplication and proper ordering at scale
+
+	fixtures := map[string]string{
+		// Multiple root applications
+		"editors/vim":       "testdata/fixtures/editors__vim.txt",
+		"devel/git":         "testdata/fixtures/devel__git.txt",
+		"shells/bash":       "testdata/fixtures/shells__bash.txt",
+		"www/firefox":       "testdata/fixtures/www__firefox.txt",
+		"multimedia/ffmpeg": "testdata/fixtures/multimedia__ffmpeg.txt",
+
+		// Common dependencies (will be shared)
+		"devel/gmake":           "testdata/fixtures/devel__gmake.txt",
+		"devel/pkgconf":         "testdata/fixtures/devel__pkgconf.txt",
+		"devel/gettext-runtime": "testdata/fixtures/devel__gettext-runtime.txt",
+		"devel/gettext-tools":   "testdata/fixtures/devel__gettext-tools.txt",
+		"devel/libffi":          "testdata/fixtures/devel__libffi.txt",
+		"lang/python39":         "testdata/fixtures/lang__python39.txt",
+		"lang/perl5":            "testdata/fixtures/lang__perl5.txt",
+		"ftp/curl":              "testdata/fixtures/ftp__curl.txt",
+		"textproc/expat":        "testdata/fixtures/textproc__expat.txt",
+	}
+
+	// Check if we have enough fixtures
+	existingCount := 0
+	var testPorts []string
+	for port, fixture := range fixtures {
+		if _, err := os.Stat(fixture); err == nil {
+			existingCount++
+			// Only use as test port if it's an application (not a library)
+			if port == "editors/vim" || port == "devel/git" || port == "shells/bash" {
+				testPorts = append(testPorts, port)
+			}
+		}
+	}
+
+	if existingCount < 5 {
+		t.Skipf("Skipping large graph test: only %d fixtures found (need at least 5)", existingCount)
+	}
+
+	if len(testPorts) < 2 {
+		t.Skip("Skipping large graph test: need at least 2 application fixtures")
+	}
+
+	restore := setTestQuerier(newTestFixtureQuerier(fixtures))
+	defer restore()
+
+	cfg := &config.Config{
+		DPortsPath: "/usr/ports",
+		MaxWorkers: 4,
+	}
+
+	pkgRegistry := NewPackageRegistry()
+	bsRegistry := NewBuildStateRegistry()
+
+	// Parse multiple ports at once
+	packages, err := ParsePortList(testPorts, cfg, bsRegistry, pkgRegistry)
+	if err != nil {
+		t.Fatalf("ParsePortList failed: %v", err)
+	}
+
+	t.Logf("Parsed %d root packages: %v", len(packages), testPorts)
+
+	// Resolve dependencies
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	if err != nil {
+		t.Fatalf("ResolveDependencies failed: %v", err)
+	}
+
+	allPackages := pkgRegistry.AllPackages()
+	t.Logf("Resolved %d total packages from %d roots", len(allPackages), len(testPorts))
+
+	// Get build order
+	buildOrder := GetBuildOrder(allPackages)
+
+	// Verify each package appears exactly once
+	seenPackages := make(map[string]int)
+	for _, pkg := range buildOrder {
+		seenPackages[pkg.PortDir]++
+	}
+
+	duplicates := 0
+	for portDir, count := range seenPackages {
+		if count > 1 {
+			t.Errorf("Package %s appears %d times in build order (should be 1)", portDir, count)
+			duplicates++
+		}
+	}
+
+	if duplicates == 0 {
+		t.Logf("No duplicates found: all %d packages appear exactly once", len(buildOrder))
+	}
+
+	// Verify all root packages are in the build order
+	for _, testPort := range testPorts {
+		if seenPackages[testPort] == 0 {
+			t.Errorf("Root package %s missing from build order", testPort)
+		}
+	}
+
+	// Verify topological ordering
+	pkgPositions := make(map[string]int)
+	for i, pkg := range buildOrder {
+		pkgPositions[pkg.PortDir] = i
+	}
+
+	violations := 0
+	for i, pkg := range buildOrder {
+		for _, dep := range pkg.IDependOn {
+			depPos, ok := pkgPositions[dep.Pkg.PortDir]
+			if !ok {
+				continue // Dependency might not be in fixtures
+			}
+			if depPos >= i {
+				violations++
+			}
+		}
+	}
+
+	if violations > 0 {
+		t.Errorf("Found %d topological order violations in large graph", violations)
+	} else {
+		t.Logf("Large graph validated: %d packages in correct dependency order", len(buildOrder))
+	}
 }
 
 // Helper function to find package index in slice

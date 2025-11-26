@@ -175,29 +175,74 @@ capture_port() {
 echo "Capturing test fixtures..."
 echo ""
 
+echo "=== Basic Dependencies ==="
 # Core ports for basic tests
 capture_port "devel" "gmake"
 capture_port "devel" "gettext-runtime"
 capture_port "devel" "gettext-tools"
-
-# Common dependencies
 capture_port "devel" "libffi"
+capture_port "devel" "pkgconf"
+capture_port "devel" "libiconv"
+
+echo ""
+echo "=== Network Libraries ==="
 capture_port "ftp" "curl"
 capture_port "textproc" "expat"
+capture_port "security" "ca_root_nss"
+capture_port "dns" "libidn2"
 
-# Ports with dependencies for integration tests
+echo ""
+echo "=== Language Runtimes ==="
 capture_port "lang" "python39"
+capture_port "lang" "perl5"
+capture_port "lang" "ruby31"
+
+echo ""
+echo "=== Basic Applications ==="
 capture_port "editors" "vim"
 capture_port "devel" "git"
+capture_port "shells" "bash"
 
+echo ""
+echo "=== Flavored Ports ==="
 # Flavored port example
 capture_port "editors" "vim" "python39"
 
-# Meta port example (GNOME meta-port)
-if [ -d "$PORTS_DIR/x11/meta-gnome" ]; then
-    capture_port "x11" "meta-gnome"
-elif [ -d "$PORTS_DIR/x11/gnome" ]; then
+echo ""
+echo "=== Complex Ports with Deep Dependencies ==="
+# X11 and graphics stack (moderate complexity)
+capture_port "x11" "xorg-server"
+capture_port "x11" "xorg-libs"
+capture_port "x11" "libX11"
+capture_port "x11" "libxcb"
+capture_port "graphics" "mesa-libs"
+capture_port "graphics" "cairo"
+
+# Desktop environment components
+capture_port "x11-wm" "i3"
+capture_port "x11" "gnome-shell"
+
+# Large applications with many dependencies
+capture_port "www" "firefox"
+capture_port "www" "chromium"
+
+# Multimedia (deep dependency trees)
+capture_port "multimedia" "ffmpeg"
+capture_port "multimedia" "gstreamer1"
+
+echo ""
+echo "=== Meta Ports ==="
+# Meta port examples
+if [ -d "$PORTS_DIR/x11/xorg" ]; then
+    capture_port "x11" "xorg"
+fi
+if [ -d "$PORTS_DIR/x11/gnome" ]; then
     capture_port "x11" "gnome"
+elif [ -d "$PORTS_DIR/x11/meta-gnome" ]; then
+    capture_port "x11" "meta-gnome"
+fi
+if [ -d "$PORTS_DIR/x11/kde5" ]; then
+    capture_port "x11" "kde5"
 fi
 
 echo ""

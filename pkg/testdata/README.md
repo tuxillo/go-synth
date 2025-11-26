@@ -119,14 +119,71 @@ func TestSomething(t *testing.T) {
 
 ## Available Fixtures
 
+### Basic Dependencies
 | Fixture | Port | Purpose |
 |---------|------|---------|
-| `editors__vim.txt` | editors/vim | Common port with dependencies |
-| `devel__gmake.txt` | devel/gmake | Simple build tool dependency |
-| `lang__python39.txt` | lang/python39 | Runtime dependency |
-| `editors__vim@python39.txt` | editors/vim@python39 | Flavored port example |
-| `devel__git.txt` | devel/git | Complex port with many deps |
-| `ports__meta-port.txt` | ports/meta-port | Meta port (no PKGFILE) |
+| `devel__gmake.txt` | devel/gmake | Build tool dependency |
+| `devel__pkgconf.txt` | devel/pkgconf | Configuration helper |
+| `devel__gettext-runtime.txt` | devel/gettext-runtime | Internationalization runtime |
+| `devel__gettext-tools.txt` | devel/gettext-tools | Internationalization build tools |
+| `devel__libffi.txt` | devel/libffi | Foreign function interface library |
+| `devel__libiconv.txt` | devel/libiconv | Character encoding conversion |
+
+### Network Libraries
+| Fixture | Port | Purpose |
+|---------|------|---------|
+| `ftp__curl.txt` | ftp/curl | HTTP/FTP client library |
+| `textproc__expat.txt` | textproc/expat | XML parser |
+| `security__ca_root_nss.txt` | security/ca_root_nss | SSL certificate bundle |
+| `dns__libidn2.txt` | dns/libidn2 | Internationalized domain names |
+
+### Language Runtimes
+| Fixture | Port | Purpose |
+|---------|------|---------|
+| `lang__python39.txt` | lang/python39 | Python 3.9 runtime |
+| `lang__perl5.txt` | lang/perl5 | Perl 5 runtime |
+| `lang__ruby31.txt` | lang/ruby31 | Ruby 3.1 runtime |
+
+### Basic Applications
+| Fixture | Port | Purpose |
+|---------|------|---------|
+| `editors__vim.txt` | editors/vim | Text editor (moderate deps) |
+| `editors__vim@python39.txt` | editors/vim@python39 | Vim with Python flavor |
+| `devel__git.txt` | devel/git | Version control (many deps) |
+| `shells__bash.txt` | shells/bash | Bash shell |
+
+### Complex Applications (Deep Dependencies)
+| Fixture | Port | Purpose |
+|---------|------|---------|
+| `www__firefox.txt` | www/firefox | Web browser (100+ deps) |
+| `www__chromium.txt` | www/chromium | Web browser (200+ deps) |
+| `multimedia__ffmpeg.txt` | multimedia/ffmpeg | Media encoder (50+ deps) |
+| `multimedia__gstreamer1.txt` | multimedia/gstreamer1 | Media framework |
+
+### X11 and Graphics
+| Fixture | Port | Purpose |
+|---------|------|---------|
+| `x11__xorg-server.txt` | x11/xorg-server | X11 display server |
+| `x11__xorg-libs.txt` | x11/xorg-libs | X11 libraries meta-port |
+| `x11__libX11.txt` | x11/libX11 | Core X11 library |
+| `x11__libxcb.txt` | x11/libxcb | X C Binding |
+| `graphics__mesa-libs.txt` | graphics/mesa-libs | OpenGL implementation |
+| `graphics__cairo.txt` | graphics/cairo | 2D graphics library |
+
+### Desktop Environments
+| Fixture | Port | Purpose |
+|---------|------|---------|
+| `x11-wm__i3.txt` | x11-wm/i3 | Tiling window manager |
+| `x11__gnome-shell.txt` | x11/gnome-shell | GNOME desktop |
+
+### Meta Ports
+| Fixture | Port | Purpose |
+|---------|------|---------|
+| `x11__xorg.txt` | x11/xorg | Complete X11 system |
+| `x11__gnome.txt` or `x11__meta-gnome.txt` | x11/gnome | GNOME desktop meta-port |
+| `x11__kde5.txt` | x11/kde5 | KDE5 desktop meta-port |
+
+**Note**: Complex fixtures are optional but recommended for thorough testing. They test deep dependency resolution, large graph handling, and real-world scenarios.
 
 ## Testing on Linux vs BSD
 
