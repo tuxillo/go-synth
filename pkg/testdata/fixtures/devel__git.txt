@@ -1,0 +1,10 @@
+git-2.42.0
+2.42.0
+git-2.42.0.pkg
+
+
+
+gmake:devel/gmake msgfmt:devel/gettext-tools
+libcurl.so:ftp/curl libexpat.so:textproc/expat
+python39:lang/python39 bash:shells/bash
+

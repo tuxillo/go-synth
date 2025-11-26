@@ -1,0 +1,10 @@
+gettext-tools-0.22
+0.22
+gettext-tools-0.22.pkg
+
+
+
+devel/gmake:build devel/gettext-runtime:build
+
+
+

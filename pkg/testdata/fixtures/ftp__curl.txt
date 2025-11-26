@@ -1,0 +1,9 @@
+curl-8.4.0
+8.4.0
+curl-8.4.0.pkg
+
+
+
+devel/gmake:build
+
+

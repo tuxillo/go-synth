@@ -398,10 +398,11 @@ Created comprehensive `PHASE_1_DEVELOPER_GUIDE.md` with 10 sections, 5 standalon
 
 ---
 
-### Task 7: Add Integration Tests
+### Task 7: Add Integration Tests ✅ COMPLETE
 
 **Priority**: MEDIUM  
-**Estimated Effort**: 2-3 hours  
+**Estimated Effort**: 2-3 hours → **Actual: ~4 hours**  
+**Status**: ✅ **COMPLETE** (2025-11-26)
 
 **Problem**:
 - Only unit tests exist
@@ -409,46 +410,56 @@ Created comprehensive `PHASE_1_DEVELOPER_GUIDE.md` with 10 sections, 5 standalon
 - Cannot verify Parse→Resolve→TopoOrder pipeline
 
 **Solution**:
-Add integration tests for complete workflows.
+Implemented multi-tier testing strategy with fixtures and BSD-specific tests.
 
-**Steps**:
-- [ ] 7.1. Create file `pkg/integration_test.go`
-- [ ] 7.2. Add test for Parse→Resolve→TopoOrder workflow:
-  ```go
-  func TestFullWorkflow(t *testing.T) {
-      cfg := &config.Config{DPortsPath: "/usr/ports"}
-      
-      // Parse
-      head, err := Parse([]string{"editors/vim"}, cfg)
-      if err != nil { t.Fatal(err) }
-      
-      // Resolve
-      err = Resolve(head, cfg)
-      if err != nil { t.Fatal(err) }
-      
-      // Order
-      order, err := TopoOrder(head)
-      if err != nil { t.Fatal(err) }
-      
-      // Verify order is valid
-      if len(order) == 0 {
-          t.Fatal("expected non-empty order")
-      }
-  }
-  ```
-- [ ] 7.3. Add test for multiple packages with shared dependencies
-- [ ] 7.4. Add test for packages with flavors
-- [ ] 7.5. Add test for error propagation through pipeline
-- [ ] 7.6. Add test with mock port directory (no filesystem dependency)
-- [ ] 7.7. Document how to run integration tests
+**Completed Steps**:
+- [x] 7.1. Created test infrastructure with fixture system
+- [x] 7.2. Created `pkg/testdata/README.md` with fixture documentation
+- [x] 7.3. Created `scripts/capture-fixtures.sh` for BSD fixture generation
+- [x] 7.4. Created 11 fixture files in `pkg/testdata/fixtures/`
+- [x] 7.5. Created `pkg/ports_interface.go` with `PortsQuerier` interface
+- [x] 7.6. Refactored `queryMakefile()` to use pluggable querier
+- [x] 7.7. Created `pkg/integration_test.go` with 5 comprehensive tests:
+  - `TestIntegration_SimpleWorkflow` - Parse→Resolve→TopoOrder pipeline
+  - `TestIntegration_SharedDependencies` - Shared deps appear once
+  - `TestIntegration_FlavoredPackage` - Flavored port handling
+  - `TestIntegration_ErrorPortNotFound` - Error handling
+  - `TestIntegration_MetaPort` - Meta port with flags
+- [x] 7.8. Created `pkg/integration_bsd_test.go` with build tags for BSD-only tests:
+  - `TestIntegrationBSD_RealPort` - Test against real gmake port
+  - `TestIntegrationBSD_ComplexPort` - Test against git (many deps)
+  - `TestIntegrationBSD_FlavoredPort` - Test against python@3.9
+- [x] 7.9. Created `TESTING.md` comprehensive testing documentation
+- [x] 7.10. Fixed fixture format to match BSD dependency syntax (`tool:port`)
+- [x] 7.11. All 5 integration tests passing on Linux ✅
+- [x] 7.12. Verified examples compile successfully ✅
 
-**Files to create**:
-- `pkg/integration_test.go`
+**Files Created**:
+- `pkg/testdata/README.md` (140 lines) - Fixture system documentation
+- `pkg/testdata/fixtures/*.txt` (11 fixture files) - Port metadata for testing
+- `scripts/capture-fixtures.sh` (94 lines) - BSD fixture generation script
+- `pkg/ports_interface.go` (285 lines) - Interface system for testing
+- `pkg/integration_test.go` (371 lines) - 5 integration tests with fixtures
+- `pkg/integration_bsd_test.go` (253 lines) - 3 BSD-specific tests
+- `TESTING.md` (679 lines) - Comprehensive testing guide
 
-**Acceptance Criteria**:
-- Tests cover full Parse→Resolve→TopoOrder workflow
-- Tests can run without real ports tree (using mocks)
-- Tests verify correctness of build order
+**Files Modified**:
+- `pkg/pkg.go` - Refactored queryMakefile(), added skipPortDirCheck, AllPackages()
+
+**Testing Strategy**:
+- **Tier 1**: Unit tests (all platforms)
+- **Tier 2**: Integration tests with fixtures (all platforms) - PRIMARY DEVELOPMENT METHOD
+- **Tier 3**: BSD integration tests (FreeBSD/DragonFly only) - VALIDATION
+
+**Acceptance Criteria**: ✅ ALL MET
+- ✅ Tests cover full ParsePortList→ResolveDependencies→GetBuildOrder workflow
+- ✅ Tests run without real ports tree (using fixtures)
+- ✅ Tests verify correctness of build order (topological validation)
+- ✅ Tests handle error conditions (port not found, etc.)
+- ✅ Tests work with flavored packages
+- ✅ Tests validate shared dependencies
+- ✅ BSD-specific tests available for real port validation
+- ✅ Comprehensive documentation in TESTING.md
 
 ---
 

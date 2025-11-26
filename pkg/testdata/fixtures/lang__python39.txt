@@ -1,0 +1,10 @@
+python39-3.9.18
+3.9.18
+python39-3.9.18.pkg
+
+
+
+msgfmt:devel/gettext-runtime gmake:devel/gmake
+libffi.so:devel/libffi
+
+

@@ -1,0 +1,10 @@
+meta-gnome-1.0
+1.0
+
+
+
+
+
+x11/gnome-desktop:run x11/gnome-terminal:run
+
+

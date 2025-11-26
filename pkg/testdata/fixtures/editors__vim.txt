@@ -1,0 +1,10 @@
+vim-9.0.1234
+9.0.1234
+vim-9.0.1234.pkg
+
+
+
+msgfmt:devel/gettext-tools gmake:devel/gmake
+libintl.so:devel/gettext-runtime
+python39:lang/python39
+

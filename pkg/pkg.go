@@ -356,6 +356,21 @@ func NewPackageRegistry() *PackageRegistry {
 	}
 }
 
+// AllPackages returns a slice containing all packages in the registry.
+// This is useful after dependency resolution to get the complete dependency graph.
+//
+// Returns a new slice containing all registered packages in no particular order.
+func (r *PackageRegistry) AllPackages() []*Package {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]*Package, 0, len(r.packages))
+	for _, pkg := range r.packages {
+		result = append(result, pkg)
+	}
+	return result
+}
+
 // Enter adds a package to the registry or returns the existing package
 // if one with the same PortDir already exists. This ensures package
 // deduplication during dependency resolution.
@@ -513,11 +528,13 @@ func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package
 
 	portPath := filepath.Join(cfg.DPortsPath, category, name)
 
-	// Check if port exists
-	if _, err := os.Stat(portPath); os.IsNotExist(err) {
-		return nil, PkgFNotFound, "", &PortNotFoundError{
-			PortSpec: portDir,
-			Path:     portPath,
+	// Check if port exists (skip in tests when using fixtures)
+	if !skipPortDirCheck {
+		if _, err := os.Stat(portPath); os.IsNotExist(err) {
+			return nil, PkgFNotFound, "", &PortNotFoundError{
+				PortSpec: portDir,
+				Path:     portPath,
+			}
 		}
 	}
 
@@ -537,97 +554,11 @@ func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package
 	return pkg, flags, ignoreReason, nil
 }
 
-// queryMakefile extracts information from port Makefile
-// Returns: error, flags to set, ignoreReason
+// queryMakefile extracts information from port Makefile using the configured querier.
+// The querier can be swapped in tests to use fixtures instead of real make commands.
+// Returns: flags to set, ignoreReason, error
 func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (PackageFlags, string, error) {
-	// Build make command to extract variables
-	vars := []string{
-		"PKGNAME",
-		"PKGVERSION",
-		"PKGFILE",
-		"FETCH_DEPENDS",
-		"EXTRACT_DEPENDS",
-		"PATCH_DEPENDS",
-		"BUILD_DEPENDS",
-		"LIB_DEPENDS",
-		"RUN_DEPENDS",
-		"IGNORE",
-	}
-
-	// Use make -V to query variables
-	args := []string{
-		"-C", portPath,
-	}
-
-	// Add flavor if specified
-	if pkg.Flavor != "" {
-		args = append(args, "FLAVOR="+pkg.Flavor)
-	}
-
-	// Query all variables in one go
-	for _, v := range vars {
-		args = append(args, "-V", v)
-	}
-
-	cmd := exec.Command("make", args...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return 0, "", fmt.Errorf("make query failed: %w", err)
-	}
-
-	lines := strings.Split(out.String(), "\n")
-	if len(lines) < len(vars) {
-		return 0, "", fmt.Errorf("insufficient output from make")
-	}
-
-	// Parse output
-	pkg.Version = strings.TrimSpace(lines[1])
-	if pkg.Version == "" {
-		pkg.Version = "unknown"
-	}
-
-	// CRITICAL: Extract just the basename from PKGFILE
-	// The Makefile might return a full path, but we only want the filename
-	pkgFileRaw := strings.TrimSpace(lines[2])
-	if pkgFileRaw != "" {
-		pkg.PkgFile = filepath.Base(pkgFileRaw)
-	}
-
-	// Check if it's a meta port BEFORE setting default
-	// Meta ports don't produce a package file
-	isMeta := pkg.PkgFile == ""
-
-	if pkg.PkgFile == "" {
-		pkgname := strings.TrimSpace(lines[0])
-		if pkgname == "" {
-			pkgname = pkg.Name + "-" + pkg.Version
-		}
-		pkg.PkgFile = pkgname + ".pkg"
-	}
-
-	pkg.FetchDeps = strings.TrimSpace(lines[3])
-	pkg.ExtractDeps = strings.TrimSpace(lines[4])
-	pkg.PatchDeps = strings.TrimSpace(lines[5])
-	pkg.BuildDeps = strings.TrimSpace(lines[6])
-	pkg.LibDeps = strings.TrimSpace(lines[7])
-	pkg.RunDeps = strings.TrimSpace(lines[8])
-
-	// Compute flags based on metadata
-	var flags PackageFlags
-	ignoreReason := strings.TrimSpace(lines[9])
-	if ignoreReason != "" {
-		flags |= PkgFIgnored | PkgFNoBuildIgnore
-	}
-
-	// Mark meta ports
-	if isMeta {
-		flags |= PkgFMeta
-	}
-
-	return flags, ignoreReason, nil
+	return portsQuerier.QueryMakefile(pkg, portPath, cfg)
 }
 
 // ResolveDependencies builds the complete dependency graph for a set of packages
