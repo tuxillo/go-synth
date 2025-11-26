@@ -91,11 +91,12 @@ gh pr create --repo otheruser/somerepo
   - If you add/remove features, update AGENTS.md, README.md, and any affected design docs
   - Documentation updates are NOT optional - they are part of the change
   - Never commit code changes without corresponding doc updates
-- **CRITICAL**: Every commit MUST include Co-authored-by trailers in the commit message to properly attribute work.
-  - Format: `Co-authored-by: Antonio Huete Jimenez <tuxillo@quantumachine.net>`
-  - Second line: `Co-authored-by: <model-name> <ai-assistant@example.com>`
-  - Example model names: `Claude 3.7 Sonnet`, `GPT-4`, etc.
-  - This ensures commits show up as done by both the user and the AI assistant
+- **CRITICAL**: Every commit MUST include Co-authored-by trailer for the AI model used.
+  - Format: `Co-authored-by: <Model Name> <ai-model@example.com>`
+  - Example: `Co-authored-by: Claude 3.7 Sonnet <claude-3.7-sonnet@anthropic.com>`
+  - Example: `Co-authored-by: GPT-4 <gpt-4@openai.com>`
+  - The commit author is already set to Antonio Huete Jimenez with proper email
+  - This properly attributes AI assistance in the git history
   - Use standard git trailer format (blank line before trailers)
 - Do NOT push to any remote during iterative Phase work unless explicitly requested.
 - Group related minimal changes per commit; avoid large mixed commits.
