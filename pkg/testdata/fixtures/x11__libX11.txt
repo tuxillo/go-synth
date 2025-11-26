@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/x11/libX11/libX11-1.8.9,1.pkg
+1.8.9,1
+/home/antonioh/s/dports/x11/libX11/libX11-1.8.9,1.pkg
+
+
+
+pkgconf>=1.3.0_1:devel/pkgconf  /usr/local/libdata/pkgconfig/xtrans.pc:x11/xtrans xorgproto>=0:x11/xorgproto /usr/local/libdata/pkgconfig/xorg-macros.pc:devel/xorg-macros /usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb   
+
+/usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb   
+

@@ -1,10 +1,10 @@
-gettext-runtime-0.22
-0.22
-gettext-runtime-0.22.pkg
+/home/antonioh/s/dports/devel/gettext-runtime/gettext-runtime-0.22.5.pkg
+0.22.5
+/home/antonioh/s/dports/devel/gettext-runtime/gettext-runtime-0.22.5.pkg
 
 
 
+libiconv>=1.14_11:converters/libiconv
 
-
-
+indexinfo:print/indexinfo
 

@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/x11/xorg/xorg-7.7_3.pkg
+7.7_3
+/home/antonioh/s/dports/x11/xorg/xorg-7.7_3.pkg
+
+
+
+
+
+/usr/local/libdata/pkgconfig/dri.pc:graphics/mesa-dri /usr/local/libdata/pkgconfig/xbitmaps.pc:x11/xbitmaps  /usr/local/share/icons/handhelds/cursors/X_cursor:x11-themes/xcursor-themes xorg-apps>0:x11/xorg-apps  xorg-libraries>0:x11/xorg-libraries  xorg-fonts>0:x11-fonts/xorg-fonts  xorg-drivers>0:x11-drivers/xorg-drivers /usr/local/share/doc/xorg-docs/README.xml:x11/xorg-docs
+

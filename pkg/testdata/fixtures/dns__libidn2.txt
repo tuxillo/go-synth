@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/dns/libidn2/libidn2-2.3.7.pkg
+2.3.7
+/home/antonioh/s/dports/dns/libidn2/libidn2-2.3.7.pkg
+
+
+
+help2man:misc/help2man libiconv>=1.14_11:converters/libiconv /usr/local/bin/makeinfo:print/texinfo
+libunistring.so:devel/libunistring
+indexinfo:print/indexinfo
+

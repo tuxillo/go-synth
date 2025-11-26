@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/x11/kde5/kde5-5.27.11.23.08.5.pkg
+5.27.11.23.08.5
+/home/antonioh/s/dports/x11/kde5/kde5-5.27.11.23.08.5.pkg
+
+
+
+
+
+kde-baseapps>=0:x11/kde-baseapps  kwalletmanager5:security/kwalletmanager  plasma5-plasma>=0:x11/plasma5-plasma kdeadmin>=23.08.5:sysutils/kdeadmin kdeedu>=23.08.5:misc/kdeedu kdegames>=23.08.5:games/kdegames kdegraphics>=23.08.5:graphics/kdegraphics kdemultimedia>=23.08.5:multimedia/kdemultimedia kdenetwork>=23.08.5:net/kdenetwork kdepim>=23.08.5:deskutils/kdepim kdeutils>=23.08.5:misc/kdeutils
+

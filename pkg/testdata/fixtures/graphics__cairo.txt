@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/graphics/cairo/cairo-1.17.4_2,3.pkg
+1.17.4_2,3
+/home/antonioh/s/dports/graphics/cairo/cairo-1.17.4_2,3.pkg
+
+
+
+gtkdocize:textproc/gtk-doc pkgconf>=1.3.0_1:devel/pkgconf gettext-runtime>=0.22_1:devel/gettext-runtime autoconf>=2.72:devel/autoconf automake>=1.16.5:devel/automake libtoolize:devel/libtool    xorgproto>=0:x11/xorgproto   /usr/local/libdata/pkgconfig/pixman-1.pc:x11/pixman /usr/local/libdata/pkgconfig/x11.pc:x11/libX11 /usr/local/libdata/pkgconfig/xext.pc:x11/libXext  /usr/local/libdata/pkgconfig/xrender.pc:x11/libXrender /usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb
+libfreetype.so:print/freetype2  libpng.so:graphics/png  libfontconfig.so:x11-fonts/fontconfig libglib-2.0.so:devel/glib20  libintl.so:devel/gettext-runtime libintl.so:devel/gettext-runtime libEGL.so:graphics/libglvnd
+/usr/local/libdata/pkgconfig/pixman-1.pc:x11/pixman /usr/local/libdata/pkgconfig/x11.pc:x11/libX11 /usr/local/libdata/pkgconfig/xext.pc:x11/libXext  /usr/local/libdata/pkgconfig/xrender.pc:x11/libXrender /usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb
+

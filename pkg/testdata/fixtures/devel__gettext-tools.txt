@@ -1,10 +1,10 @@
-gettext-tools-0.22
-0.22
-gettext-tools-0.22.pkg
+/home/antonioh/s/dports/devel/gettext-tools/gettext-tools-0.22.5.pkg
+0.22.5
+/home/antonioh/s/dports/devel/gettext-tools/gettext-tools-0.22.5.pkg
 
 
 
-devel/gmake:build devel/gettext-runtime:build
-
-
+libtextstyle>=0.22.5:devel/libtextstyle gettext-runtime>=0.22_1:devel/gettext-runtime libiconv>=1.14_11:converters/libiconv
+libtextstyle.so:devel/libtextstyle libintl.so:devel/gettext-runtime
+indexinfo:print/indexinfo
 

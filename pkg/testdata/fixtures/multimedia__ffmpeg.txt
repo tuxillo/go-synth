@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/multimedia/ffmpeg/ffmpeg-6.1.2,1.pkg
+6.1.2,1
+/home/antonioh/s/dports/multimedia/ffmpeg/ffmpeg-6.1.2,1.pkg
+
+
+
+nasm:devel/nasm texi2html:textproc/texi2html /usr/local/include/frei0r.h:graphics/frei0r v4l_compat>0:multimedia/v4l_compat vulkan-headers>0:graphics/vulkan-headers gmake>=4.4.1:devel/gmake pkgconf>=1.3.0_1:devel/pkgconf libiconv>=1.14_11:converters/libiconv perl5>=5.36<5.37:lang/perl5.36   /usr/local/libdata/pkgconfig/x11.pc:x11/libX11 /usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb
+libaom.so:multimedia/aom libass.so:multimedia/libass libdav1d.so:multimedia/dav1d libdrm.so:graphics/libdrm libfontconfig.so:x11-fonts/fontconfig libfreetype.so:print/freetype2 libgmp.so:math/gmp libgnutls.so:security/gnutls libharfbuzz.so:print/harfbuzz libjxl.so:graphics/libjxl libmp3lame.so:audio/lame liblcms2.so:graphics/lcms2 libplacebo.so:graphics/libplacebo libxml2.so:textproc/libxml2 libopus.so:audio/opus libshaderc_shared.so:graphics/shaderc libSvtAv1Enc.so:multimedia/svt-av1 libv4l2.so:multimedia/libv4l libva.so:multimedia/libva libvdpau.so:multimedia/libvdpau libvmaf.so:multimedia/vmaf libvorbisenc.so:audio/libvorbis libvpx.so:multimedia/libvpx libvulkan.so:graphics/vulkan-loader libwebp.so:graphics/webp libx264.so:multimedia/libx264 libx265.so:multimedia/x265
+/usr/local/libdata/pkgconfig/x11.pc:x11/libX11 /usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb
+

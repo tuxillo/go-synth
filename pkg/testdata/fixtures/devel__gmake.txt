@@ -1,10 +1,10 @@
-gmake-4.4.1
+/home/antonioh/s/dports/devel/gmake/gmake-4.4.1.pkg
 4.4.1
-gmake-4.4.1.pkg
+/home/antonioh/s/dports/devel/gmake/gmake-4.4.1.pkg
 
 
 
-msgfmt:devel/gettext-runtime
-
-
+gettext-runtime>=0.22_1:devel/gettext-runtime
+libintl.so:devel/gettext-runtime
+indexinfo:print/indexinfo
 

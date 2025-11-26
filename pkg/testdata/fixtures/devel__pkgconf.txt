@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/devel/pkgconf/pkgconf-2.2.0,2.pkg
+2.2.0,2
+/home/antonioh/s/dports/devel/pkgconf/pkgconf-2.2.0,2.pkg
+
+
+
+
+
+
+

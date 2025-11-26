@@ -1,0 +1,10 @@
+/home/antonioh/s/dports/x11-wm/i3/i3-4.23_1.pkg
+4.23_1
+/home/antonioh/s/dports/x11-wm/i3/i3-4.23_1.pkg
+
+
+
+bash:shells/bash libiconv>=1.14_11:converters/libiconv meson:devel/meson ninja:devel/ninja pkgconf>=1.3.0_1:devel/pkgconf perl5>=5.36<5.37:lang/perl5.36  /usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb
+libcairo.so:graphics/cairo  libev.so:devel/libev  libpangocairo-1.0.so:x11-toolkits/pango  libpcre2-8.so:devel/pcre2  libstartup-notification-1.so:x11/startup-notification  libxcb-cursor.so:x11/xcb-util-cursor  libxcb-icccm.so:x11/xcb-util-wm  libxcb-keysyms.so:x11/xcb-util-keysyms  libxcb-util.so:x11/xcb-util  libxcb-xrm.so:x11/xcb-util-xrm  libxkbcommon.so:x11/libxkbcommon  libyajl.so:devel/yajl libglib-2.0.so:devel/glib20  libintl.so:devel/gettext-runtime
+p5-AnyEvent-I3>=0:devel/p5-AnyEvent-I3  p5-IPC-Run>=0:devel/p5-IPC-Run  p5-Try-Tiny>=0:lang/p5-Try-Tiny perl5>=5.36<5.37:lang/perl5.36 /usr/local/libdata/pkgconfig/xcb.pc:x11/libxcb
+
