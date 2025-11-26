@@ -29,15 +29,44 @@ const (
 	PkgFRunning       = 0x00000800 // Currently building
 )
 
+// DepType represents the type of dependency relationship between packages.
+// Values match the original C implementation for compatibility.
+type DepType int
+
 // Dependency types
 const (
-	DepTypeFetch   = 1
-	DepTypeExtract = 2
-	DepTypePatch   = 3
-	DepTypeBuild   = 4
-	DepTypeLib     = 5
-	DepTypeRun     = 6
+	DepTypeFetch   DepType = 1 // FETCH dependency
+	DepTypeExtract DepType = 2 // EXTRACT dependency
+	DepTypePatch   DepType = 3 // PATCH dependency
+	DepTypeBuild   DepType = 4 // BUILD dependency
+	DepTypeLib     DepType = 5 // LIB dependency
+	DepTypeRun     DepType = 6 // RUN dependency
 )
+
+// String returns the string representation of the dependency type.
+func (d DepType) String() string {
+	switch d {
+	case DepTypeFetch:
+		return "FETCH"
+	case DepTypeExtract:
+		return "EXTRACT"
+	case DepTypePatch:
+		return "PATCH"
+	case DepTypeBuild:
+		return "BUILD"
+	case DepTypeLib:
+		return "LIB"
+	case DepTypeRun:
+		return "RUN"
+	default:
+		return fmt.Sprintf("UNKNOWN(%d)", d)
+	}
+}
+
+// Valid reports whether the dependency type is valid.
+func (d DepType) Valid() bool {
+	return d >= DepTypeFetch && d <= DepTypeRun
+}
 
 // Package represents a port/package metadata
 // Build-time state (flags, ignore reason, phase) is tracked separately in BuildStateRegistry
@@ -74,7 +103,7 @@ type Package struct {
 // PkgLink represents a dependency link
 type PkgLink struct {
 	Pkg     *Package
-	DepType int
+	DepType DepType
 }
 
 // GetPortDir implements builddb.Package interface

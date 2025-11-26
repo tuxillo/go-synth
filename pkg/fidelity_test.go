@@ -95,7 +95,7 @@ func TestCFidelity_TopologicalSort(t *testing.T) {
 // TestCFidelity_MultipleDepTypes verifies all dependency types are handled
 // C has 6 types: FETCH, EXTRACT, PATCH, BUILD, LIB, RUN
 func TestCFidelity_MultipleDepTypes(t *testing.T) {
-	types := []int{
+	types := []DepType{
 		DepTypeFetch,   // 1
 		DepTypeExtract, // 2
 		DepTypePatch,   // 3

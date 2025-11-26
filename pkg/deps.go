@@ -44,7 +44,7 @@ func resolveDependencies(head *Package, cfg *config.Config, registry *BuildState
 			// Parse and queue all dependency types
 			deps := []struct {
 				depStr  string
-				depType int
+				depType DepType
 			}{
 				{pkg.FetchDeps, DepTypeFetch},
 				{pkg.ExtractDeps, DepTypeExtract},
@@ -241,7 +241,7 @@ func buildDependencyGraph(head *Package, cfg *config.Config, pkgRegistry *Packag
 func linkPackageDependencies(pkg *Package, cfg *config.Config, pkgRegistry *PackageRegistry) error {
 	deps := []struct {
 		depStr  string
-		depType int
+		depType DepType
 	}{
 		{pkg.FetchDeps, DepTypeFetch},
 		{pkg.ExtractDeps, DepTypeExtract},

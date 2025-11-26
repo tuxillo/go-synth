@@ -134,3 +134,57 @@ func TestPackageRegistry_FindNonexistent(t *testing.T) {
 		t.Errorf("Expected nil for nonexistent package, got %v", result)
 	}
 }
+
+// TestDepType_String verifies the String() method for DepType
+func TestDepType_String(t *testing.T) {
+	tests := []struct {
+		depType DepType
+		want    string
+	}{
+		{DepTypeFetch, "FETCH"},
+		{DepTypeExtract, "EXTRACT"},
+		{DepTypePatch, "PATCH"},
+		{DepTypeBuild, "BUILD"},
+		{DepTypeLib, "LIB"},
+		{DepTypeRun, "RUN"},
+		{DepType(0), "UNKNOWN(0)"},
+		{DepType(99), "UNKNOWN(99)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := tt.depType.String()
+			if got != tt.want {
+				t.Errorf("DepType(%d).String() = %q, want %q", tt.depType, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDepType_Valid verifies the Valid() method for DepType
+func TestDepType_Valid(t *testing.T) {
+	tests := []struct {
+		depType DepType
+		want    bool
+	}{
+		{DepType(0), false},
+		{DepTypeFetch, true},
+		{DepTypeExtract, true},
+		{DepTypePatch, true},
+		{DepTypeBuild, true},
+		{DepTypeLib, true},
+		{DepTypeRun, true},
+		{DepType(7), false},
+		{DepType(99), false},
+		{DepType(-1), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("DepType(%d)", tt.depType), func(t *testing.T) {
+			got := tt.depType.Valid()
+			if got != tt.want {
+				t.Errorf("DepType(%d).Valid() = %v, want %v", tt.depType, got, tt.want)
+			}
+		})
+	}
+}
