@@ -52,12 +52,11 @@ type Package struct {
     Flavor   string
     PkgFile  string
     Deps     []*Package // resolved dependencies
-    Next     *Package   // linked list for traversal
 }
 
-func Parse(portSpecs []string, cfg *Config) (*Package, error)
-func Resolve(head *Package, cfg *Config) error
-func TopoOrder(head *Package) []*Package
+func Parse(portSpecs []string, cfg *Config) ([]*Package, error)
+func Resolve(pkgs []*Package, cfg *Config) error
+func TopoOrder(pkgs []*Package) []*Package
 ```
 
 ### builddb (Minimal)

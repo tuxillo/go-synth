@@ -488,16 +488,16 @@ func ComputePortDirCRC(portDir string) (uint32, error)
 7. **Distfiles:** `ALLFILES`, `DIST_SUBDIR`
 8. **Build Config:** `MAKE_JOBS_NUMBER`, `USE_LINUX`
 
-#### ❌ Dead Code Found
+#### ✅ Dead Code Removed (Part B Task B1)
 
-1. **`Package.mu sync.Mutex`** - **NEVER USED** - Remove immediately
+1. **`Package.mu sync.Mutex`** - Removed in commit 175462b
 
-#### ⚠️ C-isms to Address (Part B)
+#### ✅ C-isms Addressed (Part B Complete)
 
-1. **Linked Lists:** 9 traversals found (`Next`/`Prev`)
-2. **Bitfield Flags:** 10+ bitwise operations
-3. **Integer DepType:** Should be typed constant
-4. **Dead Mutex:** `Package.mu` unused
+1. **Linked Lists:** ✅ Converted to Go slices (commit ae58f64)
+2. **Bitfield Flags:** ✅ Converted to typed PackageFlags enum (commit eb1f7e7)
+3. **Integer DepType:** ✅ Converted to typed DepType enum (commit 063d0e7)
+4. **Dead Mutex:** ✅ Removed `Package.mu` (commit 175462b)
 
 ---
 
@@ -604,13 +604,13 @@ ok      dsynth/pkg      0.020s
    - Explicit topological sort: VERIFIED
    - Build state separation: WORKING
 
-3. **❌ Dead Code Confirmed**
-   - `Package.mu sync.Mutex`: NEVER USED - remove in Part B
+3. **✅ Dead Code Removed (Part B)**
+   - `Package.mu sync.Mutex`: Removed in commit 175462b
 
-4. **⚠️ C-isms Identified for Part B**
-   - Linked list traversals: 9 locations using `Next`/`Prev`
-   - Bitfield flags: 10+ bitwise operations
-   - Integer `DepType`: Should be typed constant
+4. **✅ C-isms Removed (Part B Complete)**
+   - Linked list traversals: Converted to Go slices (commit ae58f64)
+   - Bitfield flags: Converted to typed PackageFlags enum (commit eb1f7e7)
+   - Integer `DepType`: Converted to typed DepType enum (commit 063d0e7)
 
 **Confidence Level: HIGH ✅**
 
@@ -618,9 +618,16 @@ We can confidently proceed to Part B (Remove C-isms) knowing our implementation 
 
 ---
 
-## Part B: Remove C-isms (NEXT)
+## Part B: Remove C-isms ✅ COMPLETE
 
-See separate tracking in Phase 1.5 Part B document (to be created).
+All C-isms identified in Part A have been successfully removed:
+
+- **B1: Remove Dead Code** ✅ (commit 175462b)
+- **B2: Convert Linked Lists to Slices** ✅ (commit ae58f64)
+- **B3: Use Typed DepType Enum** ✅ (commit 063d0e7)
+- **B4: Use Typed PackageFlags Enum** ✅ (commit eb1f7e7)
+
+See `docs/design/phase_1.5_part_b_plan.md` for detailed implementation notes.
 
 ---
 

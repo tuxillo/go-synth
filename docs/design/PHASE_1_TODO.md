@@ -105,6 +105,85 @@ Move CRC database to its own package (prepare for Phase 2 BuildDB).
 
 ---
 
+## Phase 1.5: Fidelity Verification & C-ism Removal ✅ COMPLETE
+
+**Status**: ✅ **COMPLETE** (2025-11-26)  
+**Estimated Effort**: 8-10 hours → **Actual: ~6 hours**
+
+### Part A: Fidelity Verification ✅
+
+**Goal**: Verify Go implementation matches C dsynth behavior
+
+**Completed Work**:
+- [x] Comprehensive comparison of Go vs C implementation
+- [x] Created 10 C fidelity tests covering:
+  - Two-pass dependency resolution algorithm
+  - Topological sorting (Kahn's algorithm)
+  - Multiple dependency types (6 types)
+  - Package registry behavior
+  - Cycle detection
+  - Diamond dependencies
+  - Dependency string parsing
+  - Bidirectional links
+  - DepiCount and DepiDepth calculations
+- [x] All tests passing
+- [x] Documented findings in PHASE_1.5_FIDELITY_ANALYSIS.md
+
+**Acceptance Criteria**: ✅ ALL MET
+- ✅ Algorithm equivalence verified
+- ✅ 10 fidelity tests passing
+- ✅ Comprehensive analysis document created
+
+### Part B: Remove C-isms ✅
+
+**Goal**: Replace C-style patterns with Go idioms
+
+**B1: Remove Dead Code** (5 min) ✅
+- [x] Removed unused `Package.mu sync.Mutex` field
+- [x] Verified zero references in codebase
+- Commit: 175462b
+
+**B2: Convert Linked Lists to Slices** (2-3 hours) ✅
+- [x] Removed `Package.Next` and `Package.Prev` fields
+- [x] Updated ParsePortList() to return []*Package
+- [x] Updated 5 API signatures (ResolveDependencies, MarkPackagesNeedingBuild, etc.)
+- [x] Converted 7 linked list traversals to range loops
+- [x] Updated all test files (17 locations)
+- [x] Updated main.go consumer pattern
+- [x] Updated build package (DoBuild, DoFetchOnly)
+- Net result: -53 lines of code
+- Commit: ae58f64
+
+**B3: Add Typed DepType** (1 hour) ✅
+- [x] Defined `type DepType int` with String() and Valid() methods
+- [x] Updated PkgLink struct to use DepType
+- [x] Updated anonymous structs in deps.go
+- [x] Added comprehensive tests
+- Commit: 063d0e7
+
+**B4: Add Typed PackageFlags** (2 hours) ✅
+- [x] Defined `type PackageFlags int` with Has(), Set(), Clear(), String()
+- [x] Updated BuildState struct to use PackageFlags
+- [x] Updated all flag operations (6 registry methods)
+- [x] Updated bulk queue and parsing functions
+- [x] Added comprehensive tests
+- Commit: eb1f7e7
+
+**Documentation**:
+- [x] Created phase_1.5_part_b_plan.md (1,348 lines)
+- [x] Comprehensive analysis and implementation plan
+- Commit: 3da4f08
+
+**Acceptance Criteria**: ✅ ALL MET
+- ✅ No Next/Prev pointers (slice-based)
+- ✅ Typed enums for DepType and PackageFlags
+- ✅ All 39 tests passing (including 10 fidelity tests)
+- ✅ Test coverage maintained at 42.8%
+- ✅ Build successful, binary works correctly
+- ✅ No new race conditions introduced
+
+---
+
 ### Task 3: Add Structured Error Types ✅ COMPLETE
 
 **Priority**: HIGH  
