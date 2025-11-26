@@ -299,7 +299,41 @@ func calculateDepthRecursive(pkg *Package) int {
 	return pkg.DepiDepth
 }
 
-// GetBuildOrder returns packages in topological order (dependencies first)
+// GetBuildOrder computes a topological ordering of packages using Kahn's
+// algorithm, ensuring dependencies are built before packages that depend
+// on them.
+//
+// # Algorithm
+//
+// Kahn's algorithm works by:
+//  1. Computing in-degree (number of dependencies) for each package
+//  2. Starting with packages that have zero dependencies (in-degree = 0)
+//  3. Processing packages in order, removing edges and adding newly
+//     zero-dependency packages to the queue
+//  4. Continuing until all packages are processed or a cycle is detected
+//
+// If the dependency graph contains cycles, some packages will remain unordered
+// and a warning is printed. The function returns successfully with a partial
+// ordering containing only the packages that could be ordered. Use
+// TopoOrderStrict() if you need to detect and handle cycles as errors.
+//
+// # Parameters
+//
+//   - packages: slice of packages with resolved dependencies (IDependOn and
+//     DependsOnMe fields populated)
+//
+// # Returns
+//
+// A slice of packages in build order (dependencies before dependents). If
+// cycles exist, only non-cyclic packages are included. The function never
+// returns an error; use TopoOrderStrict() for strict cycle checking.
+//
+// # Example
+//
+//	buildOrder := pkg.GetBuildOrder(packages)
+//	for _, p := range buildOrder {
+//	    fmt.Printf("Build: %s\n", p.PortDir)
+//	}
 func GetBuildOrder(packages []*Package) []*Package {
 	// Kahn's algorithm for topological sort
 	inDegree := make(map[*Package]int)
@@ -369,7 +403,45 @@ func GetBuildOrder(packages []*Package) []*Package {
 	return result
 }
 
-// TopoOrderStrict returns the topological order and an error if a cycle is detected.
+// TopoOrderStrict is like GetBuildOrder but returns an error if circular
+// dependencies are detected. Use this when you need to guarantee a complete,
+// valid build order or fail explicitly.
+//
+// The function calls GetBuildOrder internally and checks if all packages were
+// successfully ordered. If cycles exist, returns *CycleError with details
+// about the remaining packages that couldn't be ordered.
+//
+// # Error Inspection
+//
+// The error can be inspected with errors.As() to access cycle information:
+//
+//	order, err := pkg.TopoOrderStrict(packages)
+//	if err != nil {
+//	    var cycleErr *pkg.CycleError
+//	    if errors.As(err, &cycleErr) {
+//	        fmt.Printf("Found %d packages in cycles\n", cycleErr.NumPackages())
+//	        fmt.Printf("Successfully ordered: %d/%d\n",
+//	            cycleErr.OrderedPackages, cycleErr.TotalPackages)
+//	    }
+//	    return err
+//	}
+//
+// # Parameters
+//
+//   - packages: slice of packages with resolved dependencies
+//
+// # Returns
+//
+//   - slice of packages in build order (may be partial if cycles exist)
+//   - *CycleError if cycles detected, wrapping ErrCycleDetected
+//   - nil error if all packages were successfully ordered
+//
+// # Example
+//
+//	buildOrder, err := pkg.TopoOrderStrict(packages)
+//	if err != nil {
+//	    log.Fatalf("Cannot build: %v", err)
+//	}
 func TopoOrderStrict(packages []*Package) ([]*Package, error) {
 	order := GetBuildOrder(packages)
 	if len(order) != len(packages) {
