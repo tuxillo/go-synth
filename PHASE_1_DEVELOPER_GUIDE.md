@@ -144,11 +144,9 @@ func main() {
         log.Fatalf("Failed to resolve dependencies: %v", err)
     }
     
-    // 5. Get build order
-    buildOrder, err := pkg.GetBuildOrder(packages)
-    if err != nil {
-        log.Fatalf("Failed to compute build order: %v", err)
-    }
+    // 5. Get build order (must use ALL packages from registry)
+    allPackages := pkgRegistry.AllPackages()
+    buildOrder := pkg.GetBuildOrder(allPackages)
     
     // 6. Print build order
     fmt.Printf("\nBuild order (%d packages):\n", len(buildOrder))
@@ -269,17 +267,21 @@ const (
 The library uses **Kahn's algorithm** for topological sorting:
 
 ```go
+// IMPORTANT: Must use ALL packages from registry after ResolveDependencies()
+allPackages := pkgRegistry.AllPackages()
+
 // Get build order (permissive - ignores cycles)
-order, err := pkg.GetBuildOrder(packages)
+order := pkg.GetBuildOrder(allPackages)
 
 // Strict ordering (fails on cycles)
-order, err := pkg.TopoOrderStrict(packages)
+order, err := pkg.TopoOrderStrict(allPackages)
 ```
 
 **Key Points:**
 - `GetBuildOrder()` is permissive (used for building)
 - `TopoOrderStrict()` fails fast on cycles (used for validation)
 - Order respects all 6 dependency types
+- **Must pass allPackages from registry, not just root packages**
 
 ---
 
@@ -607,15 +609,15 @@ func safeBuildOrder(ports []string, cfg *config.Config) ([]*pkg.Package, error) 
         return nil, fmt.Errorf("dependency resolution failed: %w", err)
     }
     
+    // Get all packages from registry (includes transitive dependencies)
+    allPackages := pkgRegistry.AllPackages()
+    
     // Try strict ordering first
-    order, err := pkg.TopoOrderStrict(packages)
+    order, err := pkg.TopoOrderStrict(allPackages)
     if err != nil {
         // Fall back to permissive ordering
         log.Printf("Warning: Cycles detected, using permissive ordering: %v", err)
-        order, err = pkg.GetBuildOrder(packages)
-        if err != nil {
-            return nil, fmt.Errorf("build order failed: %w", err)
-        }
+        order = pkg.GetBuildOrder(allPackages)
     }
     
     return order, nil
@@ -749,7 +751,8 @@ Error: dependency cycle detected (12 packages involved)
 **Solutions:**
 1. Use permissive ordering for builds:
    ```go
-   order, err := pkg.GetBuildOrder(packages)  // Permissive
+   allPackages := pkgRegistry.AllPackages()
+   order := pkg.GetBuildOrder(allPackages)  // Permissive
    ```
 
 2. Identify cycle participants:
@@ -913,7 +916,8 @@ func main() {
         len(p.BuildDepend)+len(p.RunDepend)+len(p.LibDepend))
     
     // Compute total (including transitive)
-    order, _ := pkg.GetBuildOrder(packages)
+    allPackages := pkgRegistry.AllPackages()
+    order := pkg.GetBuildOrder(allPackages)
     fmt.Printf("  Total transitive:     %d\n", len(order)-1)
 }
 ```

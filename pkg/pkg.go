@@ -595,9 +595,14 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (PackageFl
 //   - nil on success
 //   - error if a critical failure occurs during dependency resolution
 //
-// After successful completion, the packages slice contains the complete transitive
-// closure of all dependencies, and each Package has its dependency graph fields
+// After successful completion, pkgRegistry contains the complete transitive
+// closure of all dependencies. Each Package has its dependency graph fields
 // (IDependOn, DependsOnMe, DepiCount, DepiDepth) fully populated.
+//
+// IMPORTANT: The complete dependency graph is stored in pkgRegistry, not in
+// the input packages slice. To get all resolved packages (including transitive
+// dependencies), call pkgRegistry.AllPackages() after resolution completes.
+// This is required when passing packages to GetBuildOrder() or TopoOrderStrict().
 //
 // # Example
 //
@@ -605,6 +610,9 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (PackageFl
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
+//	// Get all resolved packages for build ordering
+//	allPackages := pkgRegistry.AllPackages()
+//	buildOrder := pkg.GetBuildOrder(allPackages)
 func ResolveDependencies(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
 	return resolveDependencies(packages, cfg, registry, pkgRegistry)
 }

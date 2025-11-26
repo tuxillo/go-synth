@@ -322,6 +322,10 @@ func calculateDepthRecursive(pkg *Package) int {
 //   - packages: slice of packages with resolved dependencies (IDependOn and
 //     DependsOnMe fields populated)
 //
+// IMPORTANT: After calling ResolveDependencies(), you must pass ALL packages
+// from pkgRegistry.AllPackages(), not just the root packages you initially
+// requested. The complete dependency graph is stored in the registry.
+//
 // # Returns
 //
 // A slice of packages in build order (dependencies before dependents). If
@@ -330,7 +334,9 @@ func calculateDepthRecursive(pkg *Package) int {
 //
 // # Example
 //
-//	buildOrder := pkg.GetBuildOrder(packages)
+//	// After ResolveDependencies(), get all packages from registry
+//	allPackages := pkgRegistry.AllPackages()
+//	buildOrder := pkg.GetBuildOrder(allPackages)
 //	for _, p := range buildOrder {
 //	    fmt.Printf("Build: %s\n", p.PortDir)
 //	}
@@ -430,6 +436,10 @@ func GetBuildOrder(packages []*Package) []*Package {
 //
 //   - packages: slice of packages with resolved dependencies
 //
+// IMPORTANT: After calling ResolveDependencies(), you must pass ALL packages
+// from pkgRegistry.AllPackages(), not just the root packages you initially
+// requested. The complete dependency graph is stored in the registry.
+//
 // # Returns
 //
 //   - slice of packages in build order (may be partial if cycles exist)
@@ -438,7 +448,9 @@ func GetBuildOrder(packages []*Package) []*Package {
 //
 // # Example
 //
-//	buildOrder, err := pkg.TopoOrderStrict(packages)
+//	// After ResolveDependencies(), get all packages from registry
+//	allPackages := pkgRegistry.AllPackages()
+//	buildOrder, err := pkg.TopoOrderStrict(allPackages)
 //	if err != nil {
 //	    log.Fatalf("Cannot build: %v", err)
 //	}
