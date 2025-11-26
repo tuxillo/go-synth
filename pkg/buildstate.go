@@ -7,10 +7,10 @@ import (
 // BuildState tracks build-time state for a package.
 // This is separate from Package to keep Package as pure metadata.
 type BuildState struct {
-	Pkg          *Package // Reference to the package
-	Flags        int      // Build status flags (PkgF* constants)
-	IgnoreReason string   // Reason package was ignored (from IGNORE in Makefile)
-	LastPhase    string   // Last build phase that executed
+	Pkg          *Package     // Reference to the package
+	Flags        PackageFlags // Build status flags (PkgF* constants)
+	IgnoreReason string       // Reason package was ignored (from IGNORE in Makefile)
+	LastPhase    string       // Last build phase that executed
 }
 
 // BuildStateRegistry maintains a mapping from Package to BuildState.
@@ -70,36 +70,36 @@ func (r *BuildStateRegistry) Has(pkg *Package) bool {
 }
 
 // GetFlags is a convenience method to get just the flags.
-func (r *BuildStateRegistry) GetFlags(pkg *Package) int {
+func (r *BuildStateRegistry) GetFlags(pkg *Package) PackageFlags {
 	return r.Get(pkg).Flags
 }
 
 // SetFlags is a convenience method to set flags.
-func (r *BuildStateRegistry) SetFlags(pkg *Package, flags int) {
+func (r *BuildStateRegistry) SetFlags(pkg *Package, flags PackageFlags) {
 	state := r.Get(pkg)
 	state.Flags = flags
 }
 
 // AddFlags sets one or more flag bits.
-func (r *BuildStateRegistry) AddFlags(pkg *Package, flags int) {
+func (r *BuildStateRegistry) AddFlags(pkg *Package, flags PackageFlags) {
 	state := r.Get(pkg)
 	state.Flags |= flags
 }
 
 // ClearFlags clears one or more flag bits.
-func (r *BuildStateRegistry) ClearFlags(pkg *Package, flags int) {
+func (r *BuildStateRegistry) ClearFlags(pkg *Package, flags PackageFlags) {
 	state := r.Get(pkg)
 	state.Flags &^= flags
 }
 
 // HasFlags checks if all specified flags are set.
-func (r *BuildStateRegistry) HasFlags(pkg *Package, flags int) bool {
+func (r *BuildStateRegistry) HasFlags(pkg *Package, flags PackageFlags) bool {
 	state := r.Get(pkg)
 	return (state.Flags & flags) == flags
 }
 
 // HasAnyFlags checks if any of the specified flags are set.
-func (r *BuildStateRegistry) HasAnyFlags(pkg *Package, flags int) bool {
+func (r *BuildStateRegistry) HasAnyFlags(pkg *Package, flags PackageFlags) bool {
 	state := r.Get(pkg)
 	return (state.Flags & flags) != 0
 }

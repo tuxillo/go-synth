@@ -13,21 +13,87 @@ import (
 	"dsynth/config"
 )
 
+// PackageFlags represents boolean attributes of a package using bitfield flags.
+// Multiple flags can be combined using bitwise OR.
+type PackageFlags int
+
 // Package flags
 const (
-	PkgFManualSel     = 0x00000001 // Manually selected
-	PkgFMeta          = 0x00000002 // Meta port (no build)
-	PkgFDummy         = 0x00000004 // Dummy package
-	PkgFSuccess       = 0x00000008 // Build succeeded
-	PkgFFailed        = 0x00000010 // Build failed
-	PkgFSkipped       = 0x00000020 // Skipped
-	PkgFIgnored       = 0x00000040 // Ignored
-	PkgFNoBuildIgnore = 0x00000080 // Don't build (ignored)
-	PkgFNotFound      = 0x00000100 // Port not found
-	PkgFCorrupt       = 0x00000200 // Port corrupted
-	PkgFPackaged      = 0x00000400 // Package exists
-	PkgFRunning       = 0x00000800 // Currently building
+	PkgFManualSel     PackageFlags = 0x00000001 // Manually selected
+	PkgFMeta          PackageFlags = 0x00000002 // Meta port (no build)
+	PkgFDummy         PackageFlags = 0x00000004 // Dummy package
+	PkgFSuccess       PackageFlags = 0x00000008 // Build succeeded
+	PkgFFailed        PackageFlags = 0x00000010 // Build failed
+	PkgFSkipped       PackageFlags = 0x00000020 // Skipped
+	PkgFIgnored       PackageFlags = 0x00000040 // Ignored
+	PkgFNoBuildIgnore PackageFlags = 0x00000080 // Don't build (ignored)
+	PkgFNotFound      PackageFlags = 0x00000100 // Port not found
+	PkgFCorrupt       PackageFlags = 0x00000200 // Port corrupted
+	PkgFPackaged      PackageFlags = 0x00000400 // Package exists
+	PkgFRunning       PackageFlags = 0x00000800 // Currently building
 )
+
+// Has reports whether the flag f includes the specified flag.
+func (f PackageFlags) Has(flag PackageFlags) bool {
+	return f&flag != 0
+}
+
+// Set returns f with the specified flag set.
+func (f PackageFlags) Set(flag PackageFlags) PackageFlags {
+	return f | flag
+}
+
+// Clear returns f with the specified flag cleared.
+func (f PackageFlags) Clear(flag PackageFlags) PackageFlags {
+	return f &^ flag
+}
+
+// String returns a string representation of the flags.
+func (f PackageFlags) String() string {
+	if f == 0 {
+		return "NONE"
+	}
+
+	var parts []string
+	if f.Has(PkgFManualSel) {
+		parts = append(parts, "MANUAL_SEL")
+	}
+	if f.Has(PkgFMeta) {
+		parts = append(parts, "META")
+	}
+	if f.Has(PkgFDummy) {
+		parts = append(parts, "DUMMY")
+	}
+	if f.Has(PkgFSuccess) {
+		parts = append(parts, "SUCCESS")
+	}
+	if f.Has(PkgFFailed) {
+		parts = append(parts, "FAILED")
+	}
+	if f.Has(PkgFSkipped) {
+		parts = append(parts, "SKIPPED")
+	}
+	if f.Has(PkgFIgnored) {
+		parts = append(parts, "IGNORED")
+	}
+	if f.Has(PkgFNoBuildIgnore) {
+		parts = append(parts, "NO_BUILD_IGNORE")
+	}
+	if f.Has(PkgFNotFound) {
+		parts = append(parts, "NOT_FOUND")
+	}
+	if f.Has(PkgFCorrupt) {
+		parts = append(parts, "CORRUPT")
+	}
+	if f.Has(PkgFPackaged) {
+		parts = append(parts, "PACKAGED")
+	}
+	if f.Has(PkgFRunning) {
+		parts = append(parts, "RUNNING")
+	}
+
+	return strings.Join(parts, "|")
+}
 
 // DepType represents the type of dependency relationship between packages.
 // Values match the original C implementation for compatibility.
@@ -248,7 +314,7 @@ func parsePortSpec(spec string, cfg *config.Config) (category, name, flavor stri
 // getPackageInfo fetches package information from the port Makefile
 // getPackageInfo returns a package and its flags/ignoreReason
 // Returns: (pkg, flags, ignoreReason, error)
-func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package, int, string, error) {
+func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package, PackageFlags, string, error) {
 	portDir := category + "/" + name
 	if flavor != "" {
 		portDir += "@" + flavor
@@ -282,7 +348,7 @@ func getPackageInfo(category, name, flavor string, cfg *config.Config) (*Package
 
 // queryMakefile extracts information from port Makefile
 // Returns: error, flags to set, ignoreReason
-func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (int, string, error) {
+func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (PackageFlags, string, error) {
 	// Build make command to extract variables
 	vars := []string{
 		"PKGNAME",
@@ -359,7 +425,7 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (int, stri
 	pkg.RunDeps = strings.TrimSpace(lines[8])
 
 	// Compute flags based on metadata
-	flags := 0
+	var flags PackageFlags
 	ignoreReason := strings.TrimSpace(lines[9])
 	if ignoreReason != "" {
 		flags |= PkgFIgnored | PkgFNoBuildIgnore

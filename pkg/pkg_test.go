@@ -188,3 +188,79 @@ func TestDepType_Valid(t *testing.T) {
 		})
 	}
 }
+
+// TestPackageFlags_String verifies the String() method for PackageFlags
+func TestPackageFlags_String(t *testing.T) {
+	tests := []struct {
+		name  string
+		flags PackageFlags
+		want  string
+	}{
+		{"none", 0, "NONE"},
+		{"manual", PkgFManualSel, "MANUAL_SEL"},
+		{"success", PkgFSuccess, "SUCCESS"},
+		{"multiple", PkgFSuccess | PkgFPackaged, "SUCCESS|PACKAGED"},
+		{"all_error_flags", PkgFFailed | PkgFCorrupt | PkgFNotFound, "FAILED|NOT_FOUND|CORRUPT"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.flags.String()
+			if got != tt.want {
+				t.Errorf("PackageFlags.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPackageFlags_Has verifies the Has() method for PackageFlags
+func TestPackageFlags_Has(t *testing.T) {
+	flags := PkgFSuccess | PkgFPackaged
+
+	tests := []struct {
+		name string
+		flag PackageFlags
+		want bool
+	}{
+		{"has_success", PkgFSuccess, true},
+		{"has_packaged", PkgFPackaged, true},
+		{"not_has_failed", PkgFFailed, false},
+		{"not_has_ignored", PkgFIgnored, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := flags.Has(tt.flag)
+			if got != tt.want {
+				t.Errorf("PackageFlags.Has(%v) = %v, want %v", tt.flag, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPackageFlags_SetClear verifies the Set() and Clear() methods
+func TestPackageFlags_SetClear(t *testing.T) {
+	var flags PackageFlags
+
+	// Test Set
+	flags = flags.Set(PkgFSuccess)
+	if !flags.Has(PkgFSuccess) {
+		t.Error("Set(PkgFSuccess) didn't set the flag")
+	}
+
+	flags = flags.Set(PkgFPackaged)
+	if !flags.Has(PkgFPackaged) {
+		t.Error("Set(PkgFPackaged) didn't set the flag")
+	}
+
+	// Test Clear
+	flags = flags.Clear(PkgFSuccess)
+	if flags.Has(PkgFSuccess) {
+		t.Error("Clear(PkgFSuccess) didn't clear the flag")
+	}
+
+	// PkgFPackaged should still be set
+	if !flags.Has(PkgFPackaged) {
+		t.Error("Clear(PkgFSuccess) affected PkgFPackaged")
+	}
+}

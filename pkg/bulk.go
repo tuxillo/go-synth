@@ -27,9 +27,9 @@ type bulkWork struct {
 type bulkResult struct {
 	pkg          *Package
 	err          error
-	initialFlags int    // Flags from manual selection, debug mode, etc.
-	parseFlags   int    // Flags from queryMakefile (PkgFIgnored, PkgFMeta, PkgFCorrupt)
-	ignoreReason string // Ignore reason from queryMakefile
+	initialFlags PackageFlags // Flags from manual selection, debug mode, etc.
+	parseFlags   PackageFlags // Flags from queryMakefile (PkgFIgnored, PkgFMeta, PkgFCorrupt)
+	ignoreReason string       // Ignore reason from queryMakefile
 }
 
 func newBulkQueue(cfg *config.Config, maxBulk int) *BulkQueue {
@@ -59,7 +59,7 @@ func (bq *BulkQueue) worker() {
 	for work := range bq.workChan {
 		pkg, parseFlags, ignoreReason, err := getPackageInfo(work.category, work.name, work.flavor, bq.cfg)
 
-		initialFlags := 0
+		var initialFlags PackageFlags
 		if err == nil {
 			// Add selection flags
 			if work.flags != "x" {
@@ -93,7 +93,7 @@ func (bq *BulkQueue) Queue(category, name, flavor, flags string) {
 	}
 }
 
-func (bq *BulkQueue) GetResult() (*Package, int, int, string, error) {
+func (bq *BulkQueue) GetResult() (*Package, PackageFlags, PackageFlags, string, error) {
 	result := <-bq.resultChan
 
 	bq.mu.Lock()
