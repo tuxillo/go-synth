@@ -67,7 +67,12 @@ if [ ! -f "go.mod" ] || ! grep -q "module dsynth" go.mod; then
 fi
 
 # Get absolute path to project root
-PROJECT_ROOT="$(pwd)"
+# Use realpath if available, otherwise pwd
+if command -v realpath >/dev/null 2>&1; then
+    PROJECT_ROOT="$(realpath .)"
+else
+    PROJECT_ROOT="$(pwd)"
+fi
 FIXTURE_DIR="$PROJECT_ROOT/pkg/testdata/fixtures"
 
 # Verify ports directory exists
@@ -80,9 +85,19 @@ fi
 # Create fixture directory if needed
 mkdir -p "$FIXTURE_DIR"
 
+echo "Project root: $PROJECT_ROOT"
 echo "Capturing port fixtures from $PORTS_DIR..."
 echo "Output directory: $FIXTURE_DIR"
 echo ""
+
+# Verify fixture directory is absolute path
+case "$FIXTURE_DIR" in
+    /*) ;; # Absolute path, good
+    *)
+        echo "ERROR: FIXTURE_DIR is not absolute: $FIXTURE_DIR"
+        exit 1
+        ;;
+esac
 
 # Function to capture a single port's make output
 # Usage: capture_port category port [flavor]
@@ -110,6 +125,17 @@ capture_port() {
     fi
     
     echo "  Capturing: $display_name"
+    echo "    Port path: $port_path"
+    echo "    Output: $output_file"
+    
+    # Verify output file path is absolute
+    case "$output_file" in
+        /*) ;; # Absolute, good
+        *)
+            echo "    ✗ ERROR: Output path is not absolute: $output_file"
+            return 1
+            ;;
+    esac
     
     # Capture make output
     # Note: We use 'cd' instead of -C for better compatibility
