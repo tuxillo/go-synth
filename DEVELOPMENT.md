@@ -31,9 +31,9 @@ The goal is to maintain a working, compilable codebase at every step while progr
 
 ---
 
-## Phase 1: Library Extraction (pkg) 🟡
+## Phase 1: Library Extraction (pkg) 🟢
 
-**Status**: 🟡 In Progress (85% complete)  
+**Status**: 🟢 Complete (All exit criteria met - documentation tasks remaining)  
 **Timeline**: Started 2025-11-21 | Target: TBD  
 **Owner**: Core Team
 
@@ -49,8 +49,8 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - ✅ Pure metadata-only Package struct (Phase 1.5 complete)
 - ✅ Separated CRC database (builddb package created)
 - ✅ Removed C-isms (Phase 1.5 complete)
-- ❌ Structured error types
-- ❌ Comprehensive documentation
+- ✅ Structured error types (Task 3 complete)
+- ✅ Comprehensive godoc documentation (Task 5 complete)
 
 ### ✓ Exit Criteria
 - ✅ TopoOrder returns correct, cycle-free ordering
@@ -58,11 +58,11 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - ✅ CRC/build tracking separated into builddb package
 - ✅ Package struct contains ONLY metadata (Phase 1.5 complete)
 - ✅ C-isms removed (Phase 1.5 complete)
-- ❌ No global state in pkg package
-- ❌ Structured errors for all failure modes
-- ❌ Comprehensive godoc documentation
+- ✅ No global state in pkg package (Task 4 complete)
+- ✅ Structured errors for all failure modes (Task 3 complete)
+- ✅ Comprehensive godoc documentation (Task 5 complete)
 
-### Current Status (6/8 criteria met)
+### Current Status (9/9 criteria met - Phase 1 COMPLETE pending final tasks)
 
 **Completed Work:**
 - Parse, Resolve, TopoOrder implementation with Kahn's algorithm
@@ -81,6 +81,9 @@ The goal is to maintain a working, compilable codebase at every step while progr
   - B2: Converted linked lists to slices (-53 lines)
   - B3: Added typed DepType enum
   - B4: Added typed PackageFlags
+- **Phase 1 Task 3**: Structured error types (80 lines, 4 tests)
+- **Phase 1 Task 4**: Removed global state - pkgRegistry now passed as parameter
+- **Phase 1 Task 5**: Comprehensive godoc documentation (package, types, functions)
 
 **Clean Architecture Achieved:**
 - ✅ Package struct is now pure metadata (no build state)
@@ -88,11 +91,9 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - ✅ Slice-based package collections (removed Next/Prev pointers)
 - ✅ Type-safe enums (DepType, PackageFlags)
 - ✅ All 39 tests passing including fidelity tests
+- ✅ Comprehensive API documentation with godoc
 
 **Remaining Work:**
-- Add structured error types (~1-2h)
-- Remove global registry (~2-3h)
-- Add comprehensive godoc (~3-4h)
 - Write developer guide (~2-3h)
 - Add integration tests (~3-4h)
 
@@ -531,12 +532,15 @@ Rationale: Package should contain only metadata, not build-time state
 ## 📈 Project Status Summary
 
 ### Overall Progress
-- **Phase 1**: 🟡 85% complete (6/8 exit criteria met)
+- **Phase 1**: 🟢 100% core complete (9/9 exit criteria met) - documentation tasks remaining
 - **Phase 1.5**: 🟢 100% complete (fidelity verification + C-ism removal)
-- **Phase 2-7**: ⚪ Planned (waiting for Phase 1)
-- **Total Estimated Remaining**: ~15-20 hours for Phase 1, then ~50-70 hours for Phases 2-7
+- **Phase 2-7**: ⚪ Planned (ready to start)
+- **Total Estimated Remaining**: ~5-8 hours for Phase 1 documentation, then ~50-70 hours for Phases 2-7
 
 ### Recent Milestones
+- ✅ 2025-11-26: Phase 1 Task 5 complete - Comprehensive godoc documentation added
+- ✅ 2025-11-25: Phase 1 Task 4 complete - Removed global state, pkgRegistry now parameter-based
+- ✅ 2025-11-25: Phase 1 Task 3 complete - Structured error types with 4 tests
 - ✅ 2025-11-26: Phase 1.5 Part B complete - All C-isms removed - Commits 175462b, 063d0e7, eb1f7e7, ae58f64
 - ✅ 2025-11-26: B4: Added typed PackageFlags enum - Commit eb1f7e7
 - ✅ 2025-11-26: B3: Added typed DepType enum - Commit 063d0e7
@@ -552,22 +556,21 @@ Rationale: Package should contain only metadata, not build-time state
 - ✅ 2025-11-21: Cycle detection implemented and tested
 
 ### Next Milestones
-- 🎯 Task 3: Add structured error types (~1-2h)
-- 🎯 Task 4: Remove global state (~2-3h)
-- 🎯 Task 5: Add comprehensive godoc (~3-4h)
-- 🎯 Phase 1 completion (8/8 exit criteria met)
+- 🎯 Task 6: Create developer guide (~2-3h)
+- 🎯 Task 7: Add integration tests (~2-3h)
+- 🎯 Task 9: Update README with library usage (~1-2h)
+- 🎯 Phase 1 documentation tasks completion
 
 ### Known Issues
 See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for complete list.
 
 **⚠️ Critical:**
-- Global state (globalRegistry) not yet removed
-- No structured error types
+- None - all critical architecture work complete! 🎉
 
 **🔶 Medium:**
-- Incomplete godoc documentation
 - Missing integration tests
 - No developer guide yet
+- README doesn't document library usage
 
 **🔹 Low:**
 - No context.Context support
