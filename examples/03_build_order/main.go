@@ -62,7 +62,9 @@ func main() {
 
 	// 5. Compute build order
 	fmt.Println("\nComputing topological build order...")
-	buildOrder := pkg.GetBuildOrder(packages)
+	// Note: GetBuildOrder needs ALL packages from the registry, not just the root package(s)
+	allPackages := pkgRegistry.AllPackages()
+	buildOrder := pkg.GetBuildOrder(allPackages)
 
 	// 6. Display build order
 	fmt.Printf("\nBuild Order (%d packages total):\n", len(buildOrder))

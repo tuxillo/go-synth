@@ -60,7 +60,9 @@ func main() {
 
 	// 5. Try strict ordering (detects cycles)
 	fmt.Println("Attempting strict topological ordering (cycle detection)...")
-	strictOrder, err := pkg.TopoOrderStrict(packages)
+	// Note: TopoOrderStrict needs ALL packages from the registry
+	allPackages := pkgRegistry.AllPackages()
+	strictOrder, err := pkg.TopoOrderStrict(allPackages)
 
 	if err != nil {
 		// Check if it's a cycle error
@@ -87,7 +89,7 @@ func main() {
 
 		// 6. Fall back to permissive ordering
 		fmt.Println("\nFalling back to permissive ordering (ignores cycles)...")
-		permissiveOrder := pkg.GetBuildOrder(packages)
+		permissiveOrder := pkg.GetBuildOrder(allPackages)
 		fmt.Printf("✓ Permissive ordering succeeded with %d packages\n", len(permissiveOrder))
 		fmt.Println("\nNote: Permissive ordering works around cycles by breaking them arbitrarily.")
 
