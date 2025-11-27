@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 67% Complete (8/12 tasks)  
+**Status**: 🟡 75% Complete (9/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -324,10 +324,29 @@ crc_index/
   5. `UpdateCRC` with new value
   6. Check `NeedsBuild` again (returns false)
 
-### Task 10: Godoc & Documentation (1 hour)
-- Add godoc comments to all exported functions
-- Document bucket schemas and key formats
-- Add code examples to README
+### Task 10: Godoc & Documentation (1 hour) ✅ COMPLETE
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Actual Time**: 25 minutes (faster than estimate - db.go already had comprehensive docs)
+- **Result**: Enhanced documentation across builddb package
+  - Enhanced `builddb/errors.go` package-level documentation:
+    * Added comprehensive overview explaining two error categories (sentinel vs structured)
+    * Added usage examples to all 5 error types (DatabaseError, RecordError, PackageIndexError, CRCError, ValidationError)
+    * Enhanced all 4 helper function docs (IsValidationError, IsDatabaseError, IsRecordNotFound, IsBucketNotFound)
+    * All examples show proper errors.As/errors.Is usage patterns
+  - Note: `builddb/db.go` already had comprehensive godoc from initial implementation:
+    * Package-level documentation (lines 1-3)
+    * All constants documented (BucketBuilds, BucketPackages, BucketCRCIndex)
+    * All types documented (DB, BuildRecord with field descriptions)
+    * All functions with Parameters/Returns/Examples (OpenDB, Close, SaveRecord, GetRecord, etc.)
+    * ComputePortCRC has extensive documentation (performance notes, use cases, examples)
+  - Verified with `go doc builddb` - all types and functions properly documented
+  - Verified specific function docs: `go doc builddb.OpenDB`, `go doc builddb.ComputePortCRC`, `go doc builddb.DatabaseError`
+- **Benefits**:
+  - Clear API usage patterns for all error types
+  - Examples show idiomatic Go error handling (errors.Is, errors.As)
+  - Package overview helps new developers understand error system design
+  - All public API fully documented for godoc.org publication
 
 ### Task 11: Benchmarks (1 hour)
 - Benchmark CRC lookups (old vs. new)

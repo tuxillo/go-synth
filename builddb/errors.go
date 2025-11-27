@@ -1,3 +1,12 @@
+// Package builddb defines structured error types for build database operations.
+//
+// This file provides comprehensive error handling with two categories:
+//
+//  1. Sentinel Errors: Simple error constants for common conditions (use errors.Is)
+//  2. Structured Errors: Rich error types with context (use errors.As)
+//
+// All structured error types implement Unwrap() for compatibility with Go's
+// error wrapping and inspection functions (errors.Is, errors.As, errors.Unwrap).
 package builddb
 
 import (
@@ -42,6 +51,13 @@ var (
 // DatabaseError wraps database operation errors with context about the operation
 // and bucket involved. This provides detailed information for debugging database
 // issues while maintaining error chain compatibility.
+//
+// Use errors.As to extract DatabaseError from error chains:
+//
+//	var dbErr *DatabaseError
+//	if errors.As(err, &dbErr) {
+//	    log.Printf("Database operation '%s' failed on bucket '%s'", dbErr.Op, dbErr.Bucket)
+//	}
 type DatabaseError struct {
 	// Op is the operation that failed (e.g., "open", "create bucket", "transaction")
 	Op string
@@ -68,6 +84,13 @@ func (e *DatabaseError) Unwrap() error {
 
 // RecordError wraps build record operation errors with context about which
 // record was involved and what operation failed.
+//
+// Use errors.As to extract RecordError from error chains:
+//
+//	var recErr *RecordError
+//	if errors.As(err, &recErr) {
+//	    log.Printf("Record operation '%s' failed for UUID '%s'", recErr.Op, recErr.UUID)
+//	}
 type RecordError struct {
 	// Op is the operation that failed (e.g., "save", "get", "update", "delete")
 	Op string
@@ -91,6 +114,13 @@ func (e *RecordError) Unwrap() error {
 
 // PackageIndexError wraps package index operation errors with context about
 // which package and version were involved.
+//
+// Use errors.As to extract PackageIndexError from error chains:
+//
+//	var pkgErr *PackageIndexError
+//	if errors.As(err, &pkgErr) {
+//	    log.Printf("Package index '%s' failed for %s@%s", pkgErr.Op, pkgErr.PortDir, pkgErr.Version)
+//	}
 type PackageIndexError struct {
 	// Op is the operation that failed (e.g., "update", "lookup", "validate")
 	Op string
@@ -118,6 +148,13 @@ func (e *PackageIndexError) Unwrap() error {
 
 // CRCError wraps CRC operation errors with context about which port directory
 // was involved and what operation failed.
+//
+// Use errors.As to extract CRCError from error chains:
+//
+//	var crcErr *CRCError
+//	if errors.As(err, &crcErr) {
+//	    log.Printf("CRC operation '%s' failed for port '%s'", crcErr.Op, crcErr.PortDir)
+//	}
 type CRCError struct {
 	// Op is the operation that failed (e.g., "compute", "update", "get")
 	Op string
@@ -141,6 +178,13 @@ func (e *CRCError) Unwrap() error {
 
 // ValidationError wraps input validation errors with context about which
 // field failed validation and what the invalid value was.
+//
+// Use errors.As to extract ValidationError from error chains:
+//
+//	var valErr *ValidationError
+//	if errors.As(err, &valErr) {
+//	    log.Printf("Validation failed for field '%s': %v", valErr.Field, valErr.Err)
+//	}
 type ValidationError struct {
 	// Field is the name of the field that failed validation
 	Field string
@@ -167,28 +211,61 @@ func (e *ValidationError) Unwrap() error {
 
 // ==================== Error Inspection Helpers ====================
 
-// IsValidationError checks if the error is a validation error.
+// IsValidationError checks if the error (or any error in its chain) is a ValidationError.
 // This is useful for distinguishing between user input errors and system errors.
+//
+// Returns true if err wraps a ValidationError, false otherwise.
+//
+// Example:
+//
+//	if IsValidationError(err) {
+//	    fmt.Println("Invalid input provided")
+//	}
 func IsValidationError(err error) bool {
 	var ve *ValidationError
 	return errors.As(err, &ve)
 }
 
-// IsDatabaseError checks if the error is a database operation error.
+// IsDatabaseError checks if the error (or any error in its chain) is a DatabaseError.
 // This helps identify infrastructure-level failures.
+//
+// Returns true if err wraps a DatabaseError, false otherwise.
+//
+// Example:
+//
+//	if IsDatabaseError(err) {
+//	    log.Error("Database infrastructure failure")
+//	}
 func IsDatabaseError(err error) bool {
 	var de *DatabaseError
 	return errors.As(err, &de)
 }
 
-// IsRecordNotFound checks if the error indicates a build record was not found.
+// IsRecordNotFound checks if the error (or any error in its chain) is ErrRecordNotFound.
 // This is useful for implementing "create if not exists" patterns.
+//
+// Returns true if err is or wraps ErrRecordNotFound, false otherwise.
+//
+// Example:
+//
+//	rec, err := db.GetRecord(uuid)
+//	if IsRecordNotFound(err) {
+//	    // Create new record
+//	}
 func IsRecordNotFound(err error) bool {
 	return errors.Is(err, ErrRecordNotFound)
 }
 
-// IsBucketNotFound checks if the error indicates a database bucket was not found.
+// IsBucketNotFound checks if the error (or any error in its chain) is ErrBucketNotFound.
 // This typically indicates database corruption or initialization issues.
+//
+// Returns true if err is or wraps ErrBucketNotFound, false otherwise.
+//
+// Example:
+//
+//	if IsBucketNotFound(err) {
+//	    log.Fatal("Database not properly initialized")
+//	}
 func IsBucketNotFound(err error) bool {
 	return errors.Is(err, ErrBucketNotFound)
 }
