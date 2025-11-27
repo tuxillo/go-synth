@@ -2,21 +2,26 @@
 
 **Status**: 🟡 In Progress  
 **Last Updated**: 2025-11-27  
-**Estimated Total**: 16 hours (13 hours remaining)
+**Estimated Total**: 16 hours (5 hours remaining: integration tests + docs)
 
 ## Overview
 
 Phase 3 integrates builddb (CRC-based incremental builds) with the existing builder orchestration code. The existing builder (~705 lines) already has worker pool, dependency ordering, and mount management. Phase 3 adds CRC checking, build record tracking, and database updates.
 
-## Task Progress: 1/6 Complete (17%)
+**Note**: Tasks 2-4 were already implemented during Phase 2 (commits 65ccadd, b9d9d41). Phase 3 Task 1 completes the integration by adding pre-build CRC checking.
 
-### ✅ Completed: 1 task
+## Task Progress: 4/6 Complete (67%)
+
+### ✅ Completed: 4 tasks
 - Task 1: Pre-Build CRC Check Integration (502fae3)
+- Task 2: Build Record Lifecycle Tracking (65ccadd - Phase 2)
+- Task 3: CRC and Package Index Update (65ccadd, b9d9d41 - Phase 2)
+- Task 4: Error Handling and Logging (Phase 2)
 
 ### 🚧 In Progress: 0 tasks
 - None
 
-### ❌ Remaining: 5 tasks
+### ❌ Remaining: 2 tasks
 1. Pre-Build CRC Check Integration (3h)
 2. Build Record Lifecycle Tracking (4h)
 3. CRC and Package Index Update (2h)
@@ -112,11 +117,12 @@ Skip unchanged ports before queuing them for build by checking CRC.
 
 ---
 
-## Task 2: Build Record Lifecycle Tracking
+## Task 2: Build Record Lifecycle Tracking ✅
 
 **Priority**: 🔴 High  
 **Effort**: 4 hours  
-**Status**: ❌ Not Started
+**Status**: ✅ Complete (Phase 2)  
+**Commit**: 65ccadd
 
 ### Objective
 Track each build with UUID, status transitions, and timestamps in builddb.
@@ -206,11 +212,12 @@ Track each build with UUID, status transitions, and timestamps in builddb.
 
 ---
 
-## Task 3: CRC and Package Index Update on Success
+## Task 3: CRC and Package Index Update on Success ✅
 
 **Priority**: 🔴 High  
 **Effort**: 2 hours  
-**Status**: ❌ Not Started
+**Status**: ✅ Complete (Phase 2)  
+**Commits**: 65ccadd, b9d9d41
 
 ### Objective
 Update CRC and package index after successful builds to enable future CRC-based skips.
@@ -287,11 +294,12 @@ Update CRC and package index after successful builds to enable future CRC-based 
 
 ---
 
-## Task 4: Error Handling and Logging
+## Task 4: Error Handling and Logging ✅
 
 **Priority**: 🟡 Medium  
 **Effort**: 2 hours  
-**Status**: ❌ Not Started
+**Status**: ✅ Complete (Phase 2)  
+**Note**: Implemented alongside Tasks 2-3
 
 ### Objective
 Add structured error handling for all builddb operations with fail-safe behavior.
