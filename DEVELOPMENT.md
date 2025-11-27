@@ -315,8 +315,8 @@ func (db *DB) UpdateCRC(portDir string, crc uint32) error
 
 ## Phase 3: Builder Orchestration 🔵
 
-**Status**: 🔵 Ready to Start (Phase 2 complete)  
-**Timeline**: Not started | Target: TBD (16 hours estimated)  
+**Status**: 🟡 In Progress (Task 1/6 complete)  
+**Timeline**: Started 2025-11-27 | Target: TBD (13 hours remaining of 16 estimated)  
 **Dependencies**: Phases 1-2 completion (✅ Complete)
 
 ### 🎯 Goals
@@ -332,11 +332,13 @@ func (db *DB) UpdateCRC(portDir string, crc uint32) error
 - Comprehensive integration tests
 - Documentation and examples
 
-### 🚧 Task Breakdown (0/6 complete)
-1. ❌ **Pre-Build CRC Check Integration** (3 hours)
-   - Check CRC before queuing packages
-   - Skip unchanged ports (CRC match)
-   - Update stats.Skipped counter
+### 🚧 Task Breakdown (1/6 complete)
+1. ✅ **Pre-Build CRC Check Integration** (3 hours) - **Commit: 502fae3**
+   - ✅ Check CRC before queuing packages
+   - ✅ Skip unchanged ports (CRC match)
+   - ✅ Update stats.Skipped counter
+   - ✅ Fail-safe error handling (log but continue)
+   - ✅ Success message with "(CRC match, skipped)" indicator
    
 2. ❌ **Build Record Lifecycle Tracking** (4 hours)
    - Generate UUID for each build
@@ -367,8 +369,8 @@ func (db *DB) UpdateCRC(portDir string, crc uint32) error
    - Add godoc comments
    - Create usage examples
 
-### ✓ Exit Criteria (0/6 complete)
-- ❌ Unchanged ports are skipped based on CRC comparison
+### ✓ Exit Criteria (1/6 complete)
+- ✅ Unchanged ports are skipped based on CRC comparison (502fae3)
 - ❌ Build records track lifecycle (UUID, status, timestamps)
 - ❌ CRC and package index updated on successful builds
 - ❌ Structured error handling for all builddb operations

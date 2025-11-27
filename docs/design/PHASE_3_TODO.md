@@ -1,22 +1,22 @@
 # Phase 3: Builder Orchestration - Task Breakdown
 
-**Status**: 🔵 Ready to Start  
+**Status**: 🟡 In Progress  
 **Last Updated**: 2025-11-27  
-**Estimated Total**: 16 hours
+**Estimated Total**: 16 hours (13 hours remaining)
 
 ## Overview
 
 Phase 3 integrates builddb (CRC-based incremental builds) with the existing builder orchestration code. The existing builder (~705 lines) already has worker pool, dependency ordering, and mount management. Phase 3 adds CRC checking, build record tracking, and database updates.
 
-## Task Progress: 0/6 Complete (0%)
+## Task Progress: 1/6 Complete (17%)
 
-### ✅ Completed: 0 tasks
-- None yet
+### ✅ Completed: 1 task
+- Task 1: Pre-Build CRC Check Integration (502fae3)
 
 ### 🚧 In Progress: 0 tasks
-- None yet
+- None
 
-### ❌ Remaining: 6 tasks
+### ❌ Remaining: 5 tasks
 1. Pre-Build CRC Check Integration (3h)
 2. Build Record Lifecycle Tracking (4h)
 3. CRC and Package Index Update (2h)
@@ -26,11 +26,12 @@ Phase 3 integrates builddb (CRC-based incremental builds) with the existing buil
 
 ---
 
-## Task 1: Pre-Build CRC Check Integration
+## Task 1: Pre-Build CRC Check Integration ✅
 
 **Priority**: 🔴 High  
 **Effort**: 3 hours  
-**Status**: ❌ Not Started
+**Status**: ✅ Complete  
+**Commit**: 502fae3
 
 ### Objective
 Skip unchanged ports before queuing them for build by checking CRC.
@@ -101,10 +102,10 @@ Skip unchanged ports before queuing them for build by checking CRC.
 - [ ] Verify port is rebuilt (CRC mismatch detected)
 
 ### Success Criteria
-- Unchanged ports are skipped before queueing
-- Stats.Skipped counter accurately reflects CRC-based skips
-- Logs clearly indicate when ports are skipped
-- CRC computation errors don't cause build orchestration to fail
+- ✅ Unchanged ports are skipped before queueing
+- ✅ Stats.Skipped counter accurately reflects CRC-based skips
+- ✅ Logs clearly indicate when ports are skipped
+- ✅ CRC computation errors don't cause build orchestration to fail
 
 ### Dependencies
 - ✅ Phase 2 complete (builddb.ComputePortCRC, builddb.NeedsBuild available)
