@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/local/bin/bash
 # Phase 3: go-synth Specific Provisioning
 #
 # This script configures the DragonFlyBSD VM for go-synth Phase 4 testing:
@@ -9,21 +9,21 @@
 #   - Verifies configuration
 #
 # This is custom for go-synth, not based on golang/build
+#
+# NOTE: Uses /usr/local/bin/bash (installed by phase2)
 
-set -euxo pipefail
-
-# Logging setup
-LOG_FILE="/tmp/phase3-provision.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
-
-# Error trap for debugging
-trap 'echo "ERROR at line $LINENO: $BASH_COMMAND"; echo "Pausing for 60 seconds for inspection..."; sleep 60' ERR
+set -ex
+set -o pipefail
 
 echo "============================================"
 echo "Phase 3: go-synth Provisioning Starting"
 echo "============================================"
-echo "Log file: $LOG_FILE"
-echo ""
+
+# Remove PFI config so it doesn't run again on next boot
+rm -f /etc/pfi.conf
+
+# PFI startup does not have full PATH
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/games:/usr/local/sbin:/usr/local/bin:/usr/pkg/sbin:/usr/pkg/bin:/root/bin
 
 # Step 1: Configure doas for passwordless root
 echo "Step 1: Configuring doas..."
@@ -127,7 +127,7 @@ echo "Step 7: Testing doas configuration..."
 if doas -u root true 2>&1; then
     echo "  ✓ doas is working correctly"
 else
-    echo "  ✗ doas test failed!" >&2
+    echo "  ✗ doas test failed!"
     exit 1
 fi
 
@@ -138,7 +138,7 @@ if command -v go &> /dev/null; then
     echo "  ✓ GOROOT: $GOROOT"
     echo "  ✓ GOPATH: $GOPATH"
 else
-    echo "  ✗ Go not found!" >&2
+    echo "  ✗ Go not found!"
     exit 1
 fi
 
@@ -148,7 +148,7 @@ for dir in /build/Workers /usr/dports "$GOPATH" "$GOCACHE"; do
     if [ -d "$dir" ]; then
         echo "  ✓ $dir exists"
     else
-        echo "  ✗ $dir missing!" >&2
+        echo "  ✗ $dir missing!"
         exit 1
     fi
 done
@@ -160,10 +160,6 @@ cat > /etc/gosynth-provisioned <<EOF
 # Date: $(date)
 # Phase 3 completed successfully
 EOF
-
-# Step 11: Copy log to persistent location
-echo "Step 11: Saving log..."
-cp "$LOG_FILE" /root/phase3-provision.log
 
 echo ""
 echo "============================================"
@@ -179,11 +175,13 @@ echo "    - /build/Workers"
 echo "    - /usr/dports"
 echo "    - $GOPATH"
 echo ""
-echo "Log saved to /root/phase3-provision.log"
 echo "The VM is now ready for go-synth Phase 4 testing!"
 echo ""
+echo "DONE WITH PHASE 3."
+sync
 echo "Shutting down..."
 sleep 3
 
 # Power off - orchestrator will create final snapshot
 poweroff
+sleep 86400
