@@ -93,7 +93,7 @@ gh pr create --repo otheruser/somerepo
   - Never commit code changes without corresponding doc updates
 - **CRITICAL**: Every commit MUST include Co-authored-by trailer for the AI model used.
   - Format: `Co-authored-by: <Model Name> <ai-model@example.com>`
-  - Example: `Co-authored-by: Claude 3.7 Sonnet <claude-3.7-sonnet@anthropic.com>`
+  - Example: `Co-authored-by: Claude 4.5 Sonnet <claude-4.5-sonnet@anthropic.com>`
   - Example: `Co-authored-by: GPT-4 <gpt-4@openai.com>`
   - The commit author is already set to Antonio Huete Jimenez with proper email
   - This properly attributes AI assistance in the git history
