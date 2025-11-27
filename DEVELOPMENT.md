@@ -455,7 +455,7 @@ Phase 3 adds:
 
 ## Phase 4: Environment Abstraction 🟡
 
-**Status**: 🚧 In Progress (3/10 tasks complete - 30%)  
+**Status**: 🚧 In Progress (5/10 tasks complete - 50%)  
 **Timeline**: Started 2025-11-27 | Target: TBD  
 **Dependencies**: Phase 3 completion (✅ Complete - 2025-11-27)
 
@@ -474,12 +474,12 @@ Phase 3 adds:
 - Comprehensive testing (unit + integration)
 - Remove direct chroot calls from build package
 
-### 🚧 Task Breakdown (4/10 complete - 40%) - Task 5 Ready
+### 🚧 Task Breakdown (5/10 complete - 50%) - Task 6 Ready
 1. ✅ Define Environment Interface (2h) - **COMPLETE** (2025-11-27)
 2. ✅ Implement BSD Environment - Mount Logic (2h) - **COMPLETE** (2025-11-27)
 3. ✅ Implement BSD Environment - Setup() (2h) - **COMPLETE** (2025-11-28)
 4. ✅ Implement BSD Environment - Execute() (2h) - **COMPLETE** (2025-11-28)
-5. ❌ Implement BSD Environment - Cleanup() (1h)
+5. ✅ Implement BSD Environment - Cleanup() (1h) - **COMPLETE** (2025-11-28)
 6. ❌ Update build/phases.go (3h)
 7. ❌ Update Worker Lifecycle (2h)
 8. ❌ Add Context and Error Handling (3h)
@@ -488,9 +488,9 @@ Phase 3 adds:
 
 **Total**: 27 hours estimated
 
-### ✓ Exit Criteria (4/10 complete)
+### ✓ Exit Criteria (5/10 complete)
 - [x] Environment interface defined and documented
-- [ ] BSD implementation complete (Setup, Execute, Cleanup) - 100% (Setup + Execute done, Cleanup pending)
+- [x] BSD implementation complete (Setup, Execute, Cleanup) - 100%
 - [ ] All mount logic moved to environment package
 - [ ] All chroot calls go through Environment.Execute()
 - [ ] Workers use Environment for isolation

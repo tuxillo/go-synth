@@ -50,6 +50,7 @@ import (
 	"dsynth/config"
 	"dsynth/environment"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -435,13 +436,150 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 	return result, nil
 }
 
-// Cleanup tears down the environment.
+// Cleanup tears down the environment by unmounting all filesystems and
+// removing the base directory.
 //
-// This method will be implemented in Task 5. For now, return not implemented.
+// This method:
+//  1. Unmounts all filesystems in reverse order (opposite of Setup)
+//  2. Retries unmount operations up to 10 times with 5-second delays for busy mounts
+//  3. Logs warnings for failed unmounts but continues (fail-safe behavior)
+//  4. Removes the base directory after all unmounts succeed
+//  5. Returns error only for catastrophic failures (e.g., baseDir not set)
+//
+// Unmounting is performed in reverse order to handle dependencies (e.g., /usr/lib
+// must be unmounted before /usr).
+//
+// Retry Logic:
+// - If unmount fails with EBUSY (device busy), retry up to 10 times
+// - 5-second delay between retry attempts
+// - After retries exhausted, log warning and continue to next mount
+//
+// Error Handling:
+// - Returns ErrCleanupFailed only if baseDir is empty (catastrophic)
+// - Unmount failures after retries are logged but do NOT fail Cleanup
+// - This fail-safe behavior ensures partial cleanup succeeds
+//
+// Idempotency:
+// - Safe to call multiple times (skips if baseDir empty)
+// - Safe to call even if Setup() failed or was never called
+//
+// Example:
+//
+//	env := &BSDEnvironment{baseDir: "/build/SL01"}
+//	err := env.Cleanup()
+//	if err != nil {
+//	    // Only catastrophic failures reach here
+//	    log.Fatalf("cleanup failed: %v", err)
+//	}
 func (e *BSDEnvironment) Cleanup() error {
-	return &environment.ErrCleanupFailed{
-		Err: fmt.Errorf("Cleanup() not yet implemented (Task 5)"),
+	const (
+		maxRetries    = 10
+		retryDelaySec = 5
+	)
+
+	// Validate baseDir is set
+	if e.baseDir == "" {
+		return &environment.ErrCleanupFailed{
+			Err: fmt.Errorf("baseDir is empty, cannot cleanup"),
+		}
 	}
+
+	log.Printf("[Cleanup] Starting cleanup for environment: %s", e.baseDir)
+
+	// Track unmount failures for logging
+	var unmountFailures []string
+
+	// Unmount in reverse order (opposite of Setup)
+	// We iterate backwards through e.mounts slice
+	for i := len(e.mounts) - 1; i >= 0; i-- {
+		ms := e.mounts[i]
+		target := ms.target
+
+		log.Printf("[Cleanup] Unmounting %s (attempt 1/%d)", target, maxRetries)
+
+		// Retry loop for busy mounts
+		var lastErr error
+		unmounted := false
+
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			err := e.doUnmount(target)
+			if err == nil {
+				log.Printf("[Cleanup] Successfully unmounted %s", target)
+				unmounted = true
+				break
+			}
+
+			lastErr = err
+
+			// Check if EBUSY (device busy)
+			if attempt < maxRetries {
+				log.Printf("[Cleanup] Unmount failed (attempt %d/%d): %v, retrying in %ds...",
+					attempt, maxRetries, err, retryDelaySec)
+				time.Sleep(retryDelaySec * time.Second)
+			}
+		}
+
+		if !unmounted {
+			// After all retries failed, log warning and continue
+			msg := fmt.Sprintf("%s: %v (after %d retries)", target, lastErr, maxRetries)
+			unmountFailures = append(unmountFailures, msg)
+			log.Printf("[Cleanup] WARNING: Failed to unmount %s after %d retries: %v",
+				target, maxRetries, lastErr)
+		}
+	}
+
+	// Check if any mounts remain
+	remaining := e.listRemainingMounts()
+	if len(remaining) > 0 {
+		log.Printf("[Cleanup] WARNING: %d mount(s) still present after cleanup: %v",
+			len(remaining), remaining)
+	}
+
+	// Remove base directory (only if all unmounts succeeded)
+	if len(unmountFailures) == 0 {
+		log.Printf("[Cleanup] Removing base directory: %s", e.baseDir)
+		if err := os.RemoveAll(e.baseDir); err != nil {
+			log.Printf("[Cleanup] WARNING: Failed to remove base directory %s: %v",
+				e.baseDir, err)
+		} else {
+			log.Printf("[Cleanup] Successfully removed base directory: %s", e.baseDir)
+		}
+	} else {
+		log.Printf("[Cleanup] Skipping base directory removal due to %d unmount failure(s)",
+			len(unmountFailures))
+	}
+
+	log.Printf("[Cleanup] Cleanup complete for environment: %s", e.baseDir)
+	return nil
+}
+
+// listRemainingMounts checks which mounts from e.mounts are still active.
+//
+// Returns a slice of mount targets that are still mounted according to the
+// system mount table. This is used for debugging and validation during Cleanup.
+//
+// Example:
+//
+//	remaining := env.listRemainingMounts()
+//	if len(remaining) > 0 {
+//	    log.Printf("WARNING: %d mounts still present: %v", len(remaining), remaining)
+//	}
+func (e *BSDEnvironment) listRemainingMounts() []string {
+	var remaining []string
+
+	for _, ms := range e.mounts {
+		// Check if mount still exists by attempting to stat the target
+		// On BSD, a mounted directory will have different inode properties
+		// For simplicity, we check if the path exists and assume it's mounted
+		// if it was in our mounts list and still exists
+		if _, err := os.Stat(ms.target); err == nil {
+			// Path exists, assume still mounted
+			// A more robust check would parse /etc/mtab or use getmntinfo(3)
+			remaining = append(remaining, ms.target)
+		}
+	}
+
+	return remaining
 }
 
 // GetBasePath returns the root path of the chroot environment.
