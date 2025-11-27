@@ -30,7 +30,7 @@ The VM testing infrastructure provides:
 
 **Technology Stack**:
 - Host: Ubuntu 24.04 with QEMU/KVM
-- Guest: DragonFlyBSD 6.4.0 (x86_64)
+- Guest: DragonFlyBSD 6.4.2 (x86_64, configurable)
 - Provisioning: Shell scripts + SSH keys
 - Management: Makefile + Bash scripts
 
@@ -75,7 +75,7 @@ Phase 4 of `dsynth-go` implements a complex worker environment with 27 mount poi
 │  │ QEMU/KVM Virtual Machine                           │    │
 │  │                                                     │    │
 │  │  ┌──────────────────────────────────────────────┐  │    │
-│  │  │ DragonFlyBSD 6.4.0                           │  │    │
+│  │  │ DragonFlyBSD 6.4.2                           │  │    │
 │  │  │                                               │  │    │
 │  │  │  • /root/go-synth/ (synced from host)        │  │    │
 │  │  │  • Go toolchain installed                    │  │    │
@@ -97,7 +97,7 @@ Phase 4 of `dsynth-go` implements a complex worker environment with 27 mount poi
 │                                                              │
 │  vm/ directory:                                             │
 │   • dfly-vm.qcow2 (VM disk image)                          │
-│   • dfly-6.4.0.iso (installation media)                    │
+│   • dfly-6.4.2.iso (installation media, configurable)     │
 │   • dfly-vm-clean.qcow2 (snapshot)                         │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -148,7 +148,7 @@ make vm-setup
 ```
 
 This will:
-- Download DragonFlyBSD 6.4.0 ISO (~300MB) to `vm/`
+- Download DragonFlyBSD 6.4.2 ISO (~300MB) to `vm/` (version configurable)
 - Create 20GB QCOW2 disk image at `vm/dfly-vm.qcow2`
 
 #### Step 2: Install DragonFlyBSD
@@ -429,18 +429,21 @@ make vm-start
 
 ## Maintenance
 
-### Updating DragonFlyBSD
+### Updating DragonFlyBSD Version
 
-When a new DragonFlyBSD release is available:
+When a new DragonFlyBSD release is available, update the version configuration:
 
-1. Download new ISO:
+**Method 1: Update config.sh (Recommended)**
+
+1. Check latest release at: https://mirror-master.dragonflybsd.org/iso-images/
+
+2. Edit `scripts/vm/config.sh`:
    ```bash
-   cd vm/
-   wget https://mirror-master.dragonflybsd.org/iso-images/dfly-x86_64-6.5.0_REL.iso.bz2
-   bunzip2 dfly-x86_64-6.5.0_REL.iso.bz2
+   # Change this line:
+   DFLY_VERSION="${DFLY_VERSION:-6.4.2}"
+   # To:
+   DFLY_VERSION="${DFLY_VERSION:-6.6.0}"
    ```
-
-2. Update `scripts/vm/fetch-dfly-image.sh` with new URL/version
 
 3. Recreate VM:
    ```bash
@@ -450,6 +453,29 @@ When a new DragonFlyBSD release is available:
    # ... provision ...
    make vm-snapshot
    ```
+
+**Method 2: Environment Override (One-Time)**
+
+Test a new version without modifying config:
+```bash
+DFLY_VERSION=6.6.0 make vm-setup
+DFLY_VERSION=6.6.0 make vm-install
+# ... provision ...
+DFLY_VERSION=6.6.0 make vm-snapshot
+DFLY_VERSION=6.6.0 make vm-start
+```
+
+**Version Compatibility**:
+- Tested with: 6.4.2 (latest stable as of Nov 2025)
+- Should work with: Any 6.x release
+- May work with: Future 7.x releases (untested)
+
+**After updating**, verify the version:
+```bash
+make vm-start
+make vm-ssh
+uname -a  # Should show new version
+```
 
 ### Updating Provisioning
 

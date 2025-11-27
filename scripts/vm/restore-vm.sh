@@ -2,12 +2,12 @@
 # Restore VM from clean snapshot
 set -euo pipefail
 
-VM_DIR="${HOME}/.go-synth/vm"
-SNAPSHOT_BASE="${VM_DIR}/dfly-clean-snapshot.qcow2"
-DISK_IMAGE="${VM_DIR}/dfly-test.qcow2"
+# Load VM configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 
-if [ ! -f "${SNAPSHOT_BASE}" ]; then
-    echo "❌ Clean snapshot not found: ${SNAPSHOT_BASE}"
+if [ ! -f "${VM_SNAPSHOT}" ]; then
+    echo "❌ Clean snapshot not found: ${VM_SNAPSHOT}"
     echo "   Run initial setup first with: make vm-setup"
     echo "   Then after manual install: make vm-snapshot"
     exit 1
@@ -15,13 +15,13 @@ fi
 
 # Stop VM if running
 echo "🛑 Stopping VM..."
-./scripts/vm/stop-vm.sh
+"${SCRIPT_DIR}/stop-vm.sh"
 
 echo "♻️  Restoring VM from clean snapshot..."
-rm -f "${DISK_IMAGE}"
+rm -f "${VM_DISK}"
 
 # Use copy-on-write backing
-if ! qemu-img create -f qcow2 -F qcow2 -b "${SNAPSHOT_BASE}" "${DISK_IMAGE}"; then
+if ! qemu-img create -f qcow2 -F qcow2 -b "${VM_SNAPSHOT}" "${VM_DISK}"; then
     echo "❌ Failed to restore from snapshot"
     exit 1
 fi

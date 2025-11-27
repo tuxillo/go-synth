@@ -2,22 +2,22 @@
 # Destroy VM and all associated files
 set -euo pipefail
 
-VM_DIR="${HOME}/.go-synth/vm"
-DISK_IMAGE="${VM_DIR}/dfly-test.qcow2"
-SNAPSHOT_IMAGE="${VM_DIR}/dfly-clean-snapshot.qcow2"
+# Load VM configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 
 # Stop VM first
 echo "🛑 Stopping VM..."
-./scripts/vm/stop-vm.sh
+"${SCRIPT_DIR}/stop-vm.sh"
 
 echo "🗑️  Destroying VM disk images..."
-rm -f "${DISK_IMAGE}"
+rm -f "${VM_DISK}"
 
-if [ -f "${SNAPSHOT_IMAGE}" ]; then
+if [ -f "${VM_SNAPSHOT}" ]; then
     read -p "   Also delete clean snapshot? [y/N]: " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        rm -f "${SNAPSHOT_IMAGE}"
+        rm -f "${VM_SNAPSHOT}"
         echo "   ✓ Snapshot deleted"
     fi
 fi

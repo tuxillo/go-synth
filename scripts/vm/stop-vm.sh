@@ -2,7 +2,10 @@
 # Stop DragonFlyBSD VM
 set -euo pipefail
 
-VM_DIR="${HOME}/.go-synth/vm"
+# Load VM configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
+
 PID_FILE="${VM_DIR}/vm.pid"
 
 if [ ! -f "${PID_FILE}" ]; then

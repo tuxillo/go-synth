@@ -2,14 +2,15 @@
 # Start DragonFlyBSD VM
 set -euo pipefail
 
-VM_DIR="${HOME}/.go-synth/vm"
-DISK_IMAGE="${VM_DIR}/dfly-test.qcow2"
+# Load VM configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
+
 PID_FILE="${VM_DIR}/vm.pid"
-SSH_PORT="2222"
 
 # Check if disk exists
-if [ ! -f "${DISK_IMAGE}" ]; then
-    echo "❌ Disk image not found: ${DISK_IMAGE}"
+if [ ! -f "${VM_DISK}" ]; then
+    echo "❌ Disk image not found: ${VM_DISK}"
     echo "   Run 'make vm-setup' first"
     exit 1
 fi
@@ -17,22 +18,22 @@ fi
 # Check if VM already running
 if [ -f "${PID_FILE}" ] && kill -0 $(cat "${PID_FILE}") 2>/dev/null; then
     echo "✓ VM already running (PID: $(cat ${PID_FILE}))"
-    echo "  SSH: ssh -p ${SSH_PORT} gosynth@localhost"
+    echo "  SSH: ssh -p ${VM_SSH_PORT} root@localhost"
     exit 0
 fi
 
-echo "🚀 Starting DragonFlyBSD VM..."
-echo "   Disk: ${DISK_IMAGE}"
-echo "   SSH: localhost:${SSH_PORT}"
-echo "   Memory: 2GB / CPUs: 2"
+echo "🚀 Starting DragonFlyBSD ${DFLY_VERSION} VM..."
+echo "   Disk: ${VM_DISK}"
+echo "   SSH: localhost:${VM_SSH_PORT}"
+echo "   Memory: ${VM_MEMORY} / CPUs: ${VM_CPUS}"
 
 # Start VM in background
 qemu-system-x86_64 \
     -enable-kvm \
-    -m 2048 \
-    -smp 2 \
-    -drive file="${DISK_IMAGE}",format=qcow2 \
-    -netdev user,id=net0,hostfwd=tcp::${SSH_PORT}-:22 \
+    -m "${VM_MEMORY}" \
+    -smp "${VM_CPUS}" \
+    -drive file="${VM_DISK}",format=qcow2 \
+    -netdev user,id=net0,hostfwd=tcp::${VM_SSH_PORT}-:22 \
     -device e1000,netdev=net0 \
     -daemonize \
     -pidfile "${PID_FILE}" \
@@ -45,9 +46,8 @@ fi
 
 echo "⏳ Waiting for SSH (may take 30s)..."
 for i in {1..60}; do
-    if ssh -p ${SSH_PORT} -o StrictHostKeyChecking=no -o ConnectTimeout=1 \
-           -o UserKnownHostsFile=/dev/null \
-           gosynth@localhost "echo connected" >/dev/null 2>&1; then
+    if ssh ${VM_SSH_OPTS} -o ConnectTimeout=1 \
+           ${VM_SSH_HOST} "echo connected" >/dev/null 2>&1; then
         echo "✓ VM ready! (PID: $(cat ${PID_FILE}))"
         echo ""
         echo "  Connect: make vm-ssh"

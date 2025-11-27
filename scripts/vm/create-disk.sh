@@ -2,25 +2,25 @@
 # Create QCOW2 disk image for DragonFlyBSD VM
 set -euo pipefail
 
-VM_DIR="${HOME}/.go-synth/vm"
-DISK_IMAGE="${VM_DIR}/dfly-test.qcow2"
-DISK_SIZE="20G"
+# Load VM configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 
 mkdir -p "${VM_DIR}"
 
-if [ -f "${DISK_IMAGE}" ]; then
-    echo "⚠️  Disk image already exists: ${DISK_IMAGE}"
-    echo "   Size: $(du -h "${DISK_IMAGE}" | cut -f1)"
+if [ -f "${VM_DISK}" ]; then
+    echo "⚠️  Disk image already exists: ${VM_DISK}"
+    echo "   Size: $(du -h "${VM_DISK}" | cut -f1)"
     echo "   Delete it first or use: make vm-destroy"
     exit 1
 fi
 
-echo "💾 Creating ${DISK_SIZE} disk image..."
-if ! qemu-img create -f qcow2 "${DISK_IMAGE}" "${DISK_SIZE}"; then
+echo "💾 Creating ${VM_DISK_SIZE} disk image..."
+if ! qemu-img create -f qcow2 "${VM_DISK}" "${VM_DISK_SIZE}"; then
     echo "❌ Failed to create disk image"
     exit 1
 fi
 
-echo "✓ Disk created: ${DISK_IMAGE}"
+echo "✓ Disk created: ${VM_DISK}"
 echo "  Format: QCOW2 (thin provisioned)"
-echo "  Size: ${DISK_SIZE}"
+echo "  Size: ${VM_DISK_SIZE}"

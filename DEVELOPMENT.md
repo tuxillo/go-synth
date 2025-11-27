@@ -557,7 +557,7 @@ Existing E2E tests (4,875 lines) skip 5 critical integration tests requiring roo
 A complete DragonFlyBSD VM testing environment:
 
 **Components**:
-- QEMU/KVM-based VM (DragonFlyBSD 6.4.0)
+- QEMU/KVM-based VM (DragonFlyBSD 6.4.2, configurable)
 - 9 management scripts (`scripts/vm/`, ~500 lines)
 - Makefile integration (`make vm-*` targets, ~150 lines)
 - Comprehensive documentation (`docs/testing/VM_TESTING.md`, ~600 lines)

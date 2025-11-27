@@ -2,34 +2,36 @@
 # Fetch DragonFlyBSD ISO image for VM testing
 set -euo pipefail
 
-VM_DIR="${HOME}/.go-synth/vm"
-IMAGE_URL="https://mirror-master.dragonflybsd.org/iso-images/dfly-x86_64-6.4.0_REL.iso.bz2"
-IMAGE_FILE="${VM_DIR}/dfly-6.4.0.iso"
+# Load VM configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 
 mkdir -p "${VM_DIR}"
 
-if [ -f "${IMAGE_FILE}" ]; then
-    echo "✓ DragonFlyBSD image already exists: ${IMAGE_FILE}"
-    echo "  Size: $(du -h "${IMAGE_FILE}" | cut -f1)"
+if [ -f "${VM_IMAGE}" ]; then
+    echo "✓ DragonFlyBSD ${DFLY_VERSION} image already exists: ${VM_IMAGE}"
+    echo "  Size: $(du -h "${VM_IMAGE}" | cut -f1)"
     exit 0
 fi
 
-echo "📥 Downloading DragonFlyBSD 6.4.0 ISO..."
-echo "   URL: ${IMAGE_URL}"
+echo "📥 Downloading DragonFlyBSD ${DFLY_VERSION} ISO..."
+echo "   URL: ${VM_DOWNLOAD_URL}"
 echo "   This may take a few minutes (~300 MB compressed)"
 
-if ! curl -L -o "${IMAGE_FILE}.bz2" "${IMAGE_URL}"; then
+if ! curl -L -o "${VM_IMAGE}.bz2" "${VM_DOWNLOAD_URL}"; then
     echo "❌ Download failed"
-    rm -f "${IMAGE_FILE}.bz2"
+    echo "   Check if version ${DFLY_VERSION} exists at:"
+    echo "   https://mirror-master.dragonflybsd.org/iso-images/"
+    rm -f "${VM_IMAGE}.bz2"
     exit 1
 fi
 
 echo "📦 Extracting image..."
-if ! bunzip2 "${IMAGE_FILE}.bz2"; then
+if ! bunzip2 "${VM_IMAGE}.bz2"; then
     echo "❌ Extraction failed"
-    rm -f "${IMAGE_FILE}" "${IMAGE_FILE}.bz2"
+    rm -f "${VM_IMAGE}" "${VM_IMAGE}.bz2"
     exit 1
 fi
 
-echo "✓ Image ready: ${IMAGE_FILE}"
-echo "  Size: $(du -h "${IMAGE_FILE}" | cut -f1)"
+echo "✓ Image ready: ${VM_IMAGE}"
+echo "  Size: $(du -h "${VM_IMAGE}" | cut -f1)"
