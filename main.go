@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"dsynth/build"
+	"dsynth/builddb"
 	"dsynth/config"
 	"dsynth/log"
 	"dsynth/pkg"
@@ -311,6 +312,15 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	}
 	defer logger.Close()
 
+	// Open BuildDB once for the entire workflow
+	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
+	buildDB, err := builddb.OpenDB(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening build database: %v\n", err)
+		os.Exit(1)
+	}
+	defer buildDB.Close()
+
 	// DEBUG: Print config values
 	fmt.Printf("\nDEBUG: Config loaded:\n")
 	fmt.Printf("  Profile: %s\n", cfg.Profile)
@@ -335,6 +345,11 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 
 		if buildCleanup != nil {
 			buildCleanup()
+		}
+
+		// Close buildDB on signal
+		if buildDB != nil {
+			buildDB.Close()
 		}
 
 		os.Exit(1)
@@ -362,7 +377,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	}
 
 	// Check which packages need building (CRC-based)
-	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, registry)
+	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, registry, buildDB)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking build status: %v\n", err)
 		os.Exit(1)
@@ -400,7 +415,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	}
 
 	// Execute build - NOW WITH 3 RETURN VALUES
-	stats, cleanup, err := build.DoBuild(packages, cfg, logger)
+	stats, cleanup, err := build.DoBuild(packages, cfg, logger, buildDB)
 	buildCleanup = cleanup // Store cleanup function for signal handler
 
 	if err != nil {

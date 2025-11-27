@@ -3,9 +3,11 @@ package build
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"dsynth/builddb"
 	"dsynth/config"
 	"dsynth/log"
 	"dsynth/mount"
@@ -37,6 +39,7 @@ type BuildContext struct {
 	cfg       *config.Config
 	logger    *log.Logger
 	registry  *pkg.BuildStateRegistry
+	buildDB   *builddb.DB
 	workers   []*Worker
 	queue     chan *pkg.Package
 	stats     BuildStats
@@ -47,7 +50,7 @@ type BuildContext struct {
 
 // DoBuild executes the main build process
 // Returns stats, cleanup function, and error
-func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger) (*BuildStats, func(), error) {
+func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
 	buildOrder := pkg.GetBuildOrder(packages)
 
@@ -55,6 +58,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger) (*
 		cfg:       cfg,
 		logger:    logger,
 		registry:  pkg.NewBuildStateRegistry(),
+		buildDB:   buildDB,
 		queue:     make(chan *pkg.Package, 100),
 		startTime: time.Now(),
 	}
@@ -237,14 +241,18 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	duration := time.Since(startTime)
 	pkgLogger.WriteSuccess(duration)
 
-	// TODO: Update CRC database after successful build
-	// This requires:
-	//   1. Add buildDB *builddb.DB to BuildContext
-	//   2. Pass buildDB to DoBuild() function
-	//   3. Compute CRC: builddb.ComputePortCRC(portPath)
-	//   4. Update CRC: ctx.buildDB.UpdateCRC(p.PortDir, crc)
-	//   5. Update package index: ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, buildUUID)
-	// This will be implemented in a future task (Task 6D or Task 7)
+	// Update CRC database after successful build
+	portPath := filepath.Join(ctx.cfg.DPortsPath, p.Category, p.Name)
+	crc, err := builddb.ComputePortCRC(portPath)
+	if err != nil {
+		// Log warning but don't fail the build (CRC update is non-fatal)
+		fmt.Fprintf(os.Stderr, "Warning: Failed to compute CRC for %s: %v\n", p.PortDir, err)
+	} else {
+		if err := ctx.buildDB.UpdateCRC(p.PortDir, crc); err != nil {
+			// Log warning but don't fail the build (CRC update is non-fatal)
+			fmt.Fprintf(os.Stderr, "Warning: Failed to update CRC for %s: %v\n", p.PortDir, err)
+		}
+	}
 
 	return true
 }

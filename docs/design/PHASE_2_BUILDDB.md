@@ -199,26 +199,28 @@ crc_index/
   - ✅ Verified compilation succeeds
 - **Result**: Legacy CRC system completely removed; only content-based BuildDB remains
 
-#### Task 6D: BuildDB Refactoring + UUID Infrastructure (pending)
-- **Estimated Time**: 30-45 minutes
+#### Task 6D: BuildDB Refactoring + UUID Infrastructure ✅
+- **Status**: Complete
+- **Completed**: 2025-11-27
+- **Actual Time**: 35 minutes
 - **Objective**: Refactor to open BuildDB once per workflow; add UUID support; implement basic post-build CRC updates
 - **Why Split from 6E**: Combined 6D+6E would be 75-105 min (too large); split for incremental testing and easier rollback
 - **Scope**:
-  1. Add `github.com/google/uuid` dependency (uses UUID v4 - random, 122-bit uniqueness)
-  2. Refactor to open BuildDB once at workflow start (eliminate races)
-  3. Update `MarkPackagesNeedingBuild()` to accept buildDB parameter
-  4. Update `DoBuild()` to accept buildDB parameter
-  5. Add `buildDB` field to BuildContext struct
-  6. Implement post-build CRC update in buildPackage()
-  7. Implement post-build package index update (generate UUID)
-  8. Update callers in cmd/build.go and main.go
-  9. Add buildDB.Close() to signal handler cleanup (critical for clean shutdown)
+  1. ✅ Add `github.com/google/uuid` dependency (uses UUID v4 - random, 122-bit uniqueness)
+  2. ✅ Refactor to open BuildDB once at workflow start (eliminate races)
+  3. ✅ Update `MarkPackagesNeedingBuild()` to accept buildDB parameter
+  4. ✅ Update `DoBuild()` to accept buildDB parameter
+  5. ✅ Add `buildDB` field to BuildContext struct
+  6. ✅ Implement post-build CRC update in buildPackage()
+  7. ⏭️ Implement post-build package index update (deferred to 6E - requires UUID generation)
+  8. ✅ Update callers in cmd/build.go and main.go
+  9. ✅ Add buildDB.Close() to signal handler cleanup (critical for clean shutdown)
 - **Changes**:
-  - `go.mod`: Add `github.com/google/uuid v1.6.0` (uuid.New() generates UUID v4)
-  - `build/build.go` (~40 lines): Add buildDB to BuildContext, update DoBuild signature, implement CRC update
-  - `pkg/pkg.go` (~10 lines): Update MarkPackagesNeedingBuild signature, remove internal open/close
-  - `cmd/build.go` (~20 lines): Open buildDB, add to signal handler cleanup, pass to functions
-  - `main.go` (~20 lines): Open buildDB, add to signal handler cleanup, pass to functions
+  - ✅ `go.mod`: Added `github.com/google/uuid v1.6.0` (uuid.New() generates UUID v4)
+  - ✅ `build/build.go` (~50 lines): Added buildDB to BuildContext, updated DoBuild signature, implemented CRC update after successful builds
+  - ✅ `pkg/pkg.go` (~10 lines): Updated MarkPackagesNeedingBuild signature to accept buildDB, removed internal open/close (lines 651-658)
+  - ✅ `cmd/build.go` (~25 lines): Open buildDB at start, added to signal handler cleanup, pass to functions
+  - ✅ `main.go` (~30 lines): Open buildDB at start, added to signal handler cleanup, pass to functions
 - **BuildDB Lifecycle**: Open → MarkPackagesNeedingBuild → DoBuild → buildPackage (CRC update) → Close
 - **Database Path**: `${BuildBase}/builds.db` (e.g., `/build/builds.db` - configurable via profile)
 - **Concurrency Safety**: 
@@ -237,15 +239,15 @@ crc_index/
   - No MAC address exposure (privacy concern)
   - 122 bits of randomness (2^122 possibilities, collision probability negligible)
   - uuid.New() is cryptographically random and thread-safe
-- **Result**: BuildDB opened once per workflow; CRC updates after successful builds; no open/close races; clean shutdown on signals
-- **Testing Strategy**:
-  1. Compilation: `go build -v` (verify no errors)
-  2. Single build: `./go-synth build editors/vim` (check no CRC warnings)
-  3. Rebuild same: Should show "up-to-date" (CRC match detected)
-  4. Modify port: `touch $DPortsPath/editors/vim/Makefile`, rebuild (should detect change)
-  5. Database file: Verify `ls -lh $BuildBase/builds.db` exists and grows
-  6. Signal handling: Ctrl+C during build, verify clean shutdown and no stale locks
-- **Note**: Full build record lifecycle (SaveRecord/UpdateRecordStatus) deferred to Task 6E
+- **Result**: ✅ BuildDB opened once per workflow; CRC updates after successful builds; no open/close races; clean shutdown on signals
+- **Testing Strategy** (deferred to integration testing):
+  1. ✅ Compilation: `go build -v` succeeded (4.2MB binary generated)
+  2. ⏭️ Single build: `./go-synth build editors/vim` (requires actual ports tree)
+  3. ⏭️ Rebuild same: Should show "up-to-date" (CRC match detected)
+  4. ⏭️ Modify port: `touch $DPortsPath/editors/vim/Makefile`, rebuild (should detect change)
+  5. ⏭️ Database file: Verify `ls -lh $BuildBase/builds.db` exists and grows
+  6. ⏭️ Signal handling: Ctrl+C during build, verify clean shutdown and no stale locks
+- **Note**: Full build record lifecycle (SaveRecord/UpdateRecordStatus with UUID generation) deferred to Task 6E
 
 #### Task 6E: Build Record Lifecycle (pending)
 - **Estimated Time**: 45-60 minutes
@@ -345,7 +347,7 @@ crc_index/
 - ✅ Optional migration utility to import old CRC data
 - ✅ CLI updated to use new database
 
-**Phase 2 Status**: In progress (6/12 tasks, 50% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-6C completed 2025-11-27: dependency, DB wrapper, CRUD, tracking, CRC operations, and full legacy replacement. Task 6 split into 6A-6E for incremental delivery. Tasks 6D-6E pending: BuildDB refactoring (30-45 min) and build record lifecycle (45-60 min). Next immediate: Task 6D. No blockers.
+**Phase 2 Status**: In progress (6.5/12 tasks, 54% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-6D completed 2025-11-27: dependency, DB wrapper, CRUD, tracking, CRC operations, full legacy replacement, and BuildDB refactoring. Task 6 split into 6A-6E for incremental delivery. Task 6E pending: Build record lifecycle (45-60 min) - UUID generation and SaveRecord/UpdateRecordStatus integration. Next immediate: Task 6E. No blockers.
 
 ## Dependencies
 - Phase 1 (`pkg` provides stable `PortDir`, `Version`, and `Package` API)

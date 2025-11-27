@@ -618,44 +618,44 @@ func ResolveDependencies(packages []*Package, cfg *config.Config, registry *Buil
 }
 
 // MarkPackagesNeedingBuild analyzes which packages need rebuilding based on
-// CRC comparison with the build database. Packages whose ports have changed
-// since the last successful build are marked for rebuilding.
+// CRC comparisons with the build database. It marks packages that are already
+// up-to-date with PkgFSuccess|PkgFPackaged flags so they can be skipped during
+// the build phase.
 //
-// The function computes a CRC checksum of each port's Makefile and compares
-// it with the stored CRC from previous builds. If the CRC differs or no
-// previous build exists, the package is marked for rebuilding.
+// The function handles several special cases:
+//   - Packages with errors (PkgFNotFound, PkgFCorrupt) are marked PkgFNoBuildIgnore
+//   - Meta packages are marked PkgFSuccess (metaports have no build phase)
+//   - Ignored packages are marked PkgFNoBuildIgnore
+//   - Packages with unchanged CRCs are marked PkgFSuccess|PkgFPackaged
+//   - Packages with CRC errors default to "needs rebuild" for safety
 //
-// # Side Effects
+// This function is typically called after dependency resolution and before
+// starting the build process:
 //
-// Modifies the build state registry by updating flags for packages that need
-// rebuilding. Does not modify the Package structs themselves.
+//	ResolveDependencies(packages, cfg, stateRegistry, pkgRegistry)
+//	needBuild, err := MarkPackagesNeedingBuild(packages, cfg, stateRegistry, buildDB)
+//	DoBuild(packages, cfg, logger, buildDB)
 //
 // # Parameters
-//
-//   - packages: slice of packages to check
-//   - cfg: configuration containing BuildBase path for CRC database
-//   - registry: build state registry to update with rebuild flags
+//   - packages: List of packages to check (typically from ParsePortList)
+//   - cfg: Configuration containing build paths and settings
+//   - registry: BuildStateRegistry for tracking package flags
+//   - buildDB: Open BuildDB instance for CRC operations
 //
 // # Returns
-//
 //   - number of packages marked as needing rebuild
-//   - error if CRC database initialization fails
+//   - error if CRC operations fail
 //
 // # Example
 //
-//	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, stateRegistry)
+//	buildDB, _ := builddb.OpenDB(filepath.Join(cfg.BuildBase, "builds.db"))
+//	defer buildDB.Close()
+//	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, stateRegistry, buildDB)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
 //	fmt.Printf("%d packages need rebuilding\n", needBuild)
-func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry *BuildStateRegistry) (int, error) {
-	// Initialize BuildDB
-	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
-	buildDB, err := builddb.OpenDB(dbPath)
-	if err != nil {
-		return 0, fmt.Errorf("failed to open build database: %w", err)
-	}
-	defer buildDB.Close()
+func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, buildDB *builddb.DB) (int, error) {
 
 	fmt.Println("\nChecking which packages need rebuilding...")
 

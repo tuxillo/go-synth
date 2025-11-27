@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"dsynth/build"
+	"dsynth/builddb"
 	"dsynth/config"
 	"dsynth/log"
 	"dsynth/pkg"
@@ -37,6 +39,15 @@ func runBuild(cmd *cobra.Command, args []string) {
 	cfg := config.GetConfig()
 	logger, _ := log.NewLogger(cfg) // TODO: handle error in Phase 3
 
+	// Open BuildDB once for the entire workflow
+	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
+	buildDB, err := builddb.OpenDB(dbPath)
+	if err != nil {
+		fmt.Printf("Error opening build database: %v\n", err)
+		os.Exit(1)
+	}
+	defer buildDB.Close()
+
 	// Setup signal handler for cleanup
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
@@ -52,6 +63,11 @@ func runBuild(cmd *cobra.Command, args []string) {
 		// Call cleanup if available
 		if buildCleanup != nil {
 			buildCleanup()
+		}
+
+		// Close buildDB on signal
+		if buildDB != nil {
+			buildDB.Close()
 		}
 
 		os.Exit(1)
@@ -78,7 +94,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	}
 
 	// Mark packages needing build
-	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg, registry)
+	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg, registry, buildDB)
 	if err != nil {
 		fmt.Printf("Error checking packages: %v\n", err)
 		os.Exit(1)
@@ -99,7 +115,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	}
 
 	// Execute build with cleanup function
-	stats, cleanupFunc, err := build.DoBuild(head, cfg, logger)
+	stats, cleanupFunc, err := build.DoBuild(head, cfg, logger, buildDB)
 	buildCleanup = cleanupFunc
 
 	if err != nil {
