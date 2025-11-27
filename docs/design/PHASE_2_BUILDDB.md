@@ -370,14 +370,66 @@ crc_index/
   - Content-based CRC tested with real port structures
   - Test coverage exceeds target (84.5% vs 80% goal)
 
-### Task 9: Integration Test (1.5 hours)
-- Simulate full build workflow:
-  1. Check `NeedsBuild` (returns true)
-  2. `SaveRecord` with status="running"
-  3. `UpdateRecordStatus` to "success"
-  4. Update `packages` bucket
-  5. `UpdateCRC` with new value
-  6. Check `NeedsBuild` again (returns false)
+### Task 9: Integration Test (1.5 hours) ✅ COMPLETE
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Actual Time**: 2 hours (slightly over estimate due to API signature corrections)
+- **Result**: Comprehensive end-to-end workflow validation
+  - Created `builddb/integration_test.go` with 5 integration tests (576 lines)
+  - Test Statistics:
+    * 5 test functions with 23 subtests
+    * All 31 tests passing (26 unit + 5 integration)
+    * Race detector: PASS (`go test -race -run Integration ./builddb`)
+    * Test coverage maintained: 84.5%
+  - Integration Test Workflows:
+    1. **TestIntegration_FirstBuildWorkflow** (3 subtests):
+       - Port should need building (no CRC exists)
+       - Complete successful build workflow (save record → update status → update CRC/index)
+       - Database consistency check (no orphaned records)
+    2. **TestIntegration_RebuildSamePort** (4 subtests):
+       - First build establishes baseline CRC
+       - Rebuild without changes should skip (NeedsBuild = false)
+       - CRC should match after no changes
+       - Database consistency after incremental check
+    3. **TestIntegration_RebuildAfterChange** (6 subtests):
+       - First build establishes baseline
+       - Modify port file (append timestamp comment to Makefile)
+       - Rebuild after change should be needed (NeedsBuild = true)
+       - CRC should differ after modification
+       - Complete rebuild after change
+       - Database consistency after rebuild
+    4. **TestIntegration_FailedBuildHandling** (5 subtests):
+       - Failed build does NOT update CRC
+       - Failed build does NOT update package index
+       - Retry after failed build should still need building
+       - Successful retry updates CRC and index
+       - Database consistency after failed build handling
+    5. **TestIntegration_MultiPortCoordination** (5 subtests):
+       - Build multiple ports simultaneously (vim + python)
+       - Each port tracks its own CRC
+       - Each port has independent package index
+       - Rebuilding one port doesn't affect the other
+       - Database consistency with multiple ports
+  - Helper Functions (6):
+    * generateBuildUUID() - UUID generation for build records
+    * modifyPortFile() - modifies test port files to change CRC
+    * assertBuildRecordState() - verifies record status in database
+    * assertDatabaseConsistency() - validates no orphaned records
+    * simulateBuildWorkflow() - simulates complete build lifecycle (CRC check → save → update → CRC/index update)
+    * copyDir() - recursively copies directories for modification tests
+  - Test Scenarios Validated:
+    * First-time build workflow (no existing CRC)
+    * Incremental build detection (CRC match → skip rebuild)
+    * Change detection (CRC mismatch → trigger rebuild)
+    * Failed build handling (no CRC/index update on failure, retry still needed)
+    * Multi-port coordination (independent tracking, no interference)
+    * Database consistency (package index points to valid builds, no orphans)
+- **Benefits**:
+  - End-to-end workflow validation (not just unit tests)
+  - Incremental build mechanism verified (core feature of Phase 2)
+  - Failed build handling ensures database integrity
+  - Multi-port scenarios validate concurrent build tracking
+  - Database consistency checks prevent data corruption
 
 ### Task 10: Godoc & Documentation (1 hour) ✅ COMPLETE
 - **Status**: Complete
