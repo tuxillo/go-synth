@@ -12,6 +12,8 @@ import (
 	"dsynth/log"
 	"dsynth/mount"
 	"dsynth/pkg"
+
+	"github.com/google/uuid"
 )
 
 // BuildStats tracks build statistics
@@ -204,6 +206,24 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 
 	pkgLogger.WriteHeader()
 
+	// Generate UUID for this build attempt
+	p.BuildUUID = uuid.New().String()
+
+	startTime := time.Now()
+
+	// Create initial build record with status "running"
+	buildRecord := &builddb.BuildRecord{
+		UUID:      p.BuildUUID,
+		PortDir:   p.PortDir,
+		Version:   p.Version,
+		Status:    "running",
+		StartTime: startTime,
+	}
+	if err := ctx.buildDB.SaveRecord(buildRecord); err != nil {
+		// Log warning but don't fail build (DB operations are non-fatal)
+		fmt.Fprintf(os.Stderr, "Warning: Failed to save build record for %s: %v\n", p.PortDir, err)
+	}
+
 	// Execute all build phases
 	phases := []string{
 		"install-pkgs",
@@ -225,8 +245,6 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 		"package",
 	}
 
-	startTime := time.Now()
-
 	for _, phase := range phases {
 		ctx.registry.SetLastPhase(p, phase)
 		pkgLogger.WritePhase(phase)
@@ -234,12 +252,23 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 		if err := executePhase(worker, p, phase, ctx.cfg, ctx.registry, pkgLogger); err != nil {
 			duration := time.Since(startTime)
 			pkgLogger.WriteFailure(duration, fmt.Sprintf("Phase %s failed: %v", phase, err))
+
+			// Update build record status to failed
+			if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "failed", time.Now()); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to update build record for %s: %v\n", p.PortDir, err)
+			}
+
 			return false
 		}
 	}
 
 	duration := time.Since(startTime)
 	pkgLogger.WriteSuccess(duration)
+
+	// Update build record status to success
+	if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "success", time.Now()); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to update build record for %s: %v\n", p.PortDir, err)
+	}
 
 	// Update CRC database after successful build
 	portPath := filepath.Join(ctx.cfg.DPortsPath, p.Category, p.Name)
@@ -252,6 +281,11 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 			// Log warning but don't fail the build (CRC update is non-fatal)
 			fmt.Fprintf(os.Stderr, "Warning: Failed to update CRC for %s: %v\n", p.PortDir, err)
 		}
+	}
+
+	// Update package index to point to this successful build
+	if err := ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, p.BuildUUID); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to update package index for %s: %v\n", p.PortDir, err)
 	}
 
 	return true

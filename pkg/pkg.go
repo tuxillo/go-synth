@@ -289,6 +289,7 @@ type Package struct {
 	DepiDepth   int        // Maximum dependency chain length (for ordering)
 
 	// Status tracking (not build state)
+	BuildUUID  string // UUID for current build attempt (generated at build start)
 	LastStatus string // Last build status message
 }
 
