@@ -53,6 +53,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 // NewBSDEnvironment creates a new BSD environment instance.
@@ -272,12 +273,166 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 
 // Execute runs a command in the chroot environment.
 //
-// This method will be implemented in Task 4. For now, return not implemented.
+// This method executes commands via the chroot(8) utility, not the chroot(2)
+// system call. This approach:
+//   - Matches the existing Go implementation pattern (build/phases.go)
+//   - Simplifies context and timeout handling via exec.CommandContext
+//   - Avoids process lifecycle complexity (fork/exec coordination)
+//
+// Command execution flow:
+//  1. Validates environment is setup (baseDir != "")
+//  2. Creates derived context if cmd.Timeout > 0
+//  3. Builds chroot command: chroot <baseDir> <command> <args...>
+//  4. Sets environment variables if cmd.Env provided
+//  5. Wires stdout/stderr streams
+//  6. Executes command and measures duration
+//  7. Returns ExecResult with exit code and duration
+//
+// Error handling follows the Environment interface contract:
+//   - Command exits with code 0: ExecResult{ExitCode: 0}, err=nil (SUCCESS)
+//   - Command exits with code N: ExecResult{ExitCode: N}, err=nil (SUCCESS)
+//   - Execution fails: ExecResult{ExitCode: -1, Error: ErrExecutionFailed}, err != nil (FAILURE)
+//
+// The key distinction: a command that runs and returns a non-zero exit code
+// is considered successful execution (err=nil). Only failures to execute the
+// command (chroot not found, context cancelled, permission denied) return err != nil.
+//
+// Examples:
+//   - make install returns 1 → ExecResult{ExitCode: 1}, err=nil ✅
+//   - chroot binary not found → ExecResult{ExitCode: -1, Error: ...}, err != nil ❌
+//   - context cancelled → ExecResult{ExitCode: -1, Error: ...}, err != nil ❌
+//   - timeout expired → ExecResult{ExitCode: -1, Error: ...}, err != nil ❌
+//
+// Context and timeout behavior:
+//   - Parent context cancellation always takes precedence
+//   - If cmd.Timeout > 0: Creates derived context with timeout
+//   - Uses exec.CommandContext for automatic process cleanup on cancellation
+//   - Timeout errors are wrapped in ErrExecutionFailed
+//
+// Environment variables:
+//   - If cmd.Env is nil or empty: Inherits parent process environment
+//   - If cmd.Env is provided: Uses ONLY the specified variables
+//   - Variables are converted from map[string]string to []string{"KEY=VALUE"}
+//
+// WorkDir field:
+//   - Currently not implemented (reserved for future enhancement)
+//   - The chroot command sets working directory to / inside chroot
+//   - Commands handle their own working directory (e.g., make -C /xports/...)
+//   - This matches current behavior in build/phases.go (cmd.Dir = "/")
+//
+// Thread safety:
+//   - Safe to call concurrently after Setup() completes
+//   - Each call creates independent exec.Cmd instance
+//   - No shared mutable state modified during execution
+//
+// Example usage:
+//
+//	cmd := &environment.ExecCommand{
+//	    Command: "/usr/bin/make",
+//	    Args:    []string{"-C", "/xports/editors/vim", "install"},
+//	    Env:     map[string]string{"BATCH": "yes"},
+//	    Stdout:  logger,
+//	    Stderr:  logger,
+//	    Timeout: 30 * time.Minute,
+//	}
+//	result, err := env.Execute(ctx, cmd)
+//	if err != nil {
+//	    // Execution failed (chroot failed, cancelled, etc)
+//	    log.Printf("Execution failed: %v", err)
+//	} else if result.ExitCode != 0 {
+//	    // Command ran but returned non-zero exit
+//	    log.Printf("Command failed with exit code %d", result.ExitCode)
+//	} else {
+//	    // Success
+//	    log.Printf("Command succeeded in %v", result.Duration)
+//	}
 func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecCommand) (*environment.ExecResult, error) {
-	return nil, &environment.ErrExecutionFailed{
-		Command: cmd.Command,
-		Err:     fmt.Errorf("Execute() not yet implemented (Task 4)"),
+	// Validate environment is setup
+	if e.baseDir == "" {
+		return nil, &environment.ErrExecutionFailed{
+			Command: cmd.Command,
+			Err:     fmt.Errorf("environment not set up (Setup must be called first)"),
+		}
 	}
+
+	// Handle timeout: create derived context if cmd.Timeout > 0
+	// This allows the caller to specify per-command timeouts while
+	// still respecting parent context cancellation
+	execCtx := ctx
+	if cmd.Timeout > 0 {
+		var cancel context.CancelFunc
+		execCtx, cancel = context.WithTimeout(ctx, cmd.Timeout)
+		defer cancel()
+	}
+
+	// Build chroot command arguments
+	// Format: chroot <baseDir> <command> <arg1> <arg2> ...
+	// Example: chroot /build/SL01 /usr/bin/make -C /xports/editors/vim install
+	args := []string{e.baseDir, cmd.Command}
+	args = append(args, cmd.Args...)
+
+	// Create command with context support
+	// CommandContext ensures the process is killed if context is cancelled
+	execCmd := exec.CommandContext(execCtx, "chroot", args...)
+
+	// Set working directory from host perspective
+	// The chroot command itself runs from root, and the command inside
+	// chroot will have / as its working directory
+	execCmd.Dir = "/"
+
+	// Set environment variables if provided
+	// If cmd.Env is nil/empty, the command inherits parent environment
+	// If cmd.Env is provided, use ONLY those variables
+	if len(cmd.Env) > 0 {
+		env := make([]string, 0, len(cmd.Env))
+		for k, v := range cmd.Env {
+			env = append(env, fmt.Sprintf("%s=%s", k, v))
+		}
+		execCmd.Env = env
+	}
+
+	// Wire output streams
+	// If nil, output is discarded (exec package default behavior)
+	if cmd.Stdout != nil {
+		execCmd.Stdout = cmd.Stdout
+	}
+	if cmd.Stderr != nil {
+		execCmd.Stderr = cmd.Stderr
+	}
+
+	// Execute command and measure duration
+	startTime := time.Now()
+	err := execCmd.Run()
+	duration := time.Since(startTime)
+
+	// Build result
+	result := &environment.ExecResult{
+		Duration: duration,
+	}
+
+	// Handle errors with proper semantics
+	// CRITICAL: Non-zero exit code is NOT an error from Execute's perspective
+	if err != nil {
+		// Try to extract exit code from error
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Command ran but returned non-zero exit code
+			// This is SUCCESS from Execute's perspective (err=nil)
+			result.ExitCode = exitErr.ExitCode()
+			return result, nil
+		}
+
+		// Execution failed (chroot not found, context cancelled, permission denied, etc)
+		// This is FAILURE from Execute's perspective (err != nil)
+		result.ExitCode = -1
+		return result, &environment.ErrExecutionFailed{
+			Command: cmd.Command,
+			Err:     err,
+		}
+	}
+
+	// Success: command ran and returned exit code 0
+	result.ExitCode = 0
+	return result, nil
 }
 
 // Cleanup tears down the environment.
