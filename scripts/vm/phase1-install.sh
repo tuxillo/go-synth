@@ -94,7 +94,7 @@ echo "Step 9: Configuring system services..."
 cat > /mnt/etc/rc.conf <<'EOF'
 # Network configuration
 hostname="dragonfly-gosynth"
-ifconfig_em0="DHCP"
+ifconfig_vtnet0="DHCP mtu 1460"
 sshd_enable="YES"
 
 # Time synchronization
