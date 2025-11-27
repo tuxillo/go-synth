@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 8% Complete (1/12 tasks)  
+**Status**: 🟡 17% Complete (2/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -100,8 +100,8 @@ crc_index/
 
 ### High Priority (Core Implementation)
 1. ✅ **Add bbolt dependency** - Update `go.mod` with `go.etcd.io/bbolt` (DONE: commit 6a6ff7b)
-2. ❌ **Create DB wrapper** - Implement `DB` struct with Open/Close
-3. ❌ **Implement bucket creation** - Initialize 3 buckets on first open
+2. ✅ **Create DB wrapper** - Implement `DB` struct with Open/Close (DONE: commit TBD)
+3. ✅ **Implement bucket creation** - Initialize 3 buckets on first open (DONE: commit TBD)
 4. ❌ **Build record CRUD** - SaveRecord, GetRecord, UpdateRecordStatus
 5. ❌ **Package tracking** - LatestFor, update packages bucket on success
 6. ❌ **CRC operations** - NeedsBuild, UpdateCRC, GetCRC
@@ -125,11 +125,13 @@ crc_index/
 - **Completed**: 2025-11-27 (commit 6a6ff7b)
 - **Result**: Added go.etcd.io/bbolt v1.4.3, upgraded Go 1.21→1.23, golang.org/x/sys v0.15.0→v0.29.0
 
-### Task 2: Create Database Wrapper (1 hour)
-- Create `builddb/db.go` with `DB` struct
-- Implement `OpenDB(path string) (*DB, error)`
-- Implement `Close() error`
-- Initialize 3 buckets: `builds`, `packages`, `crc_index`
+### Task 2: Create Database Wrapper ✅ COMPLETE
+- ✅ Create `builddb/db.go` with `DB` struct
+- ✅ Implement `OpenDB(path string) (*DB, error)`
+- ✅ Implement `Close() error`
+- ✅ Initialize 3 buckets: `builds`, `packages`, `crc_index`
+- **Completed**: 2025-11-27 (commit TBD)
+- **Result**: Created db.go (113 lines), bbolt now direct dependency, verified with test
 
 ### Task 3: Build Record CRUD (2 hours)
 - Implement `SaveRecord(rec *BuildRecord) error`
@@ -193,11 +195,11 @@ crc_index/
 
 ## Deliverables
 
-### Completed (1/6)
+### Completed (2/6)
 - ✅ bbolt dependency added (go.etcd.io/bbolt v1.4.3)
+- ✅ bbolt integration (`builddb/db.go` with OpenDB/Close)
 
-### Incomplete (5/6)
-- ❌ bbolt integration (`builddb/db.go`)
+### Incomplete (4/6)
 - ❌ Build record CRUD operations
 - ❌ CRC indexing with NeedsBuild logic
 - ❌ Unit and integration tests
@@ -223,7 +225,7 @@ crc_index/
 - ✅ Optional migration utility to import old CRC data
 - ✅ CLI updated to use new database
 
-**Phase 2 Status**: In progress (1/12 tasks, 8% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Task 1 (bbolt dependency) completed 2025-11-27. No blockers.
+**Phase 2 Status**: In progress (2/12 tasks, 17% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-2 completed 2025-11-27 (dependency + DB wrapper). No blockers.
 
 ## Dependencies
 - Phase 1 (`pkg` provides stable `PortDir`, `Version`, and `Package` API)
