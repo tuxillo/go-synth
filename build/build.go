@@ -241,7 +241,7 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	// This requires:
 	//   1. Add buildDB *builddb.DB to BuildContext
 	//   2. Pass buildDB to DoBuild() function
-	//   3. Compute CRC: builddb.ComputePortCRCContent(portPath)
+	//   3. Compute CRC: builddb.ComputePortCRC(portPath)
 	//   4. Update CRC: ctx.buildDB.UpdateCRC(p.PortDir, crc)
 	//   5. Update package index: ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, buildUUID)
 	// This will be implemented in a future task (Task 6D or Task 7)

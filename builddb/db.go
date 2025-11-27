@@ -479,7 +479,7 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 	return crc, found, nil
 }
 
-// ComputePortCRCContent calculates a CRC32 checksum of all files in a port directory.
+// ComputePortCRC calculates a CRC32 checksum of all files in a port directory.
 //
 // Unlike metadata-based approaches (which hash file size + mtime), this function
 // hashes actual file contents to reliably detect changes regardless of modification
@@ -499,9 +499,6 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 // Use this function before calling NeedsBuild() to determine if a port's source
 // files have changed since the last successful build.
 //
-// Note: This function will be renamed to ComputePortCRC once the legacy metadata-based
-// version is removed from crc.go (Task 6C).
-//
 // Parameters:
 //   - portPath: Absolute path to port directory (e.g., "/dports/editors/vim")
 //
@@ -511,12 +508,12 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 //
 // Example:
 //
-//	crc, err := builddb.ComputePortCRCContent("/usr/dports/editors/vim")
+//	crc, err := builddb.ComputePortCRC("/usr/dports/editors/vim")
 //	if err != nil {
 //	    return fmt.Errorf("failed to compute CRC: %w", err)
 //	}
 //	needsBuild, err := db.NeedsBuild("editors/vim", crc)
-func ComputePortCRCContent(portPath string) (uint32, error) {
+func ComputePortCRC(portPath string) (uint32, error) {
 	hash := crc32.NewIEEE()
 
 	// Walk the port directory tree

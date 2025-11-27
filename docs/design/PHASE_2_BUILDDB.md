@@ -187,11 +187,16 @@ crc_index/
   - ✅ Added TODO comment for post-build CRC updates (requires buildDB in BuildContext)
 - **Result**: All legacy API calls removed; buildDB properly integrated; compiles successfully
 
-#### Task 6C: Delete Legacy Code (pending)
-- Delete `builddb/crc.go` entirely (494 lines)
-- Delete legacy helpers from `builddb/helpers.go`
-- Rename `ComputePortCRCContent()` → `ComputePortCRC()`
-- Test full build workflow end-to-end
+#### Task 6C: Delete Legacy Code ✅
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Changes**:
+  - ✅ Deleted `builddb/crc.go` entirely (494 lines, 11KB) - metadata-based CRC implementation
+  - ✅ Deleted `builddb/helpers.go` entirely (144 lines) - RebuildCRCDatabase, CleanCRCDatabase, ExportCRCDatabase
+  - ✅ Renamed `ComputePortCRCContent()` → `ComputePortCRC()` in builddb/db.go
+  - ✅ Updated all call sites (pkg/pkg.go, build/build.go comments)
+  - ✅ Verified compilation succeeds
+- **Result**: Legacy CRC system completely removed; only content-based BuildDB remains
 
 ### Task 7: Error Types (1 hour)
 - Add `ErrNotFound`, `ErrCorrupted`, `ErrInvalidUUID`, etc.
@@ -264,7 +269,7 @@ crc_index/
 - ✅ Optional migration utility to import old CRC data
 - ✅ CLI updated to use new database
 
-**Phase 2 Status**: In progress (5.5/12 tasks, 46% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-5 completed 2025-11-27 (dependency + DB wrapper + CRUD + tracking + CRC). Task 6A-6B completed (content-based CRC + API migration). Next: Task 6C (delete legacy code). No blockers.
+**Phase 2 Status**: In progress (6/12 tasks, 50% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-6 completed 2025-11-27: dependency, DB wrapper, CRUD, tracking, CRC operations, and full legacy replacement (content-based CRC migration complete). Next: Task 7 (error types). No blockers.
 
 ## Dependencies
 - Phase 1 (`pkg` provides stable `PortDir`, `Version`, and `Package` API)

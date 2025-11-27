@@ -685,7 +685,7 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 
 		// Check if build is needed
 		portPath := filepath.Join(cfg.DPortsPath, pkg.Category, pkg.Name)
-		currentCRC, err := builddb.ComputePortCRCContent(portPath)
+		currentCRC, err := builddb.ComputePortCRC(portPath)
 		if err != nil {
 			// On error computing CRC, rebuild to be safe
 			fmt.Printf("  %s: needs rebuild (CRC computation error: %v)\n", pkg.PortDir, err)
