@@ -22,9 +22,9 @@ DFLY_VERSION="${DFLY_VERSION:-6.4.2}"
 VM_DIR="${VM_DIR:-${HOME}/.go-synth/vm}"
 
 # VM resource allocation
-VM_MEMORY="${VM_MEMORY:-2G}"      # RAM allocation (2G, 4G, 8G, etc.)
-VM_CPUS="${VM_CPUS:-2}"           # Number of CPU cores
-VM_DISK_SIZE="${VM_DISK_SIZE:-20G}"  # Disk size
+VM_MEMORY="${VM_MEMORY:-8G}"      # RAM allocation (8G = 1/4 of 32GB host)
+VM_CPUS="${VM_CPUS:-4}"           # Number of CPU cores
+VM_DISK_SIZE="${VM_DISK_SIZE:-40G}"  # Disk size (qcow2, no preallocation)
 
 # Network configuration
 VM_SSH_PORT="${VM_SSH_PORT:-2222}"  # Host port for SSH forwarding
