@@ -3,6 +3,7 @@
 package builddb
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -110,4 +111,156 @@ func (db *DB) Close() error {
 		return nil
 	}
 	return db.db.Close()
+}
+
+// SaveRecord stores a BuildRecord in the database. The record is serialized
+// to JSON and stored in the builds bucket with the UUID as the key.
+//
+// Parameters:
+//   - rec: Pointer to BuildRecord to save
+//
+// Returns:
+//   - error: Any error encountered during save operation
+//
+// Example:
+//
+//	rec := &BuildRecord{
+//	    UUID:      "abc-123",
+//	    PortDir:   "editors/vim",
+//	    Version:   "9.0.1",
+//	    Status:    "running",
+//	    StartTime: time.Now(),
+//	}
+//	if err := db.SaveRecord(rec); err != nil {
+//	    log.Fatal(err)
+//	}
+func (db *DB) SaveRecord(rec *BuildRecord) error {
+	if rec.UUID == "" {
+		return fmt.Errorf("build record UUID cannot be empty")
+	}
+
+	// Marshal BuildRecord to JSON
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return fmt.Errorf("failed to marshal build record: %w", err)
+	}
+
+	// Store in builds bucket
+	err = db.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(BucketBuilds))
+		if bucket == nil {
+			return fmt.Errorf("builds bucket not found")
+		}
+		return bucket.Put([]byte(rec.UUID), data)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to save build record: %w", err)
+	}
+
+	return nil
+}
+
+// GetRecord retrieves a BuildRecord from the database by its UUID.
+//
+// Parameters:
+//   - uuid: The unique identifier of the build record
+//
+// Returns:
+//   - *BuildRecord: The retrieved record, or nil if not found
+//   - error: Any error encountered, including not found errors
+//
+// Example:
+//
+//	rec, err := db.GetRecord("abc-123")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Build status: %s\n", rec.Status)
+func (db *DB) GetRecord(uuid string) (*BuildRecord, error) {
+	if uuid == "" {
+		return nil, fmt.Errorf("UUID cannot be empty")
+	}
+
+	var rec BuildRecord
+
+	err := db.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(BucketBuilds))
+		if bucket == nil {
+			return fmt.Errorf("builds bucket not found")
+		}
+
+		data := bucket.Get([]byte(uuid))
+		if data == nil {
+			return fmt.Errorf("build record not found: %s", uuid)
+		}
+
+		return json.Unmarshal(data, &rec)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &rec, nil
+}
+
+// UpdateRecordStatus updates the status and end time of an existing BuildRecord.
+// This is more efficient than retrieving the full record, modifying it, and
+// saving it back, as it does the read-modify-write in a single transaction.
+//
+// Parameters:
+//   - uuid: The unique identifier of the build record to update
+//   - status: New status value (e.g., "success", "failed")
+//   - endTime: The completion timestamp
+//
+// Returns:
+//   - error: Any error encountered during update operation
+//
+// Example:
+//
+//	err := db.UpdateRecordStatus("abc-123", "success", time.Now())
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (db *DB) UpdateRecordStatus(uuid, status string, endTime time.Time) error {
+	if uuid == "" {
+		return fmt.Errorf("UUID cannot be empty")
+	}
+
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(BucketBuilds))
+		if bucket == nil {
+			return fmt.Errorf("builds bucket not found")
+		}
+
+		// Read existing record
+		data := bucket.Get([]byte(uuid))
+		if data == nil {
+			return fmt.Errorf("build record not found: %s", uuid)
+		}
+
+		// Unmarshal, update, marshal
+		var rec BuildRecord
+		if err := json.Unmarshal(data, &rec); err != nil {
+			return fmt.Errorf("failed to unmarshal build record: %w", err)
+		}
+
+		rec.Status = status
+		rec.EndTime = endTime
+
+		updatedData, err := json.Marshal(&rec)
+		if err != nil {
+			return fmt.Errorf("failed to marshal updated record: %w", err)
+		}
+
+		// Save back
+		return bucket.Put([]byte(uuid), updatedData)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update build record status: %w", err)
+	}
+
+	return nil
 }

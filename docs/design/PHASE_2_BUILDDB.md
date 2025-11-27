@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 17% Complete (2/12 tasks)  
+**Status**: 🟡 25% Complete (3/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -100,9 +100,9 @@ crc_index/
 
 ### High Priority (Core Implementation)
 1. ✅ **Add bbolt dependency** - Update `go.mod` with `go.etcd.io/bbolt` (DONE: commit 6a6ff7b)
-2. ✅ **Create DB wrapper** - Implement `DB` struct with Open/Close (DONE: commit TBD)
-3. ✅ **Implement bucket creation** - Initialize 3 buckets on first open (DONE: commit TBD)
-4. ❌ **Build record CRUD** - SaveRecord, GetRecord, UpdateRecordStatus
+2. ✅ **Create DB wrapper** - Implement `DB` struct with Open/Close (DONE: commit 48569e6)
+3. ✅ **Implement bucket creation** - Initialize 3 buckets on first open (DONE: commit 48569e6)
+4. ✅ **Build record CRUD** - SaveRecord, GetRecord, UpdateRecordStatus (DONE: commit TBD)
 5. ❌ **Package tracking** - LatestFor, update packages bucket on success
 6. ❌ **CRC operations** - NeedsBuild, UpdateCRC, GetCRC
 
@@ -133,11 +133,13 @@ crc_index/
 - **Completed**: 2025-11-27 (commit TBD)
 - **Result**: Created db.go (113 lines), bbolt now direct dependency, verified with test
 
-### Task 3: Build Record CRUD (2 hours)
-- Implement `SaveRecord(rec *BuildRecord) error`
-- Implement `GetRecord(uuid string) (*BuildRecord, error)`
-- Implement `UpdateRecordStatus(uuid, status, endTime)` 
-- Use JSON encoding for build records
+### Task 3: Build Record CRUD ✅ COMPLETE
+- ✅ Implement `SaveRecord(rec *BuildRecord) error`
+- ✅ Implement `GetRecord(uuid string) (*BuildRecord, error)`
+- ✅ Implement `UpdateRecordStatus(uuid, status, endTime)` 
+- ✅ Use JSON encoding for build records
+- **Completed**: 2025-11-27 (commit TBD)
+- **Result**: Added 3 CRUD methods (152 lines), full save/retrieve/update cycle working
 
 ### Task 4: Package Tracking (1 hour)
 - Implement `LatestFor(portDir, version string) (*BuildRecord, error)`
@@ -195,12 +197,12 @@ crc_index/
 
 ## Deliverables
 
-### Completed (2/6)
+### Completed (3/6)
 - ✅ bbolt dependency added (go.etcd.io/bbolt v1.4.3)
 - ✅ bbolt integration (`builddb/db.go` with OpenDB/Close)
+- ✅ Build record CRUD operations (SaveRecord, GetRecord, UpdateRecordStatus)
 
-### Incomplete (4/6)
-- ❌ Build record CRUD operations
+### Incomplete (3/6)
 - ❌ CRC indexing with NeedsBuild logic
 - ❌ Unit and integration tests
 - ❌ Migration from old CRC file
@@ -225,7 +227,7 @@ crc_index/
 - ✅ Optional migration utility to import old CRC data
 - ✅ CLI updated to use new database
 
-**Phase 2 Status**: In progress (2/12 tasks, 17% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-2 completed 2025-11-27 (dependency + DB wrapper). No blockers.
+**Phase 2 Status**: In progress (3/12 tasks, 25% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-3 completed 2025-11-27 (dependency + DB wrapper + CRUD). No blockers.
 
 ## Dependencies
 - Phase 1 (`pkg` provides stable `PortDir`, `Version`, and `Package` API)
