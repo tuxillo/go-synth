@@ -36,10 +36,11 @@ VM_SNAPSHOT="${VM_DIR}/dfly-vm-clean.qcow2"
 VM_DOWNLOAD_URL="https://mirror-master.dragonflybsd.org/iso-images/dfly-x86_64-${DFLY_VERSION}_REL.iso.bz2"
 
 # SSH connection settings
-VM_SSH_OPTS="-p ${VM_SSH_PORT} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+VM_SSH_KEY="${VM_DIR}/id_ed25519"
+VM_SSH_OPTS="-p ${VM_SSH_PORT} -i ${VM_SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 VM_SSH_HOST="root@localhost"
 
 # Export variables for use in scripts
 export DFLY_VERSION VM_DIR VM_MEMORY VM_CPUS VM_DISK_SIZE
-export VM_SSH_PORT VM_IMAGE VM_DISK VM_SNAPSHOT VM_DOWNLOAD_URL
+export VM_SSH_PORT VM_SSH_KEY VM_IMAGE VM_DISK VM_SNAPSHOT VM_DOWNLOAD_URL
 export VM_SSH_OPTS VM_SSH_HOST

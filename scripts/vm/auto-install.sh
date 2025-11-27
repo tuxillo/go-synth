@@ -173,8 +173,21 @@ echo "    - Configure doas for passwordless root"
 echo "    - Create /build/Workers and /usr/dports"
 echo "    - Set up Go environment"
 echo "    - Configure bash as default shell"
+echo "    - Set up SSH key authentication"
 echo "    - Verify all configurations"
 echo ""
+
+# Generate SSH key if it doesn't exist
+if [ ! -f "${VM_SSH_KEY}" ]; then
+    echo "Generating SSH key for VM access..."
+    ssh-keygen -t ed25519 -f "${VM_SSH_KEY}" -N '' -C "go-synth-vm" >/dev/null 2>&1
+    echo "✓ SSH key generated: ${VM_SSH_KEY}"
+else
+    echo "✓ Using existing SSH key: ${VM_SSH_KEY}"
+fi
+
+# Export public key for phase3
+export SSH_PUBLIC_KEY="$(cat "${VM_SSH_KEY}.pub")"
 
 # Create Phase 3 ISO
 "${SCRIPT_DIR}/make-phase-iso.sh" \

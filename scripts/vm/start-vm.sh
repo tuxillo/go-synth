@@ -28,13 +28,16 @@ echo "   SSH: localhost:${VM_SSH_PORT}"
 echo "   Memory: ${VM_MEMORY} / CPUs: ${VM_CPUS}"
 
 # Start VM in background
+# Use virtio-scsi to match installation (creates da0 device)
 qemu-system-x86_64 \
     -enable-kvm \
     -m "${VM_MEMORY}" \
     -smp "${VM_CPUS}" \
-    -drive file="${VM_DISK}",format=qcow2 \
-    -netdev user,id=net0,hostfwd=tcp::${VM_SSH_PORT}-:22 \
-    -device e1000,netdev=net0 \
+    -device virtio-scsi-pci,id=scsi0 \
+    -drive file="${VM_DISK}",if=none,format=qcow2,cache=none,id=myscsi \
+    -device scsi-hd,drive=myscsi,bus=scsi0.0 \
+    -net nic,model=virtio \
+    -net user,hostfwd=tcp::${VM_SSH_PORT}-:22 \
     -daemonize \
     -pidfile "${PID_FILE}" \
     -display none
