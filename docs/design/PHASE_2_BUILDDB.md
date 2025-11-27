@@ -165,7 +165,7 @@ crc_index/
 
 #### Task 6A: Content-Based CRC Helper ✅
 - **Status**: Complete
-- **Completed**: 2025-11-27 (commit TBD)
+- **Completed**: 2025-11-27 (commit 52d5393)
 - **Result**: Implemented `ComputePortCRCContent()` with content-based hashing (~85 lines)
   - Hashes actual file contents (not metadata like size + mtime)
   - Eliminates false positives from mtime changes (git clone, rsync, tar)
@@ -176,7 +176,7 @@ crc_index/
 
 #### Task 6B: Migrate API Calls ✅
 - **Status**: Complete
-- **Completed**: 2025-11-27 (commit TBD)
+- **Completed**: 2025-11-27 (commit d34a083)
 - **Changes**:
   - ✅ Replaced `InitCRCDatabase()` → `builddb.OpenDB()` in pkg/pkg.go:651-656
   - ✅ Replaced `CheckNeedsBuild()` → `NeedsBuild()` + `ComputePortCRCContent()` in pkg/pkg.go:689-697
@@ -204,7 +204,7 @@ crc_index/
 - **Objective**: Refactor to open BuildDB once per workflow; add UUID support; implement basic post-build CRC updates
 - **Why Split from 6E**: Combined 6D+6E would be 75-105 min (too large); split for incremental testing and easier rollback
 - **Scope**:
-  1. Add `github.com/google/uuid` dependency
+  1. Add `github.com/google/uuid` dependency (uses UUID v4 - random, 122-bit uniqueness)
   2. Refactor to open BuildDB once at workflow start (eliminate races)
   3. Update `MarkPackagesNeedingBuild()` to accept buildDB parameter
   4. Update `DoBuild()` to accept buildDB parameter
@@ -212,18 +212,39 @@ crc_index/
   6. Implement post-build CRC update in buildPackage()
   7. Implement post-build package index update (generate UUID)
   8. Update callers in cmd/build.go and main.go
+  9. Add buildDB.Close() to signal handler cleanup (critical for clean shutdown)
 - **Changes**:
-  - `go.mod`: Add `github.com/google/uuid v1.6.0`
+  - `go.mod`: Add `github.com/google/uuid v1.6.0` (uuid.New() generates UUID v4)
   - `build/build.go` (~40 lines): Add buildDB to BuildContext, update DoBuild signature, implement CRC update
   - `pkg/pkg.go` (~10 lines): Update MarkPackagesNeedingBuild signature, remove internal open/close
-  - `cmd/build.go` (~15 lines): Open buildDB, pass to functions
-  - `main.go` (~15 lines): Open buildDB, pass to functions
+  - `cmd/build.go` (~20 lines): Open buildDB, add to signal handler cleanup, pass to functions
+  - `main.go` (~20 lines): Open buildDB, add to signal handler cleanup, pass to functions
 - **BuildDB Lifecycle**: Open → MarkPackagesNeedingBuild → DoBuild → buildPackage (CRC update) → Close
+- **Database Path**: `${BuildBase}/builds.db` (e.g., `/build/builds.db` - configurable via profile)
 - **Concurrency Safety**: 
   - bbolt uses MVCC (multiple concurrent readers, single writer with automatic locking)
   - Different workers update different keys (no contention)
-  - Single DB handle shared across goroutines is safe
-- **Result**: BuildDB opened once per workflow; CRC updates after successful builds; no open/close races
+    - Example: Worker 1 writes UpdateCRC("editors/vim", crc1) while Worker 2 writes UpdateCRC("lang/python", crc2)
+    - bbolt serializes these writes automatically (each gets exclusive write lock briefly)
+    - Worst case: Brief wait for lock (microseconds), no data corruption possible
+  - Single DB handle shared across goroutines is safe (bbolt is thread-safe)
+- **Signal Handling**: 
+  - Add buildDB.Close() to signal handler cleanup (Ctrl+C, SIGTERM, SIGHUP)
+  - Prevents incomplete transactions and file locks on interrupted builds
+  - Implementation: Create buildDBClose closure, call from signal handler before os.Exit()
+- **UUID Rationale**: UUID v4 chosen (random) over v1 (timestamp+MAC):
+  - No temporal ordering needed (StartTime field provides that)
+  - No MAC address exposure (privacy concern)
+  - 122 bits of randomness (2^122 possibilities, collision probability negligible)
+  - uuid.New() is cryptographically random and thread-safe
+- **Result**: BuildDB opened once per workflow; CRC updates after successful builds; no open/close races; clean shutdown on signals
+- **Testing Strategy**:
+  1. Compilation: `go build -v` (verify no errors)
+  2. Single build: `./go-synth build editors/vim` (check no CRC warnings)
+  3. Rebuild same: Should show "up-to-date" (CRC match detected)
+  4. Modify port: `touch $DPortsPath/editors/vim/Makefile`, rebuild (should detect change)
+  5. Database file: Verify `ls -lh $BuildBase/builds.db` exists and grows
+  6. Signal handling: Ctrl+C during build, verify clean shutdown and no stale locks
 - **Note**: Full build record lifecycle (SaveRecord/UpdateRecordStatus) deferred to Task 6E
 
 #### Task 6E: Build Record Lifecycle (pending)
@@ -241,8 +262,17 @@ crc_index/
   - `pkg/pkg.go` (~3 lines): Add BuildUUID field to Package struct
   - `build/build.go` (~35 lines): SaveRecord at start, UpdateRecordStatus on success/failure
 - **Error Handling**: Non-fatal for all record operations (log warnings, don't fail builds)
+  - **Recovery Path**: Failed CRC/index updates cause next build to rebuild package (eventually consistent)
+  - **Detection**: Warning messages in build log indicate database issues (actionable by user)
+  - **Example**: Build succeeds but UpdateCRC fails → next build detects CRC mismatch → rebuilds package → system converges to correct state
 - **Result**: Complete build record tracking; database reflects build history (success/failed/interrupted)
 - **Impact**: Failed builds tracked; interrupted builds leave "running" status (detectable)
+- **Testing Strategy**:
+  1. Successful build: Build port, query database for "success" status record
+  2. Failed build: Force failure (e.g., corrupt Makefile), check for "failed" status
+  3. Interrupted build: Ctrl+C mid-build, check for "running" status (detectable orphan)
+  4. UUID linkage: Verify packages bucket points to correct build UUID
+  5. Database query: Use bbolt CLI or custom tool to inspect build records
 
 ### Task 7: Error Types (1 hour)
 - Add `ErrNotFound`, `ErrCorrupted`, `ErrInvalidUUID`, etc.
@@ -277,7 +307,7 @@ crc_index/
 
 ### Task 12: Integration with CLI (2 hours)
 - Update `go-synth build` command to use new DB
-- Add `--db-path` flag (default: `~/.go-synth/builds.db`)
+- Add `--db-path` flag to override default `${BuildBase}/builds.db`
 - Maintain backward compatibility with old CRC file
 
 **Total Estimated Effort**: 12-16 hours
@@ -330,9 +360,10 @@ crc_index/
 - **Import Path**: `import bolt "go.etcd.io/bbolt"`
 
 ### Database Location
-- **Decision**: `~/.go-synth/builds.db` (default)
-- **Override**: `--db-path` CLI flag
-- **Rationale**: User-specific, not tied to ports tree location
+- **Decision**: `${BuildBase}/builds.db` (default, e.g., `/build/builds.db`)
+- **Current Implementation**: Uses `cfg.BuildBase` from configuration
+- **Future**: `--db-path` CLI flag for override (Task 12)
+- **Rationale**: Co-located with build artifacts; BuildBase is configurable per profile
 
 ### Key Format: packages Bucket
 - **Decision**: Use `portdir@version` as key (e.g., `lang/go@default`)
