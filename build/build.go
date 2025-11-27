@@ -1,3 +1,60 @@
+// Package build provides parallel port building orchestration with CRC-based
+// incremental builds. It manages worker pools, dependency ordering, and build
+// lifecycle tracking through an embedded bbolt database.
+//
+// The build system automatically skips unchanged ports by computing CRC32
+// checksums of port directories and comparing them with stored values from
+// previous successful builds.
+//
+// # Build Workflow
+//
+// 1. Parse port specifications and resolve dependencies
+// 2. Compute topological build order
+// 3. For each port:
+//   - Compute CRC32 of port directory
+//   - Check if port needs building (NeedsBuild)
+//   - Skip if CRC matches last successful build
+//   - Otherwise, build and update CRC on success
+//
+// 4. Track all builds with UUIDs, status, and timestamps
+//
+// # Basic Usage
+//
+//	cfg, _ := config.LoadConfig("", "default")
+//	logger, _ := log.NewLogger(cfg)
+//	db, _ := builddb.OpenDB("~/.go-synth/builds.db")
+//	defer db.Close()
+//
+//	pkgRegistry := pkg.NewPackageRegistry()
+//	stateRegistry := pkg.NewBuildStateRegistry()
+//	packages, _ := pkg.ParsePortList([]string{"editors/vim"}, cfg, stateRegistry, pkgRegistry)
+//	pkg.ResolveDependencies(packages, cfg, stateRegistry, pkgRegistry)
+//
+//	stats, cleanup, _ := DoBuild(packages, cfg, logger, db)
+//	defer cleanup()
+//
+//	fmt.Printf("Success: %d, Skipped: %d\n", stats.Success, stats.Skipped)
+//
+// # Incremental Builds
+//
+// The build system uses CRC-based change detection to skip unchanged ports:
+//
+//	First build:  editors/vim -> builds (no CRC stored)
+//	Second build: editors/vim -> skipped (CRC match)
+//	After edit:   editors/vim -> rebuilds (CRC mismatch)
+//
+// # Build Records
+//
+// Every build creates a record in the database with:
+//   - Unique UUID for tracking
+//   - Status: "running" → "success" or "failed"
+//   - Timestamps: StartTime and EndTime
+//   - Port directory and version
+//
+// Query build history:
+//
+//	rec, _ := db.LatestFor("editors/vim", "9.0.0")
+//	fmt.Printf("Last build: %s at %s\n", rec.UUID, rec.StartTime)
 package build
 
 import (
@@ -36,7 +93,9 @@ type Worker struct {
 	mu        sync.Mutex
 }
 
-// BuildContext holds the build orchestration state
+// BuildContext holds the build orchestration state.
+// It manages worker pools, dependency tracking, and integrates with builddb
+// for CRC-based incremental builds and build record lifecycle tracking.
 type BuildContext struct {
 	cfg       *config.Config
 	logger    *log.Logger
@@ -50,8 +109,23 @@ type BuildContext struct {
 	wg        sync.WaitGroup
 }
 
-// DoBuild executes the main build process
-// Returns stats, cleanup function, and error
+// DoBuild executes the main build process with CRC-based incremental builds.
+//
+// For each package in the build order:
+//   - Computes CRC32 of port directory
+//   - Checks if rebuild is needed (CRC comparison)
+//   - Skips unchanged ports (increments stats.Skipped)
+//   - Builds changed ports with full lifecycle tracking
+//
+// Returns build statistics, cleanup function, and error.
+// The cleanup function must be called to unmount worker filesystems.
+//
+// Build lifecycle for each port:
+//  1. Generate UUID
+//  2. SaveRecord with status="running"
+//  3. Execute build phases
+//  4. UpdateRecordStatus to "success" or "failed"
+//  5. Update CRC and package index (on success only)
 func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
 	buildOrder := pkg.GetBuildOrder(packages)
@@ -222,7 +296,16 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 	}
 }
 
-// buildPackage builds a single package
+// buildPackage builds a single package with full lifecycle tracking.
+//
+// Lifecycle:
+//  1. Generate build UUID
+//  2. Create build record (status="running")
+//  3. Execute all build phases sequentially
+//  4. Update record status to "success" or "failed"
+//  5. On success: update CRC and package index
+//
+// Database operations are fail-safe - errors are logged but don't fail the build.
 func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	pkgLogger := log.NewPackageLogger(ctx.cfg, p.PortDir)
 	defer pkgLogger.Close()

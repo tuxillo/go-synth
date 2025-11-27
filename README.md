@@ -79,34 +79,75 @@ sudo dsynth cleanup
 
 ## Build Database
 
-go-synth uses an embedded **bbolt** database (`~/.go-synth/builds.db`) for build tracking and incremental builds:
+go-synth uses an embedded **bbolt** database (`~/.go-synth/builds.db`) for build tracking and CRC-based incremental builds.
 
-**Features:**
+### Features
+
 - **Build History**: Tracks every build with UUID, status (running/success/failed), timestamps
-- **Content-Based Incremental Builds**: Uses CRC32 checksums of port directories to skip unchanged packages
+- **Content-Based Incremental Builds**: Uses CRC32 checksums to skip unchanged packages automatically
 - **Package Versioning**: Maintains index of latest successful build for each port@version
-- **Crash-Safe**: ACID transactions ensure database integrity even during system failures
+- **Crash-Safe**: ACID transactions ensure database integrity during failures
 - **Zero Configuration**: Database created automatically on first build
 
-**How It Works:**
-1. Before building, computes CRC32 of port directory contents
-2. Compares with stored CRC - if unchanged, skips build
-3. On successful build, updates CRC and creates build record
-4. Build records track full lifecycle: running → success/failed
+### How Incremental Builds Work
 
-**Query Future (Planned):**
+1. **First Build**: Port builds normally, CRC computed and stored
+2. **Unchanged Rebuild**: CRC matches → port skipped automatically
+3. **After Modification**: CRC mismatch detected → port rebuilds
+4. **Success**: New CRC stored, build record created
+5. **Failure**: CRC not updated, port rebuilds on next attempt
+
+**Example workflow:**
 ```bash
-# View build history
-dsynth db list editors/vim
+# First build
+$ sudo dsynth build editors/vim
+Building editors/vim... success (5m 30s)
 
-# Find latest successful build
-dsynth db latest editors/vim@default
+# Rebuild immediately (no changes)
+$ sudo dsynth build editors/vim
+editors/vim (CRC match, skipped)
+Progress: 0/0 (S:0 F:0 Skipped:1)
 
-# Check if rebuild needed
-dsynth db needs-build editors/vim
+# Edit port Makefile
+$ sudo vi /usr/dports/editors/vim/Makefile
+
+# Rebuild after change
+$ sudo dsynth build editors/vim
+Building editors/vim... success (5m 35s)
 ```
 
-The database replaces the legacy binary CRC file with a proper embedded database providing unlimited capacity, indexed lookups, and full build history tracking.
+### Build Statistics
+
+Every build shows statistics:
+- **Total**: Packages that needed building
+- **Success**: Successfully built
+- **Failed**: Build failures
+- **Skipped**: Unchanged ports (CRC match)
+
+```bash
+Progress: 15/20 (S:12 F:3 Skipped:5) 2h 15m elapsed
+#            ↑    ↑   ↑        ↑
+#         done  success fail  CRC skip
+```
+
+### Query Build History (Planned)
+
+Future CLI commands for database queries:
+```bash
+# View build history for a port
+dsynth db history editors/vim
+
+# Show last successful build
+dsynth db latest editors/vim
+
+# List all failed builds
+dsynth db failures
+
+# Show CRC for a port
+dsynth db crc editors/vim
+```
+
+**Current Implementation**: Phase 3 complete - all core features working
 
 ---
 
