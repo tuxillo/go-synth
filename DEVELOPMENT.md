@@ -182,10 +182,10 @@ None - all dependencies resolved
 
 ---
 
-## Phase 2: Minimal BuildDB (bbolt) ⚪
+## Phase 2: Minimal BuildDB (bbolt) 🟡
 
-**Status**: 🟡 Ready to Begin (0% Complete)  
-**Timeline**: Not started | Target: TBD (12-16 hours estimated)  
+**Status**: 🟡 In Progress (8% Complete, 1/12 tasks)  
+**Timeline**: Started 2025-11-27 | Target: TBD (11-15 hours remaining)  
 **Dependencies**: Phase 1 completion (✅ 9/9 exit criteria met)
 
 ### 🎯 Goals
@@ -193,16 +193,16 @@ None - all dependencies resolved
 - Enable incremental builds by skipping unchanged ports
 - Replace custom binary CRC database with proper embedded database
 
-### 📦 Main Deliverables (0/6 Complete)
-- ❌ bbolt integration (`go.etcd.io/bbolt` dependency)
+### 📦 Main Deliverables (1/6 Complete)
+- ✅ bbolt integration (`go.etcd.io/bbolt` dependency) - commit 6a6ff7b
 - ❌ Database schema with three buckets: `builds`, `packages`, `crc_index`
 - ❌ BuildRecord API for CRUD operations
 - ❌ NeedsBuild() function using CRC comparison
 - ❌ Migration from existing `builddb/crc.go` to bbolt
 - ❌ Unit and integration tests
 
-### 🚧 Task Breakdown (12 tasks)
-1. ❌ Add bbolt dependency (30 min)
+### 🚧 Task Breakdown (1/12 complete)
+1. ✅ Add bbolt dependency (DONE 2025-11-27)
 2. ❌ Create DB wrapper with Open/Close (1 hour)
 3. ❌ Build record CRUD operations (2 hours)
 4. ❌ Package tracking (LatestFor) (1 hour)

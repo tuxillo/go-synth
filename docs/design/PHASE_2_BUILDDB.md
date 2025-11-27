@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 0% Complete - Ready to Begin  
+**Status**: 🟡 8% Complete (1/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -99,7 +99,7 @@ crc_index/
 ## Remaining Work for Phase 2 Completion
 
 ### High Priority (Core Implementation)
-1. ❌ **Add bbolt dependency** - Update `go.mod` with `go.etcd.io/bbolt`
+1. ✅ **Add bbolt dependency** - Update `go.mod` with `go.etcd.io/bbolt` (DONE: commit 6a6ff7b)
 2. ❌ **Create DB wrapper** - Implement `DB` struct with Open/Close
 3. ❌ **Implement bucket creation** - Initialize 3 buckets on first open
 4. ❌ **Build record CRUD** - SaveRecord, GetRecord, UpdateRecordStatus
@@ -118,10 +118,12 @@ crc_index/
 
 ## Current Task Breakdown
 
-### Task 1: Add bbolt Dependency (30 min)
-- Run `go get go.etcd.io/bbolt@latest`
-- Update `go.mod` and `go.sum`
-- Verify compilation
+### Task 1: Add bbolt Dependency ✅ COMPLETE
+- ✅ Run `go get go.etcd.io/bbolt@latest`
+- ✅ Update `go.mod` and `go.sum`
+- ✅ Verify compilation
+- **Completed**: 2025-11-27 (commit 6a6ff7b)
+- **Result**: Added go.etcd.io/bbolt v1.4.3, upgraded Go 1.21→1.23, golang.org/x/sys v0.15.0→v0.29.0
 
 ### Task 2: Create Database Wrapper (1 hour)
 - Create `builddb/db.go` with `DB` struct
@@ -191,10 +193,10 @@ crc_index/
 
 ## Deliverables
 
-### Completed
-- None yet (Phase 2 not started)
+### Completed (1/6)
+- ✅ bbolt dependency added (go.etcd.io/bbolt v1.4.3)
 
-### Incomplete
+### Incomplete (5/6)
 - ❌ bbolt integration (`builddb/db.go`)
 - ❌ Build record CRUD operations
 - ❌ CRC indexing with NeedsBuild logic
@@ -221,7 +223,7 @@ crc_index/
 - ✅ Optional migration utility to import old CRC data
 - ✅ CLI updated to use new database
 
-**Phase 2 Status**: Ready to begin. Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. No blockers.
+**Phase 2 Status**: In progress (1/12 tasks, 8% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Task 1 (bbolt dependency) completed 2025-11-27. No blockers.
 
 ## Dependencies
 - Phase 1 (`pkg` provides stable `PortDir`, `Version`, and `Package` API)
