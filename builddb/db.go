@@ -264,3 +264,96 @@ func (db *DB) UpdateRecordStatus(uuid, status string, endTime time.Time) error {
 
 	return nil
 }
+
+// LatestFor retrieves the most recent successful build record for a given port
+// directory and version combination.
+//
+// The function looks up the package index using the key format "portdir@version"
+// (e.g., "editors/vim@9.0.1") and returns the full BuildRecord for the associated
+// UUID. Returns nil with no error if no record exists for this port/version.
+//
+// Parameters:
+//   - portDir: The port directory path (e.g., "editors/vim")
+//   - version: The version string (e.g., "9.0.1")
+//
+// Returns:
+//   - *BuildRecord: The latest successful build record, or nil if not found
+//   - error: Any database or unmarshaling errors
+func (db *DB) LatestFor(portDir, version string) (*BuildRecord, error) {
+	key := []byte(portDir + "@" + version)
+	var rec *BuildRecord
+
+	err := db.db.View(func(tx *bolt.Tx) error {
+		packages := tx.Bucket([]byte("packages"))
+		if packages == nil {
+			return fmt.Errorf("packages bucket not found")
+		}
+
+		// Look up UUID in packages bucket
+		uuidBytes := packages.Get(key)
+		if uuidBytes == nil {
+			// No record found - not an error, just means no builds yet
+			return nil
+		}
+
+		// Retrieve the full record from builds bucket
+		builds := tx.Bucket([]byte("builds"))
+		if builds == nil {
+			return fmt.Errorf("builds bucket not found")
+		}
+
+		recordBytes := builds.Get(uuidBytes)
+		if recordBytes == nil {
+			// UUID points to non-existent record - data inconsistency
+			return fmt.Errorf("package index references non-existent build UUID: %s", string(uuidBytes))
+		}
+
+		// Unmarshal the build record
+		rec = &BuildRecord{}
+		if err := json.Unmarshal(recordBytes, rec); err != nil {
+			return fmt.Errorf("failed to unmarshal build record: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve latest build for %s@%s: %w", portDir, version, err)
+	}
+
+	return rec, nil
+}
+
+// UpdatePackageIndex updates the package index to point to the latest successful
+// build for a given port directory and version combination.
+//
+// This function should be called when a build completes successfully to ensure
+// the package index tracks the most recent successful build. The key format is
+// "portdir@version" (matching the flavor syntax used throughout go-synth).
+//
+// Parameters:
+//   - portDir: The port directory path (e.g., "editors/vim")
+//   - version: The version string (e.g., "9.0.1")
+//   - uuid: The UUID of the successful build to track
+//
+// Returns:
+//   - error: Any database errors that occur during the update
+func (db *DB) UpdatePackageIndex(portDir, version, uuid string) error {
+	key := []byte(portDir + "@" + version)
+	value := []byte(uuid)
+
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		packages := tx.Bucket([]byte("packages"))
+		if packages == nil {
+			return fmt.Errorf("packages bucket not found")
+		}
+
+		return packages.Put(key, value)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update package index for %s@%s: %w", portDir, version, err)
+	}
+
+	return nil
+}

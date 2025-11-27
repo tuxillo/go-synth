@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 25% Complete (3/12 tasks)  
+**Status**: 🟡 33% Complete (4/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -141,10 +141,14 @@ crc_index/
 - **Completed**: 2025-11-27 (commit TBD)
 - **Result**: Added 3 CRUD methods (152 lines), full save/retrieve/update cycle working
 
-### Task 4: Package Tracking (1 hour)
-- Implement `LatestFor(portDir, version string) (*BuildRecord, error)`
-- Update `packages` bucket on successful builds
-- Use `portdir@version` as key format
+### Task 4: Package Tracking (1 hour) ✅
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Result**: Implemented LatestFor() and UpdatePackageIndex() methods (~100 lines)
+  - `LatestFor(portDir, version)` retrieves latest successful build via packages bucket
+  - `UpdatePackageIndex(portDir, version, uuid)` updates packages bucket on successful builds
+  - Key format: `portdir@version` (e.g., "editors/vim@9.0.1")
+  - Validated with comprehensive test covering nil cases, CRUD cycle, and index updates
 
 ### Task 5: CRC Operations (1.5 hours)
 - Implement `NeedsBuild(portDir, currentCRC) (bool, error)`
@@ -197,12 +201,13 @@ crc_index/
 
 ## Deliverables
 
-### Completed (3/6)
+### Completed (4/6)
 - ✅ bbolt dependency added (go.etcd.io/bbolt v1.4.3)
 - ✅ bbolt integration (`builddb/db.go` with OpenDB/Close)
 - ✅ Build record CRUD operations (SaveRecord, GetRecord, UpdateRecordStatus)
+- ✅ Package tracking (LatestFor, UpdatePackageIndex)
 
-### Incomplete (3/6)
+### Incomplete (2/6)
 - ❌ CRC indexing with NeedsBuild logic
 - ❌ Unit and integration tests
 - ❌ Migration from old CRC file
