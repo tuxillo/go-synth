@@ -542,7 +542,7 @@ type ExecCommand struct {
 ## Phase 5: Minimal REST API ⚪
 
 **Status**: ⚪ Planned (Optional)  
-**Timeline**: Not started | Target: TBD  
+**Timeline**: Not started | Target: ~15 hours  
 **Dependencies**: Phases 1-3 completion
 
 ### 🎯 Goals
@@ -556,11 +556,29 @@ type ExecCommand struct {
 - JSON request/response formats
 - Integration with Builder and BuildDB
 
-### ✓ Exit Criteria
-- Can start build via POST /builds
-- Can poll build status via GET /builds/:id
-- Authentication rejects invalid API keys
-- Integration tests cover happy path
+### 📋 Task Breakdown (0/8 complete)
+
+- [ ] 1. Define API Package Structure (1h)
+- [ ] 2. Implement API Key Middleware (1.5h)
+- [ ] 3. Implement POST /api/v1/builds Handler (3h)
+- [ ] 4. Implement GET /api/v1/builds/:id Handler (2h)
+- [ ] 5. Implement GET /api/v1/builds Handler (2h)
+- [ ] 6. Add HTTP Router and Server Setup (2h)
+- [ ] 7. Add Configuration and Documentation (1.5h)
+- [ ] 8. Integration Tests (2h)
+
+**Estimated Total**: ~15 hours | **Critical Path**: 12 hours
+
+### ✓ Exit Criteria (0/8 complete)
+
+- [ ] POST /api/v1/builds creates and starts builds
+- [ ] GET /api/v1/builds/:id returns build status
+- [ ] GET /api/v1/builds lists all builds
+- [ ] API key authentication works
+- [ ] Invalid keys return 401
+- [ ] Integration tests pass
+- [ ] Documentation complete
+- [ ] `generate-api-key` command works
 
 ### 🌐 Proposed Endpoints
 ```
@@ -576,91 +594,167 @@ GET /api/v1/builds
 ```
 
 ### 📖 Documentation
-- **[Phase 5 Plan](docs/design/PHASE_5_MIN_API.md)** - Complete specification
+- **[Phase 5 Plan](docs/design/PHASE_5_MIN_API.md)** - High-level specification
+- **[Phase 5 TODO](docs/design/PHASE_5_TODO.md)** - Detailed task list (NEW)
 
 ### 🔑 Key Decisions
 - Polling-based (no WebSocket/SSE for MVP)
-- Simple router, minimal dependencies
+- Simple router using Go 1.22+ ServeMux
 - Optional phase - can be deferred if not needed
+- SHA256 hashed API keys for security
+
+### 📊 Code Impact
+- New package: `api/` (~800 lines)
+- Config changes: +10 lines
+- Documentation: ~200 lines
 
 ---
 
-## Phase 6: Testing Strategy ⚪
+## Phase 6: Testing Strategy 🟡
 
-**Status**: ⚪ Planned  
-**Timeline**: Not started | Target: TBD  
+**Status**: 🟡 Partially Complete (78% coverage, needs completion)  
+**Timeline**: Not started | Target: ~8 hours remaining  
 **Dependencies**: Phases 1-3 completion
 
 ### 🎯 Goals
-- Ensure reliability of core libraries
+- Complete test coverage across all packages (target >80%)
 - Validate end-to-end build flow
 - Set up continuous integration
 
-### 📦 Main Deliverables
-- Comprehensive unit tests for pkg, builddb, builder
-- Integration tests for full build pipeline
-- Test fixtures (minimal test ports or mocks)
-- CI configuration (GitHub Actions or similar)
+### 📦 Current State (REALITY CHECK ✅)
 
-### ✓ Exit Criteria
-- All packages have >80% test coverage
-- Integration test successfully builds 1-3 small ports
-- CI runs on every PR with race detector
-- Failure tests validate error propagation
+**Excellent existing coverage**:
+- **pkg**: 2,313 test lines (115% coverage) - ✅ Complete!
+- **builddb**: 2,120 test lines (252% coverage) - ✅ Complete!
+- **Total existing**: 4,875 test lines across 13 test files
 
-### 🧪 Test Coverage
-- **pkg**: Parse, Resolve, TopoOrder, cycle detection
-- **builddb**: CRUD operations, NeedsBuild, CRC updates
-- **builder**: Worker lifecycle, failure propagation, stats
-- **Integration**: End-to-end build with real ports
+**Gaps to address**:
+- **build**: 442 lines (54% coverage) - needs expansion
+- **config**: 0 lines (0% coverage) - needs tests
+- **log**: 0 lines (0% coverage) - needs tests
+- **mount**: 0 lines (Phase 4 will create environment tests)
+
+### 📋 Task Breakdown (0/6 complete)
+
+- [ ] 1. Add Build Package Tests (2h) - expand to >80%
+- [ ] 2. Add Config Package Tests (1.5h) - 0% → 80%
+- [ ] 3. Add Log Package Tests (1.5h) - 0% → 70%
+- [ ] 4. Add Mount Package Tests (1h) - integrate with Phase 4
+- [ ] 5. CI/CD Integration (1.5h) - GitHub Actions setup
+- [ ] 6. Testing Documentation (0.5h) - guide and conventions
+
+**Estimated Total**: ~8 hours | **Critical Path**: 5 hours
+
+### ✓ Exit Criteria (0/7 complete)
+
+- [ ] All packages have >80% test coverage (>70% for log)
+- [ ] Integration test builds 1-3 ports end-to-end
+- [ ] CI runs on every PR with race detector
+- [ ] All tests pass without data races
+- [ ] Failure tests validate error propagation
+- [ ] Documentation explains testing approach
+- [ ] Make targets work for local testing
+
+### 🧪 Test Coverage Summary
+
+| Package | Current | Target | Status |
+|---------|---------|--------|--------|
+| pkg | 115% | 80% | ✅ Excellent |
+| builddb | 252% | 80% | ✅ Excellent |
+| build | 54% | 80% | 🟡 Needs work |
+| config | 0% | 80% | ❌ Missing |
+| log | 0% | 70% | ❌ Missing |
+| mount | 0% | 70% | 🔄 Phase 4 |
+| **Overall** | **78%** | **80%** | 🟡 Close |
 
 ### 📖 Documentation
-- **[Phase 6 Plan](docs/design/PHASE_6_TESTING.md)** - Complete specification
+- **[Phase 6 Plan](docs/design/PHASE_6_TESTING.md)** - High-level specification
+- **[Phase 6 TODO](docs/design/PHASE_6_TODO.md)** - Detailed task list (NEW)
 
 ### 🔑 Key Decisions
 - Use standard `go test` with race detector
-- Minimal test ports or mocked execution
+- Focus on gaps: build, config, log packages
+- Leverage existing excellent pkg/builddb coverage
 - Out of scope: benchmarks, chaos testing (defer to post-MVP)
+
+### 📊 Code Impact
+- New tests: ~900 lines
+- CI config: ~150 lines
+- Documentation: ~300 lines
 
 ---
 
 ## Phase 7: Integration & Migration ⚪
 
-**Status**: ⚪ Planned  
-**Timeline**: Not started | Target: TBD  
+**Status**: ⚪ Planned (Final Phase - Completes MVP)  
+**Timeline**: Not started | Target: ~12 hours  
 **Dependencies**: Phases 1-6 completion
 
 ### 🎯 Goals
 - Wire all new components into existing CLI
 - Provide migration path from legacy CRC to BuildDB
 - Maintain backward compatibility during transition
+- **Complete the go-synth MVP** 🎉
 
 ### 📦 Main Deliverables
 - Updated CLI commands using new pipeline
-- BuildDB initialization with fallback to legacy CRC
+- BuildDB initialization with automatic migration
 - Migration tooling for existing installations
 - Updated logging with UUID tracking
+- End-to-end integration tests
 
-### ✓ Exit Criteria
-- End-to-end build via CLI works correctly
-- CRC skip validated across two consecutive runs
-- Migration from file-based CRC completes successfully
-- All existing CLI commands remain functional
+### 📋 Task Breakdown (0/9 complete)
+
+- [ ] 1. Create Migration Package (2h)
+- [ ] 2. Wire CLI Build Commands (3h)
+- [ ] 3. Wire Other CLI Commands (2h)
+- [ ] 4. Add UUID Tracking to Logs (1.5h)
+- [ ] 5. Update Configuration (1h)
+- [ ] 6. Create Initialization Command (1h)
+- [ ] 7. End-to-End Integration Tests (2h)
+- [ ] 8. Update Documentation (1.5h)
+- [ ] 9. Update DEVELOPMENT.md (0.5h)
+
+**Estimated Total**: ~14.5 hours | **Critical Path**: 10.5 hours
+
+### ✓ Exit Criteria (0/8 complete)
+
+- [ ] End-to-end build via CLI works correctly
+- [ ] CRC skip validated across two consecutive runs
+- [ ] Migration from file-based CRC completes successfully
+- [ ] All existing CLI commands remain functional
+- [ ] UUID tracking visible in log files
+- [ ] `dsynth init` sets up new environment
+- [ ] Documentation complete and accurate
+- [ ] E2E tests pass
 
 ### ⚙️ CLI Mapping
-- `dsynth build [ports...]` → uses new pipeline
-- `dsynth force` → bypasses NeedsBuild check
-- `dsynth upgrade-system` → uses pkg for installed packages
+- `dsynth build [ports...]` → uses pkg → builddb → build → environment
+- `dsynth force` → bypasses CRC check (NeedsBuild)
+- `dsynth init` → creates BuildDB, migrates legacy CRC
+- `dsynth status` → queries BuildDB
+- `dsynth reset-db` → removes BuildDB
 - Legacy commands continue to work
 
 ### 📖 Documentation
-- **[Phase 7 Plan](docs/design/PHASE_7_INTEGRATION.md)** - Complete specification
+- **[Phase 7 Plan](docs/design/PHASE_7_INTEGRATION.md)** - High-level specification
+- **[Phase 7 TODO](docs/design/PHASE_7_TODO.md)** - Detailed task list (NEW)
 
 ### 🔑 Key Decisions
-- BuildDB primary, legacy CRC fallback
-- Lazy migration: populate on successful builds
-- Keep existing log file structure
-- Add UUID to log messages for traceability
+- **Automatic migration**: Detect and migrate legacy CRC on first run
+- **Backup legacy data**: Always backup before migration
+- **Graceful degradation**: Commands work without database if possible
+- **Minimal breaking changes**: Preserve existing CLI interface
+- **UUID in logs**: Short UUID (8 chars) for readability
+
+### 📊 Code Impact
+- New package: `migration/` (~300 lines)
+- CLI updates: `main.go` (+200 lines)
+- Log enhancements: +100 lines
+- Documentation: ~500 lines
+
+### 🎉 Milestone
+**Phase 7 completion = go-synth MVP complete!**
 
 ---
 
