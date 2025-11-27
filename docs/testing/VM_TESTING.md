@@ -136,7 +136,84 @@ Phase 4 of `dsynth-go` implements a complex worker environment with 27 mount poi
 
 ## Quick Start
 
-### First-Time Setup (Run Once)
+### First-Time Setup (Automated - Recommended)
+
+**NEW**: Fully automated installation using DragonFlyBSD's PFI (Platform Firmware Interface) system, adapted from the [golang/build](https://github.com/golang/build/tree/master/env/dragonfly-amd64) automation approach.
+
+**Total time: ~15 minutes, zero interaction required.**
+
+#### Prerequisites Check
+
+```bash
+make vm-check-prereqs
+```
+
+Ensures you have:
+- `qemu-system-x86_64` (already installed on Ubuntu 24.04)
+- `genisoimage` (install with: `sudo apt-get install genisoimage`)
+
+#### Step 1: Download ISO
+
+```bash
+cd /home/antonioh/s/go-synth
+make vm-setup
+```
+
+Downloads DragonFlyBSD 6.4.2 ISO (~300MB) to `~/.go-synth/vm/`.
+
+#### Step 2: Automated Installation
+
+```bash
+make vm-auto-install
+```
+
+This single command runs three automated phases:
+
+**Phase 1: OS Installation** (~5 min)
+- Partitions and formats disk (`fdisk`, `disklabel`, `newfs`)
+- Installs DragonFlyBSD base system (`cpdup` from ISO)
+- Configures boot loader with serial console
+- Sets up networking (DHCP on em0)
+- Enables SSH server with root login
+- Powers off automatically
+
+**Phase 2: Package Updates** (~3 min)
+- Boots installed system
+- Updates pkg repository metadata
+- Upgrades all packages to latest versions
+- Installs required packages:
+  - `go` - Go compiler
+  - `bash` - Bash shell
+  - `git` - Version control
+  - `rsync` - File synchronization
+  - `curl`, `wget` - HTTP clients
+  - `doas` - Privilege escalation
+- Powers off automatically
+
+**Phase 3: Provisioning** (~2 min)
+- Boots system again
+- Configures doas for passwordless root
+- Creates directories:
+  - `/build/Workers` - Worker chroot environments
+  - `/usr/dports` - Ports tree location
+- Sets up Go environment (GOPATH, GOCACHE)
+- Configures bash as default shell
+- Verifies all configurations
+- Creates snapshot for quick restoration
+- Powers off automatically
+
+**Result**: Clean, provisioned VM ready for Phase 4 testing.
+
+#### Step 3: Start Testing
+
+```bash
+make vm-start   # Boot VM (30 seconds)
+make vm-quick   # Run Phase 4 tests
+```
+
+---
+
+### First-Time Setup (Manual - Alternative)
 
 This takes ~15 minutes including manual OS installation.
 
@@ -209,12 +286,14 @@ This saves the VM state to `vm/dfly-vm-clean.qcow2`. You can now restore to this
 
 ## Makefile Targets
 
-### Lifecycle Management
+### Setup & Lifecycle Management
 
 | Target | Description |
 |--------|-------------|
-| `make vm-setup` | Download ISO, create disk (first-time only) |
-| `make vm-install` | Boot VM for OS installation (first-time only) |
+| `make vm-check-prereqs` | Check for QEMU and genisoimage (run first) |
+| `make vm-setup` | Download DragonFlyBSD ISO (first-time only) |
+| `make vm-auto-install` | **Fully automated installation** (15 min, zero interaction) |
+| `make vm-install` | Boot VM for manual OS installation (alternative to auto-install) |
 | `make vm-snapshot` | Save current VM state as clean snapshot |
 | `make vm-start` | Start the VM |
 | `make vm-stop` | Stop the VM gracefully |
@@ -222,6 +301,7 @@ This saves the VM state to `vm/dfly-vm-clean.qcow2`. You can now restore to this
 | `make vm-restore` | Restore VM to clean snapshot |
 | `make vm-ssh` | SSH into the running VM |
 | `make vm-status` | Show VM status and info |
+| `make vm-clean-phases` | Remove temporary phase ISOs |
 
 ### Testing Targets
 
@@ -361,6 +441,119 @@ make vm-quick
 ---
 
 ## Troubleshooting
+
+### Automated Installation Issues
+
+#### Phase 1 (Installation) Fails
+
+**Symptom**: `vm-auto-install` stops during Phase 1
+
+**Common Causes**:
+1. **ISO not found**: Run `make vm-setup` first
+2. **Disk already exists**: Remove with `rm ~/.go-synth/vm/dfly-vm.qcow2` and retry
+3. **Insufficient disk space**: Need 20GB free
+4. **Device naming mismatch**: DragonFlyBSD version differences
+
+**Debug**:
+```bash
+# Check phase1 script manually
+cat scripts/vm/phase1-install.sh
+
+# Run phase1 alone (advanced)
+./scripts/vm/make-phase-iso.sh scripts/vm/phase1-install.sh /tmp/phase1.iso
+./scripts/vm/run-phase.sh 1 /tmp/phase1.iso
+```
+
+#### Phase 2 (Package Updates) Fails
+
+**Symptom**: `vm-auto-install` stops during Phase 2
+
+**Common Causes**:
+1. **Network issues**: Pkg repository unreachable
+2. **Package unavailable**: Specific package version missing
+3. **Disk full**: OS installation took more space than expected
+
+**Debug**:
+```bash
+# Boot VM manually to inspect
+qemu-system-x86_64 -hda ~/.go-synth/vm/dfly-vm.qcow2 -m 2G -nographic
+
+# Inside VM:
+pkg update -f
+pkg search go
+df -h
+```
+
+#### Phase 3 (Provisioning) Fails
+
+**Symptom**: `vm-auto-install` stops during Phase 3
+
+**Common Causes**:
+1. **Doas configuration error**: Syntax issue in doas.conf
+2. **Go not found**: Phase 2 didn't complete successfully
+3. **Directory creation fails**: Permissions issue
+
+**Debug**:
+```bash
+# Check provisioning script
+cat scripts/vm/phase3-provision.sh
+
+# Boot and check manually
+make vm-start
+make vm-ssh
+# Inside VM:
+command -v go
+ls -ld /build/Workers /usr/dports
+cat /usr/local/etc/doas.conf
+```
+
+#### genisoimage Not Found
+
+**Symptom**: `make vm-auto-install` fails with "genisoimage not found"
+
+**Solution**:
+```bash
+sudo apt-get install genisoimage
+```
+
+#### Automation Hangs Indefinitely
+
+**Symptom**: Phase script runs but never completes
+
+**Possible Causes**:
+1. **Waiting for user input**: Script expects interactive response
+2. **Network timeout**: Pkg operations stalled
+3. **Disk I/O issues**: Slow host system
+
+**Solution**:
+```bash
+# Kill QEMU process
+pkill -9 qemu-system-x86_64
+
+# Check system resources
+df -h
+free -h
+iotop
+
+# Retry with more verbose output
+bash -x scripts/vm/auto-install.sh
+```
+
+#### Clean Up After Failed Automation
+
+```bash
+# Remove temporary phase ISOs
+make vm-clean-phases
+
+# Remove incomplete VM disk
+rm ~/.go-synth/vm/dfly-vm.qcow2
+
+# Start fresh
+make vm-setup
+make vm-auto-install
+```
+
+---
 
 ### VM Won't Boot
 
@@ -505,6 +698,147 @@ rm vm/dfly-vm-clean.qcow2
 ---
 
 ## Advanced Usage
+
+### Automated Installation Deep Dive
+
+#### PFI (Platform Firmware Interface)
+
+The automated installation uses DragonFlyBSD's **PFI** system, which allows unattended installation via ISO-embedded scripts.
+
+**How it works**:
+
+1. **Create PFI ISO**: Script + `pfi.conf` file
+   ```bash
+   ./scripts/vm/make-phase-iso.sh phase1-install.sh phase1.iso
+   ```
+
+2. **Boot with PFI ISO**: DragonFlyBSD installer detects `pfi.conf`
+   ```
+   pfi.conf contains: pfi_script=phase1-install.sh
+   ```
+
+3. **Automatic Execution**: Installer runs script, then powers off
+
+**Architecture** (adapted from [golang/build](https://github.com/golang/build/tree/master/env/dragonfly-amd64)):
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Host: Ubuntu 24.04                                       │
+│                                                           │
+│  make vm-auto-install                                    │
+│         │                                                 │
+│         ├──> Phase 1: OS Installation                    │
+│         │    ├── make-phase-iso.sh → phase1.iso          │
+│         │    ├── run-phase.sh 1 phase1.iso               │
+│         │    │   ├── QEMU boots with:                    │
+│         │    │   │   cd0: Installer ISO (boot)           │
+│         │    │   │   cd1: phase1.iso (script)            │
+│         │    │   │   cd2: Installer ISO (clean cpdup)    │
+│         │    │   │   da0: Empty disk                     │
+│         │    │   └── Installer auto-runs phase1-install.sh│
+│         │    └── Result: Installed OS, powered off       │
+│         │                                                 │
+│         ├──> Phase 2: Package Updates                    │
+│         │    ├── make-phase-iso.sh → phase2.iso          │
+│         │    ├── run-phase.sh 2 phase2.iso               │
+│         │    │   ├── QEMU boots with:                    │
+│         │    │   │   Boot: Disk (installed OS)           │
+│         │    │   │   cd0: phase2.iso (script)            │
+│         │    │   └── Auto-runs phase2-update.sh          │
+│         │    └── Result: Packages installed, powered off │
+│         │                                                 │
+│         ├──> Phase 3: Provisioning                       │
+│         │    ├── make-phase-iso.sh → phase3.iso          │
+│         │    ├── run-phase.sh 3 phase3.iso               │
+│         │    │   ├── QEMU boots with:                    │
+│         │    │   │   Boot: Disk (OS + packages)          │
+│         │    │   │   cd0: phase3.iso (script)            │
+│         │    │   └── Auto-runs phase3-provision.sh       │
+│         │    └── Result: Configured, powered off         │
+│         │                                                 │
+│         └──> Create Snapshot                             │
+│              cp dfly-vm.qcow2 dfly-vm-clean.qcow2        │
+│                                                           │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Phase Scripts**:
+
+- **phase1-install.sh**: Disk partitioning, OS installation, boot config
+- **phase2-update.sh**: `pkg update`, `pkg upgrade`, install Go/bash/git
+- **phase3-provision.sh**: doas, directories, Go env, SSH keys
+
+**Key Files**:
+
+```
+scripts/vm/
+├── config.sh             # Centralized configuration (DFLY_VERSION, etc.)
+├── make-phase-iso.sh     # Generic PFI ISO builder
+├── phase1-install.sh     # OS installation script
+├── phase2-update.sh      # Package update script
+├── phase3-provision.sh   # Provisioning script
+├── run-phase.sh          # QEMU boot helper for phases
+└── auto-install.sh       # Orchestrator (runs all 3 phases)
+```
+
+**Benefits**:
+
+1. **Zero Interaction**: No manual prompts or SSH required
+2. **Reproducible**: Same result every time
+3. **Fast**: 15 minutes vs 30+ minutes manual
+4. **CI-Ready**: Can be automated in CI/CD pipelines
+5. **Battle-Tested**: Go team uses this for their DragonFly builders
+
+**Customization**:
+
+Edit phase scripts to customize installation:
+
+```bash
+# Change Phase 3 to install additional packages
+vim scripts/vm/phase3-provision.sh
+# Add: pkg install -y vim tmux
+
+# Re-run automation
+make vm-destroy
+make vm-setup
+make vm-auto-install
+```
+
+#### Manual Phase Execution
+
+Run individual phases for debugging:
+
+```bash
+# Phase 1 only
+./scripts/vm/make-phase-iso.sh scripts/vm/phase1-install.sh /tmp/p1.iso
+./scripts/vm/run-phase.sh 1 /tmp/p1.iso
+
+# Phase 2 only (requires Phase 1 complete)
+./scripts/vm/make-phase-iso.sh scripts/vm/phase2-update.sh /tmp/p2.iso
+./scripts/vm/run-phase.sh 2 /tmp/p2.iso
+
+# Phase 3 only (requires Phase 1+2 complete)
+./scripts/vm/make-phase-iso.sh scripts/vm/phase3-provision.sh /tmp/p3.iso
+./scripts/vm/run-phase.sh 3 /tmp/p3.iso
+```
+
+#### Version Overrides
+
+Use different DragonFlyBSD versions:
+
+```bash
+# Use 6.6.0 instead of default 6.4.2
+DFLY_VERSION=6.6.0 make vm-setup
+DFLY_VERSION=6.6.0 make vm-auto-install
+```
+
+Or permanently change in `scripts/vm/config.sh`:
+
+```bash
+DFLY_VERSION="${DFLY_VERSION:-6.6.0}"
+```
+
+---
 
 ### Manual VM Control
 

@@ -41,10 +41,17 @@ vet:
 #
 # Prerequisites:
 #   - QEMU/KVM installed on host (qemu-system-x86_64)
+#   - genisoimage installed (for automated installation)
 #   - 20GB disk space for VM image
 #   - ~300MB for DragonFlyBSD ISO
 #
-# First-time setup (run once):
+# AUTOMATED SETUP (recommended):
+#   1. make vm-setup          # Download ISO (one-time)
+#   2. make vm-auto-install   # Fully automated installation (15 min, zero interaction)
+#   3. make vm-start          # Boot VM (30s)
+#   4. make vm-quick          # Run Phase 4 tests
+#
+# Manual setup (alternative):
 #   1. make vm-setup      # Download ISO, create disk
 #   2. make vm-install    # Boot VM for manual installation (10 min)
 #   3. SSH to VM and run: ./scripts/vm/provision.sh
@@ -66,20 +73,29 @@ VM_RSYNC=	rsync -avz --delete --exclude='.git' --exclude='vm/' -e "ssh -p 2222 -
 # VM Lifecycle Management
 # ------------------------------------------------------------------------------
 
+vm-check-prereqs:
+	@echo "==> Checking prerequisites..."
+	@command -v qemu-system-x86_64 >/dev/null 2>&1 || \
+		(echo "Error: qemu-system-x86_64 not found. Install with: sudo apt-get install qemu-system-x86" && exit 1)
+	@command -v genisoimage >/dev/null 2>&1 || \
+		(echo "Error: genisoimage not found. Install with: sudo apt-get install genisoimage" && exit 1)
+	@echo "✓ All prerequisites installed"
+
 vm-setup:
 	@echo "==> Setting up VM environment..."
 	@./scripts/vm/fetch-dfly-image.sh
-	@./scripts/vm/create-disk.sh
 	@echo ""
 	@echo "Setup complete! Next steps:"
-	@echo "  1. Run 'make vm-install' to boot VM for installation"
-	@echo "  2. Install DragonFlyBSD manually (follow prompts)"
-	@echo "  3. SSH to VM: ssh -p 2222 root@localhost"
-	@echo "  4. Run provisioning: ./scripts/vm/provision.sh"
-	@echo "  5. Run 'make vm-snapshot' to save clean state"
+	@echo "  AUTOMATED: Run 'make vm-auto-install' (recommended)"
+	@echo "  MANUAL:    Run 'make vm-install' for manual installation"
+
+vm-auto-install: vm-check-prereqs
+	@echo "==> Starting automated DragonFlyBSD installation..."
+	@echo ""
+	@./scripts/vm/auto-install.sh
 
 vm-install:
-	@echo "==> Booting VM for DragonFlyBSD installation..."
+	@echo "==> Booting VM for DragonFlyBSD installation (MANUAL MODE)..."
 	@echo "Follow the installation prompts. When done:"
 	@echo "  1. SSH to VM: ssh -p 2222 root@localhost"
 	@echo "  2. Run: ./scripts/vm/provision.sh"
@@ -117,6 +133,11 @@ vm-restore:
 	@./scripts/vm/restore-vm.sh
 	@echo ""
 	@echo "VM restored! Run 'make vm-start' to boot."
+
+vm-clean-phases:
+	@echo "==> Cleaning temporary phase ISOs..."
+	@rm -f $(HOME)/.go-synth/vm/phase*.iso
+	@echo "✓ Phase ISOs removed"
 
 vm-ssh:
 	@$(VM_SSH)
@@ -180,8 +201,13 @@ vm-quick: vm-sync
 vm-help:
 	@echo "VM Testing Infrastructure - DragonFlyBSD on QEMU/KVM"
 	@echo ""
-	@echo "FIRST-TIME SETUP:"
-	@echo "  vm-setup         Download ISO, create disk"
+	@echo "FIRST-TIME SETUP (AUTOMATED - recommended):"
+	@echo "  vm-check-prereqs Check for QEMU and genisoimage"
+	@echo "  vm-setup         Download DragonFlyBSD ISO"
+	@echo "  vm-auto-install  Fully automated installation (15 min, zero interaction)"
+	@echo ""
+	@echo "FIRST-TIME SETUP (MANUAL - alternative):"
+	@echo "  vm-setup         Download ISO"
 	@echo "  vm-install       Boot VM for manual installation"
 	@echo "  vm-snapshot      Save clean VM state (after provisioning)"
 	@echo ""
@@ -192,6 +218,7 @@ vm-help:
 	@echo "  vm-restore       Reset VM to clean snapshot"
 	@echo "  vm-ssh           SSH into VM"
 	@echo "  vm-status        Show VM status and info"
+	@echo "  vm-clean-phases  Remove temporary phase ISOs"
 	@echo ""
 	@echo "TESTING:"
 	@echo "  vm-sync          Sync project files to VM"
@@ -209,6 +236,7 @@ vm-help:
 	@echo "See docs/testing/VM_TESTING.md for complete documentation."
 
 .PHONY: all build install clean test fmt vet
-.PHONY: vm-setup vm-install vm-snapshot vm-start vm-stop vm-destroy vm-restore
+.PHONY: vm-check-prereqs vm-setup vm-auto-install vm-install vm-snapshot
+.PHONY: vm-start vm-stop vm-destroy vm-restore vm-clean-phases
 .PHONY: vm-ssh vm-status vm-sync vm-build vm-test-unit vm-test-integration
 .PHONY: vm-test-phase4 vm-test-e2e vm-test-all vm-quick vm-help
