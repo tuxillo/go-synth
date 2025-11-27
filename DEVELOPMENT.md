@@ -474,10 +474,10 @@ Phase 3 adds:
 - Comprehensive testing (unit + integration)
 - Remove direct chroot calls from build package
 
-### 🚧 Task Breakdown (2/10 complete - 20%) - Task 3 Ready
+### 🚧 Task Breakdown (3/10 complete - 30%) - Task 4 Ready
 1. ✅ Define Environment Interface (2h) - **COMPLETE** (2025-11-27)
 2. ✅ Implement BSD Environment - Mount Logic (2h) - **COMPLETE** (2025-11-27)
-3. ❌ Implement BSD Environment - Setup() (2h)
+3. ✅ Implement BSD Environment - Setup() (2h) - **COMPLETE** (2025-11-28)
 4. ❌ Implement BSD Environment - Execute() (2h)
 5. ❌ Implement BSD Environment - Cleanup() (1h)
 6. ❌ Update build/phases.go (3h)
@@ -488,9 +488,9 @@ Phase 3 adds:
 
 **Total**: 27 hours estimated
 
-### ✓ Exit Criteria (2/10 complete)
+### ✓ Exit Criteria (3/10 complete)
 - [x] Environment interface defined and documented
-- [ ] BSD implementation complete (Setup, Execute, Cleanup) - 33% (mount primitives done)
+- [ ] BSD implementation complete (Setup, Execute, Cleanup) - 66% (Setup done, Execute/Cleanup pending)
 - [ ] All mount logic moved to environment package
 - [ ] All chroot calls go through Environment.Execute()
 - [ ] Workers use Environment for isolation

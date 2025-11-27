@@ -17,19 +17,27 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// BSDEnvironment will be fully defined in bsd.go (Task 3).
-// This partial definition allows mounts.go to compile independently.
+// BSDEnvironment implements Environment interface using chroot with nullfs/tmpfs.
 //
-// The complete BSDEnvironment struct (defined in bsd.go) will have:
-//   - baseDir: string (worker base directory)
-//   - cfg: *config.Config (configuration)
-//   - mounts: []mountState (track mounted filesystems)
-//   - mountErrors: int (count of mount errors)
+// This backend provides build isolation for FreeBSD and DragonFlyBSD systems.
+// It creates an ephemeral filesystem hierarchy using tmpfs overlays and
+// nullfs bind mounts, then executes commands via chroot.
+//
+// Thread safety: BSDEnvironment is safe for concurrent Execute() calls after
+// Setup() completes. Setup() and Cleanup() must not be called concurrently.
+//
+// Fields:
+//   - baseDir: Base directory (e.g., /build/SL01)
+//   - cfg: Configuration reference
+//   - mounts: Tracked mounts for cleanup
+//   - mountErrors: Count of mount errors (for compatibility)
+//   - workerID: Worker ID for logging/debugging
 type BSDEnvironment struct {
 	baseDir     string
 	cfg         *config.Config
 	mounts      []mountState
 	mountErrors int
+	workerID    int
 }
 
 // Mount type flags use a bitmask design inherited from C dsynth.
