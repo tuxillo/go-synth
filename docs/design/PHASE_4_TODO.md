@@ -26,7 +26,14 @@ Before starting Phase 4 implementation (Tasks 1-10), **Task 0 must be completed*
 - Makefile integration (`make vm-*` targets)
 - Comprehensive documentation (`docs/testing/VM_TESTING.md`)
 
-**First-Time Setup (15 minutes)**:
+**First-Time Setup (15 minutes, fully automated)**:
+```bash
+make vm-setup         # Download ISO, create disk
+make vm-auto-install  # Fully automated 3-phase installation (no interaction)
+# VM is ready! Clean snapshot created automatically
+```
+
+**Alternative (Manual)**:
 ```bash
 make vm-setup      # Download ISO, create disk
 make vm-install    # Manual OS installation

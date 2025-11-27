@@ -571,7 +571,14 @@ A complete DragonFlyBSD VM testing environment:
 
 #### Quick Start
 
-**First-time setup** (15 minutes, run once):
+**First-time setup** (15 minutes, fully automated):
+```bash
+make vm-setup         # Download ISO, create disk
+make vm-auto-install  # Fully automated 3-phase installation (zero interaction)
+# VM is ready! Clean snapshot created automatically
+```
+
+**Alternative (manual installation)**:
 ```bash
 make vm-setup      # Download ISO, create disk
 make vm-install    # Manual OS installation
@@ -592,7 +599,8 @@ make vm-stop       # Shut down
 
 **Lifecycle**:
 - `make vm-setup` - Download ISO, create disk (first-time)
-- `make vm-install` - Boot VM for OS installation (first-time)
+- `make vm-auto-install` - Fully automated 3-phase installation (recommended)
+- `make vm-install` - Boot VM for manual OS installation (alternative)
 - `make vm-snapshot` - Save clean VM state
 - `make vm-start` - Start VM
 - `make vm-stop` - Stop VM
@@ -627,6 +635,13 @@ See **[VM Testing Guide](docs/testing/VM_TESTING.md)** for:
 
 ```
 scripts/vm/
+├── config.sh                # Centralized configuration (versions, paths)
+├── auto-install.sh          # 3-phase automated installation orchestrator
+├── make-phase-iso.sh        # PFI ISO builder for automated phases
+├── phase1-install.sh        # Phase 1: OS installation (automated)
+├── phase2-update.sh         # Phase 2: Package updates (automated)
+├── phase3-provision.sh      # Phase 3: Provisioning (automated)
+├── run-phase.sh             # QEMU boot helper for automated phases
 ├── fetch-dfly-image.sh      # Download DragonFlyBSD ISO
 ├── create-disk.sh           # Create 20GB QCOW2 disk
 ├── snapshot-clean.sh        # Save clean VM state
@@ -635,10 +650,10 @@ scripts/vm/
 ├── start-vm.sh              # Boot VM with QEMU/KVM
 ├── stop-vm.sh               # Shut down VM
 ├── setup-ssh-keys.sh        # Configure passwordless SSH
-└── provision.sh             # Configure VM (doas, packages)
+└── provision.sh             # Manual provisioning script (alternative)
 
 docs/testing/
-└── VM_TESTING.md            # Complete documentation
+└── VM_TESTING.md            # Complete documentation (~950 lines)
 
 Makefile                     # VM management targets
 ```
