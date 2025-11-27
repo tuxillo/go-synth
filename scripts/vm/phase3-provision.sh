@@ -28,10 +28,8 @@ export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/games:/usr/local/sbin:/usr/local/
 # Step 1: Configure doas for passwordless root
 echo "Step 1: Configuring doas..."
 cat > /usr/local/etc/doas.conf <<'EOF'
-# Allow root to execute commands without password
-permit nopass root
-# Persist environment variables needed for Go
-permit nopass root env { GOPATH GOROOT GOCACHE PATH HOME }
+# Allow root to execute commands without password, preserving environment
+permit nopass keepenv root
 EOF
 
 chmod 600 /usr/local/etc/doas.conf
