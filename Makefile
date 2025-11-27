@@ -66,8 +66,8 @@ vet:
 # See docs/testing/VM_TESTING.md for complete documentation.
 
 VM_DIR=		vm
-VM_SSH=		ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost
-VM_RSYNC=	rsync -avz --delete --exclude='.git' --exclude='vm/' -e "ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+VM_SSH=		ssh -i $(HOME)/.go-synth/vm/id_ed25519 -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost
+VM_RSYNC=	rsync -avz --delete --exclude='.git' --exclude='vm/' -e "ssh -i $(HOME)/.go-synth/vm/id_ed25519 -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 # ------------------------------------------------------------------------------
 # VM Lifecycle Management
