@@ -921,23 +921,26 @@ func (a *JWTAuth) GenerateToken(userID string, permissions []string) (string, er
 ### ADR-001: Database Backend Selection
 
 **Status**: Accepted  
-**Date**: 2025-01-15  
-**Decision**: Use BoltDB as primary database backend
+**Date**: 2025-01-15 (Updated: 2025-11-27)  
+**Decision**: Use bbolt (`go.etcd.io/bbolt`) as primary database backend
 
 **Context**:
 - Current custom binary format lacks transactional safety
 - Need ACID compliance for build tracking
 - Want embedded solution (no external dependencies)
+- Original BoltDB archived in 2019; bbolt is maintained fork by etcd.io
 
 **Options**:
-1. BoltDB - Chosen
-2. BadgerDB - Rejected (too complex)
-3. SQLite - Rejected (CGO dependency)
+1. bbolt (`go.etcd.io/bbolt`) - Chosen (maintained BoltDB fork)
+2. BadgerDB - Rejected (too complex, higher memory usage)
+3. SQLite - Rejected (CGO dependency or slower pure Go version)
 
 **Consequences**:
 - ✅ ACID transactions
-- ✅ Pure Go implementation
+- ✅ Pure Go implementation (no CGO)
 - ✅ Embedded, no external server
+- ✅ Actively maintained by etcd.io team
+- ✅ 100% API compatible with original BoltDB
 - ❌ Lower write performance than BadgerDB
 - ❌ Limited query capabilities vs SQL
 

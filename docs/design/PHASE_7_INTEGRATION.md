@@ -6,7 +6,7 @@
 
 ## Initialization Sequence
 1. Load config.
-2. Open BuildDB (BoltDB); if unavailable, use legacy CRC fallback.
+2. Open BuildDB (bbolt); if unavailable, use legacy CRC fallback.
 3. Parse ports; resolve deps; compute order.
 4. Run builder with environment.
 
@@ -15,8 +15,8 @@
 - `dsynth force` → bypass `NeedsBuild`.
 
 ## Migration Decision Tree
-- If BoltDB present → use it.
-- Else initialize BoltDB; populate `crc_index` lazily after successful builds.
+- If bbolt database present → use it.
+- Else initialize bbolt database; populate `crc_index` lazily after successful builds.
 
 ## Logging (MVP)
 - Continue existing file logs; no streaming; include UUID in messages.

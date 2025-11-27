@@ -380,7 +380,7 @@ make -C /usr/ports/editors/vim -V PKGORIGIN
 See `IDEAS.md` for comprehensive architectural plans:
 - Library-first design with reusable components
 - REST API + WebSocket for web UI integration
-- Advanced build tracking with BoltDB backend
+- Advanced build tracking with bbolt database backend
 - Multi-platform support (FreeBSD jails, Linux containers)
 - Distributed builds across multiple servers
 

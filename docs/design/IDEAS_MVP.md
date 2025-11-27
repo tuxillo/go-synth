@@ -29,7 +29,7 @@ Non-Goals (Deferred):
 ```
 dsynth/
 ├── pkg/          # Pure: metadata + dependency resolution
-├── builddb/      # Minimal build tracking (BoltDB)
+├── builddb/      # Minimal build tracking (bbolt)
 ├── builder/      # Orchestration + worker loop + phases
 ├── environment/  # DragonFly/FreeBSD impl only (interface)
 ├── cmd/dsynth/   # Thin CLI wrapper
@@ -62,7 +62,7 @@ func TopoOrder(pkgs []*Package) []*Package
 ### builddb (Minimal)
 Tracks only what is needed to skip unchanged builds and display basic history.
 
-Schema (BoltDB buckets):
+Schema (bbolt buckets):
 - `builds`: `uuid -> {portdir, version, status, start_time, end_time}`
 - `packages`: `portdir@version -> uuid` (latest successful)
 - `crc_index`: `portdir -> crc32`
@@ -134,7 +134,7 @@ No queue, worker, log streaming, metrics, or stats endpoints.
 - Skip chaos/performance benchmarks; manually measure build time for sanity.
 
 ## 8. Migration Strategy (Minimal)
-1. Introduce BoltDB alongside existing custom CRC file.
+1. Introduce bbolt (`go.etcd.io/bbolt`) alongside existing custom CRC file.
 2. Populate `crc_index` on first run by scanning ports selected for build.
 3. Migrate latest successful builds opportunistically when packages finish.
 4. Allow fallback to custom CRC file if DB unavailable (temporary shim).
@@ -151,7 +151,7 @@ No queue, worker, log streaming, metrics, or stats endpoints.
 - Chaos/performance benchmarking suite.
 
 ## 10. Accepted Decisions (MVP)
-- **Database Backend**: BoltDB (ADR-001).
+- **Database Backend**: bbolt (`go.etcd.io/bbolt`) – maintained BoltDB fork (ADR-001).
 - **Environment Abstraction**: Interface with single initial implementation (ADR-003 simplified).
 - **Authentication**: Single API key (only if API enabled) – ADR-002 deferred.
 

@@ -108,7 +108,7 @@ The goal is to maintain a working, compilable codebase at every step while progr
 ### 🔑 Key Decisions
 - Use Go slices for package collections (replaced linked lists in Phase 1.5)
 - Kahn's algorithm for topological sorting
-- Separate builddb package for CRC tracking (prepare for BoltDB in Phase 2)
+- Separate builddb package for CRC tracking (prepare for bbolt in Phase 2)
 - Wrapper functions maintain compatibility with existing code
 - Type-safe enums for DepType and PackageFlags
 
@@ -182,55 +182,92 @@ None - all dependencies resolved
 
 ---
 
-## Phase 2: Minimal BuildDB (BoltDB) ⚪
+## Phase 2: Minimal BuildDB (bbolt) ⚪
 
-**Status**: ⚪ Planned  
-**Timeline**: Not started | Target: TBD  
-**Dependencies**: Phase 1 completion
+**Status**: 🟡 Ready to Begin (0% Complete)  
+**Timeline**: Not started | Target: TBD (12-16 hours estimated)  
+**Dependencies**: Phase 1 completion (✅ 9/9 exit criteria met)
 
 ### 🎯 Goals
-- Add persistent tracking of build attempts and CRCs using BoltDB
+- Add persistent tracking of build attempts and CRCs using bbolt (BoltDB successor)
 - Enable incremental builds by skipping unchanged ports
-- Replace file-based CRC database with structured database
+- Replace custom binary CRC database with proper embedded database
 
-### 📦 Main Deliverables
-- BoltDB schema with three buckets: `builds`, `packages`, `crc_index`
-- BuildRecord API for CRUD operations
-- NeedsBuild() function using CRC comparison
-- Migration from file-based CRC to BoltDB
+### 📦 Main Deliverables (0/6 Complete)
+- ❌ bbolt integration (`go.etcd.io/bbolt` dependency)
+- ❌ Database schema with three buckets: `builds`, `packages`, `crc_index`
+- ❌ BuildRecord API for CRUD operations
+- ❌ NeedsBuild() function using CRC comparison
+- ❌ Migration from existing `builddb/crc.go` to bbolt
+- ❌ Unit and integration tests
 
-### ✓ Exit Criteria
-- `NeedsBuild()` returns false when CRC unchanged
-- Successful build writes records to all three buckets
-- Migration handles existing CRC file data
-- Unit tests for all CRUD operations
+### 🚧 Task Breakdown (12 tasks)
+1. ❌ Add bbolt dependency (30 min)
+2. ❌ Create DB wrapper with Open/Close (1 hour)
+3. ❌ Build record CRUD operations (2 hours)
+4. ❌ Package tracking (LatestFor) (1 hour)
+5. ❌ CRC operations (NeedsBuild, UpdateCRC) (1.5 hours)
+6. ❌ Migration strategy and utilities (1 hour)
+7. ❌ Structured error types (1 hour)
+8. ❌ Unit tests (3 hours)
+9. ❌ Integration test (1.5 hours)
+10. ❌ Godoc and documentation (1 hour)
+11. ❌ Benchmarks vs. old CRC file (1 hour)
+12. ❌ CLI integration (2 hours)
 
-### 💻 Proposed API
+### ✓ Exit Criteria (0/8 Complete)
+- ❌ `NeedsBuild()` returns false when CRC unchanged; true otherwise
+- ❌ Successful build writes records to all three buckets
+- ❌ `LatestFor()` returns most recent successful build
+- ❌ Database survives process crash (ACID guarantees)
+- ❌ Migration from old CRC file working
+- ❌ Unit tests cover all API functions
+- ❌ Integration test validates full build workflow
+- ❌ CLI updated to use new database
+
+### 💻 Target API
 ```go
 type BuildRecord struct {
     UUID      string
     PortDir   string
     Version   string
-    Status    string // running|success|failed
+    Status    string // "running" | "success" | "failed"
     StartTime time.Time
     EndTime   time.Time
 }
 
-func SaveRecord(rec *BuildRecord) error
-func GetRecord(uuid string) (*BuildRecord, error)
-func LatestFor(portDir, version string) (*BuildRecord, error)
-func NeedsBuild(portDir string, crc uint32) bool
-func UpdateCRC(portDir string, crc uint32) error
+func OpenDB(path string) (*DB, error)
+func (db *DB) Close() error
+func (db *DB) SaveRecord(rec *BuildRecord) error
+func (db *DB) GetRecord(uuid string) (*BuildRecord, error)
+func (db *DB) LatestFor(portDir, version string) (*BuildRecord, error)
+func (db *DB) NeedsBuild(portDir string, currentCRC uint32) (bool, error)
+func (db *DB) UpdateCRC(portDir string, crc uint32) error
 ```
 
 ### 📖 Documentation
-- **[Phase 2 Plan](docs/design/PHASE_2_BUILDDB.md)** - Complete specification
+- **[Phase 2 Plan](docs/design/PHASE_2_BUILDDB.md)** - Complete specification (updated 2025-11-27)
 
 ### 🔑 Key Decisions
-- BoltDB chosen for embedded, ACID-compliant storage
-- Package keys use `portdir@version` format
-- Lazy migration: populate database on first successful build
-- Keep file-based CRC as fallback during transition
+- **bbolt vs. BoltDB**: Use `go.etcd.io/bbolt` (maintained fork; original archived 2019)
+- **Database location**: `~/.go-synth/builds.db` (override with `--db-path`)
+- **Package keys**: Use `portdir@version` format (e.g., `lang/go@default`)
+- **CRC storage**: Binary `uint32` (4 bytes) for efficiency
+- **Migration**: Coexistence approach (both old and new DB temporarily)
+
+### 📊 Current State vs. Target
+
+**Current** (`builddb/crc.go` - 495 lines):
+- Custom binary format, 16K entry limit
+- O(n) linear scan lookups
+- No build record tracking
+- Manual memory management
+
+**Target** (`builddb/` with bbolt):
+- B+tree indexed database, unlimited capacity
+- O(log n) lookups, ACID transactions
+- Full build history with UUIDs
+- Automatic crash recovery
 
 ---
 
