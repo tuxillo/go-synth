@@ -58,8 +58,9 @@ QEMU_ARGS=(
     -cpu host
     -smp "${VM_CPUS}"
     -m "${VM_MEMORY}"
-    -nographic
+    -display none
     -serial stdio
+    -monitor none
 )
 
 case "${PHASE}" in
@@ -119,7 +120,6 @@ echo ""
 echo "The VM will automatically execute the phase script and power off."
 echo "This may take several minutes..."
 echo ""
-echo "TIP: Press Ctrl-A then X to exit QEMU manually if needed"
 echo "----------------------------------------"
 
 # Run QEMU and wait for it to finish
