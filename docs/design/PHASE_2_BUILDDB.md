@@ -159,8 +159,9 @@ crc_index/
   - `GetCRC(portDir)` retrieves stored CRC with exists flag for distinguishing 0 vs missing
   - Validated with comprehensive test covering: non-existent, match, mismatch, multiple ports, edge cases (0, max uint32)
 
-### Task 6: Complete Legacy Replacement (2-2.5 hours) 🚧
-**Approach:** Delete legacy CRC database entirely, replace with content-based BuildDB
+### Task 6: Complete Legacy Replacement + Build Record Lifecycle (3.5-4.5 hours total) 🚧
+**Approach:** Delete legacy CRC database entirely, replace with content-based BuildDB, add full build tracking
+**Status:** 6A-6C complete (2 hours); 6D-6E pending (1.5-2.5 hours)
 
 #### Task 6A: Content-Based CRC Helper ✅
 - **Status**: Complete
@@ -189,7 +190,7 @@ crc_index/
 
 #### Task 6C: Delete Legacy Code ✅
 - **Status**: Complete
-- **Completed**: 2025-11-27 (commit TBD)
+- **Completed**: 2025-11-27 (commit 24beab5)
 - **Changes**:
   - ✅ Deleted `builddb/crc.go` entirely (494 lines, 11KB) - metadata-based CRC implementation
   - ✅ Deleted `builddb/helpers.go` entirely (144 lines) - RebuildCRCDatabase, CleanCRCDatabase, ExportCRCDatabase
@@ -197,6 +198,51 @@ crc_index/
   - ✅ Updated all call sites (pkg/pkg.go, build/build.go comments)
   - ✅ Verified compilation succeeds
 - **Result**: Legacy CRC system completely removed; only content-based BuildDB remains
+
+#### Task 6D: BuildDB Refactoring + UUID Infrastructure (pending)
+- **Estimated Time**: 30-45 minutes
+- **Objective**: Refactor to open BuildDB once per workflow; add UUID support; implement basic post-build CRC updates
+- **Why Split from 6E**: Combined 6D+6E would be 75-105 min (too large); split for incremental testing and easier rollback
+- **Scope**:
+  1. Add `github.com/google/uuid` dependency
+  2. Refactor to open BuildDB once at workflow start (eliminate races)
+  3. Update `MarkPackagesNeedingBuild()` to accept buildDB parameter
+  4. Update `DoBuild()` to accept buildDB parameter
+  5. Add `buildDB` field to BuildContext struct
+  6. Implement post-build CRC update in buildPackage()
+  7. Implement post-build package index update (generate UUID)
+  8. Update callers in cmd/build.go and main.go
+- **Changes**:
+  - `go.mod`: Add `github.com/google/uuid v1.6.0`
+  - `build/build.go` (~40 lines): Add buildDB to BuildContext, update DoBuild signature, implement CRC update
+  - `pkg/pkg.go` (~10 lines): Update MarkPackagesNeedingBuild signature, remove internal open/close
+  - `cmd/build.go` (~15 lines): Open buildDB, pass to functions
+  - `main.go` (~15 lines): Open buildDB, pass to functions
+- **BuildDB Lifecycle**: Open → MarkPackagesNeedingBuild → DoBuild → buildPackage (CRC update) → Close
+- **Concurrency Safety**: 
+  - bbolt uses MVCC (multiple concurrent readers, single writer with automatic locking)
+  - Different workers update different keys (no contention)
+  - Single DB handle shared across goroutines is safe
+- **Result**: BuildDB opened once per workflow; CRC updates after successful builds; no open/close races
+- **Note**: Full build record lifecycle (SaveRecord/UpdateRecordStatus) deferred to Task 6E
+
+#### Task 6E: Build Record Lifecycle (pending)
+- **Estimated Time**: 45-60 minutes
+- **Objective**: Implement complete build record tracking with SaveRecord/UpdateRecordStatus
+- **Prerequisites**: Task 6D complete (UUID infrastructure, buildDB threading)
+- **Scope**:
+  1. Add `BuildUUID` field to Package struct
+  2. Create BuildRecord at build start (SaveRecord with status="running")
+  3. Update BuildRecord on success (UpdateRecordStatus with "success")
+  4. Update BuildRecord on failure (UpdateRecordStatus with "failed")
+  5. Use actual BuildUUID in UpdatePackageIndex (not random UUID)
+  6. Transaction order: SaveRecord → build → UpdateRecordStatus → UpdateCRC → UpdatePackageIndex
+- **Changes**:
+  - `pkg/pkg.go` (~3 lines): Add BuildUUID field to Package struct
+  - `build/build.go` (~35 lines): SaveRecord at start, UpdateRecordStatus on success/failure
+- **Error Handling**: Non-fatal for all record operations (log warnings, don't fail builds)
+- **Result**: Complete build record tracking; database reflects build history (success/failed/interrupted)
+- **Impact**: Failed builds tracked; interrupted builds leave "running" status (detectable)
 
 ### Task 7: Error Types (1 hour)
 - Add `ErrNotFound`, `ErrCorrupted`, `ErrInvalidUUID`, etc.
@@ -269,7 +315,7 @@ crc_index/
 - ✅ Optional migration utility to import old CRC data
 - ✅ CLI updated to use new database
 
-**Phase 2 Status**: In progress (6/12 tasks, 50% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-6 completed 2025-11-27: dependency, DB wrapper, CRUD, tracking, CRC operations, and full legacy replacement (content-based CRC migration complete). Next: Task 7 (error types). No blockers.
+**Phase 2 Status**: In progress (6/12 tasks, 50% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-6C completed 2025-11-27: dependency, DB wrapper, CRUD, tracking, CRC operations, and full legacy replacement. Task 6 split into 6A-6E for incremental delivery. Tasks 6D-6E pending: BuildDB refactoring (30-45 min) and build record lifecycle (45-60 min). Next immediate: Task 6D. No blockers.
 
 ## Dependencies
 - Phase 1 (`pkg` provides stable `PortDir`, `Version`, and `Package` API)
