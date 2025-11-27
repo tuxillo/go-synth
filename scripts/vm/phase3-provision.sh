@@ -12,13 +12,22 @@
 
 set -euxo pipefail
 
+# Logging setup
+LOG_FILE="/tmp/phase3-provision.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# Error trap for debugging
+trap 'echo "ERROR at line $LINENO: $BASH_COMMAND"; echo "Pausing for 60 seconds for inspection..."; sleep 60' ERR
+
 echo "============================================"
 echo "Phase 3: go-synth Provisioning Starting"
 echo "============================================"
+echo "Log file: $LOG_FILE"
+echo ""
 
 # Step 1: Configure doas for passwordless root
 echo "Step 1: Configuring doas..."
-cat > /usr/local/etc/doas.conf <<EOF
+cat > /usr/local/etc/doas.conf <<'EOF'
 # Allow root to execute commands without password
 permit nopass root
 # Persist environment variables needed for Go
@@ -152,6 +161,11 @@ cat > /etc/gosynth-provisioned <<EOF
 # Phase 3 completed successfully
 EOF
 
+# Step 11: Copy log to persistent location
+echo "Step 11: Saving log..."
+cp "$LOG_FILE" /root/phase3-provision.log
+
+echo ""
 echo "============================================"
 echo "Phase 3: Provisioning Complete!"
 echo "============================================"
@@ -165,6 +179,7 @@ echo "    - /build/Workers"
 echo "    - /usr/dports"
 echo "    - $GOPATH"
 echo ""
+echo "Log saved to /root/phase3-provision.log"
 echo "The VM is now ready for go-synth Phase 4 testing!"
 echo ""
 echo "Shutting down..."

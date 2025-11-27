@@ -18,9 +18,18 @@
 
 set -euxo pipefail
 
+# Logging setup
+LOG_FILE="/tmp/phase2-update.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# Error trap for debugging
+trap 'echo "ERROR at line $LINENO: $BASH_COMMAND"; echo "Pausing for 60 seconds for inspection..."; sleep 60' ERR
+
 echo "============================================"
 echo "Phase 2: Package Updates Starting"
 echo "============================================"
+echo "Log file: $LOG_FILE"
+echo ""
 
 # Give network time to initialize
 echo "Waiting for network initialization..."
@@ -64,14 +73,21 @@ echo "Step 6: Cleaning package cache..."
 pkg clean -y
 pkg autoremove -y
 
+# Step 7: Copy log to persistent location
+echo "Step 7: Saving log..."
+cp "$LOG_FILE" /root/phase2-update.log
+
+echo ""
 echo "============================================"
 echo "Phase 2: Package Updates Complete!"
 echo "============================================"
 echo "Packages installed:"
 pkg info | grep -E '^(go|bash|git|rsync|curl|wget|doas)-' || true
 echo ""
+echo "Log saved to /root/phase2-update.log"
 echo "Shutting down to proceed to Phase 3..."
-sleep 2
+echo ""
+sleep 3
 
 # Power off so orchestrator can proceed to next phase
 poweroff

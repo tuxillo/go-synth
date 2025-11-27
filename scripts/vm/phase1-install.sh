@@ -18,14 +18,28 @@
 
 set -euxo pipefail
 
+# Logging setup - write to both console and log file
+LOG_FILE="/tmp/phase1-install.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# Error trap for debugging
+trap 'echo "ERROR at line $LINENO: $BASH_COMMAND"; echo "Pausing for 60 seconds for inspection..."; sleep 60' ERR
+
 echo "============================================"
 echo "Phase 1: Automated OS Installation Starting"
 echo "============================================"
+echo "Log file: $LOG_FILE"
+echo ""
 
 # Target disk device
 DISK="/dev/da0"
 ROOT_PART="${DISK}s1a"
 HAMMER2_PART="${DISK}s1d"
+
+# Step 0: Detect available CD devices
+echo "Step 0: Detecting CD devices..."
+ls -l /dev/cd* || echo "Warning: No /dev/cd* devices found"
+echo ""
 
 # Step 1: Partition the disk
 echo "Step 1: Partitioning disk ${DISK}..."
@@ -44,18 +58,47 @@ newfs_hammer2 -L ROOT "${HAMMER2_PART}"
 echo "Step 4: Mounting HAMMER2 partition..."
 mount "${HAMMER2_PART}" /mnt
 
-# Step 5: Copy system from clean ISO (cd2)
+# Step 5: Copy system from clean ISO
 echo "Step 5: Copying DragonFlyBSD system from ISO..."
-# Mount the clean ISO
-mkdir -p /mnt/cd2
-mount_cd9660 /dev/cd2 /mnt/cd2
+
+# Try to find the correct ISO device
+ISO_SOURCE=""
+for dev in /dev/cd2 /dev/cd1 /dev/cd0; do
+    if [ -e "$dev" ]; then
+        echo "  Trying to mount $dev..."
+        mkdir -p /mnt/cd_tmp
+        if mount_cd9660 "$dev" /mnt/cd_tmp 2>/dev/null; then
+            # Check if this looks like an installer ISO (has /boot, /bin, etc)
+            if [ -d "/mnt/cd_tmp/boot" ] && [ -d "/mnt/cd_tmp/bin" ]; then
+                ISO_SOURCE="$dev"
+                echo "  Found installer ISO at $dev"
+                umount /mnt/cd_tmp
+                break
+            fi
+            umount /mnt/cd_tmp
+        fi
+    fi
+done
+
+if [ -z "$ISO_SOURCE" ]; then
+    echo "ERROR: Could not find installer ISO!"
+    echo "Available devices:"
+    ls -l /dev/cd* || true
+    exit 1
+fi
+
+# Mount the ISO and copy
+echo "  Mounting $ISO_SOURCE for cpdup..."
+mkdir -p /mnt/cd_source
+mount_cd9660 "$ISO_SOURCE" /mnt/cd_source
 
 # Copy system files (this takes a few minutes)
-cpdup /mnt/cd2 /mnt
+echo "  Running cpdup (this may take 3-5 minutes)..."
+cpdup /mnt/cd_source /mnt
 
-# Unmount the ISO
-umount /mnt/cd2
-rmdir /mnt/cd2
+# Unmount and cleanup
+umount /mnt/cd_source
+rmdir /mnt/cd_source
 
 # Step 6: Configure /etc/fstab
 echo "Step 6: Configuring /etc/fstab..."
@@ -66,23 +109,38 @@ ${ROOT_PART}           /boot           ufs     rw              1       1
 proc                    /proc           procfs  rw              0       0
 EOF
 
-# Step 7: Configure /boot/loader.conf
-echo "Step 7: Configuring boot loader..."
-cat > /mnt/boot/loader.conf <<EOF
-# Boot configuration
-console="comconsole,vidconsole"
+# Step 7: Configure /boot/loader.conf for serial console
+echo "Step 7: Configuring boot loader (serial console only)..."
+cat > /mnt/boot/loader.conf <<'EOF'
+# Boot configuration - Serial console only to avoid character doubling
+console="comconsole"
 comconsole_speed="115200"
-boot_serial="-D -h"
-autoboot_delay="1"
+comconsole_port="0x3F8"
+boot_serial="-h"
+autoboot_delay="3"
+# Kernel console output
+kern.console="comconsole"
 EOF
+
+# Step 7b: Configure /etc/ttys for serial console
+echo "Step 7b: Configuring /etc/ttys for serial console..."
+# Enable serial console on ttyd0
+if grep -q '^ttyd0' /mnt/etc/ttys; then
+    sed -i '' 's|^ttyd0.*|ttyd0   "/usr/libexec/getty std.115200"   vt100   on  secure|' /mnt/etc/ttys
+else
+    echo 'ttyd0   "/usr/libexec/getty std.115200"   vt100   on  secure' >> /mnt/etc/ttys
+fi
 
 # Step 8: Configure /etc/rc.conf
 echo "Step 8: Configuring system services..."
-cat > /mnt/etc/rc.conf <<EOF
+cat > /mnt/etc/rc.conf <<'EOF'
 # Network configuration
 hostname="dragonfly-gosynth"
 ifconfig_em0="DHCP"
 sshd_enable="YES"
+
+# Serial console
+dumpdev="AUTO"
 
 # Time synchronization
 ntpd_enable="YES"
@@ -100,7 +158,7 @@ EOF
 
 # Step 9: Enable root SSH login (needed for automation)
 echo "Step 9: Configuring SSH..."
-cat > /mnt/etc/ssh/sshd_config <<EOF
+cat > /mnt/etc/ssh/sshd_config <<'EOF'
 # SSH Configuration for VM automation
 PermitRootLogin yes
 PasswordAuthentication yes
@@ -114,14 +172,11 @@ EOF
 
 # Step 10: Set root password (default: 'root' for initial setup)
 echo "Step 10: Setting root password..."
-echo 'root:$6$rounds=5000$DragonFly$7QvI8xvXN.K9Q3K3O9xZ9K3Q3K3O9xZ9K3Q3K3O9xZ9K3Q3K3O9xZ9K3Q3K3O9xZ9K3Q3K3O9xZ9K3' | chroot /mnt chpass -u root -l
-
-# Alternative: Set a simple password for testing
 echo "root" | chroot /mnt pw usermod root -h 0
 
 # Step 11: Configure resolv.conf for DNS
 echo "Step 11: Configuring DNS..."
-cat > /mnt/etc/resolv.conf <<EOF
+cat > /mnt/etc/resolv.conf <<'EOF'
 nameserver 8.8.8.8
 nameserver 8.8.4.4
 EOF
@@ -131,16 +186,24 @@ echo "Step 12: Creating system directories..."
 mkdir -p /mnt/root/.ssh
 chmod 700 /mnt/root/.ssh
 
-# Step 13: Sync and unmount
-echo "Step 13: Finalizing installation..."
+# Step 13: Copy log file to installed system
+echo "Step 13: Copying installation log..."
+cp "$LOG_FILE" /mnt/root/phase1-install.log
+
+# Step 14: Sync and unmount
+echo "Step 14: Finalizing installation..."
 sync
+sleep 2
 umount /mnt
 
+echo ""
 echo "============================================"
 echo "Phase 1: Installation Complete!"
 echo "============================================"
+echo "Installation log saved to /root/phase1-install.log"
 echo "Shutting down to proceed to Phase 2..."
-sleep 2
+echo ""
+sleep 3
 
 # Power off so orchestrator can proceed to next phase
 poweroff
