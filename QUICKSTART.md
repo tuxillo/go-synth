@@ -99,9 +99,9 @@ sudo dsynth build editors/vim
 This will:
 1. Parse port Makefile
 2. Resolve all dependencies
-3. Check which packages need building (CRC-based)
+3. Check which packages need building (using BuildDB with CRC32 content-based detection)
 4. Build packages in parallel
-5. Save packages to repository
+5. Save packages to repository and update BuildDB
 
 ### Building Multiple Packages
 
@@ -123,7 +123,7 @@ sudo dsynth build lang/python@py311
 
 ### Force Rebuild
 
-Ignore CRC cache and rebuild even if unchanged:
+Ignore BuildDB cache and rebuild even if unchanged:
 
 ```bash
 sudo dsynth force editors/vim
@@ -246,7 +246,7 @@ sudo vi /etc/dsynth/dsynth.ini
 ### Dependency Resolution Issues
 
 ```bash
-# Reset CRC database
+# Reset BuildDB database
 sudo dsynth reset-db
 
 # Verify ports tree is up to date

@@ -77,6 +77,39 @@ sudo dsynth logs editors/vim
 sudo dsynth cleanup
 ```
 
+## Build Database
+
+go-synth uses an embedded **bbolt** database (`~/.go-synth/builds.db`) for build tracking and incremental builds:
+
+**Features:**
+- **Build History**: Tracks every build with UUID, status (running/success/failed), timestamps
+- **Content-Based Incremental Builds**: Uses CRC32 checksums of port directories to skip unchanged packages
+- **Package Versioning**: Maintains index of latest successful build for each port@version
+- **Crash-Safe**: ACID transactions ensure database integrity even during system failures
+- **Zero Configuration**: Database created automatically on first build
+
+**How It Works:**
+1. Before building, computes CRC32 of port directory contents
+2. Compares with stored CRC - if unchanged, skips build
+3. On successful build, updates CRC and creates build record
+4. Build records track full lifecycle: running → success/failed
+
+**Query Future (Planned):**
+```bash
+# View build history
+dsynth db list editors/vim
+
+# Find latest successful build
+dsynth db latest editors/vim@default
+
+# Check if rebuild needed
+dsynth db needs-build editors/vim
+```
+
+The database replaces the legacy binary CRC file with a proper embedded database providing unlimited capacity, indexed lookups, and full build history tracking.
+
+---
+
 ## Configuration
 
 Configuration is stored in `/etc/dsynth/dsynth.ini` or `/usr/local/etc/dsynth/dsynth.ini`.

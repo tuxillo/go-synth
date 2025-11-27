@@ -67,7 +67,8 @@ gh pr create --repo otheruser/somerepo
 |---------|---------|-----------|
 | `main.go` | CLI entry point, command parsing, orchestration | `main.go` |
 | `config/` | INI-based configuration management | `config/config.go` |
-| `pkg/` | Package metadata, dependency resolution, CRC database | `pkg/*.go` |
+| `pkg/` | Package metadata, dependency resolution | `pkg/*.go` |
+| `builddb/` | Embedded bbolt database for build tracking and CRC-based incremental builds | `builddb/db.go` (562 lines) |
 | `build/` | Build orchestration with worker pool management | `build/*.go` |
 | `mount/` | Filesystem operations for chroot environments | `mount/mount.go` |
 | `log/` | Multi-file logging system (8 different log types) | `log/*.go` |
@@ -202,7 +203,12 @@ Tmpfs_worksize=64g           # Work directory size
 - Configuration parsing and management
 - Package parsing and metadata extraction
 - Dependency resolution with topological sort
-- CRC-based change detection
+- **BuildDB**: Embedded bbolt database with build tracking and content-based incremental builds
+  - Build history with UUIDs and status tracking (running/success/failed)
+  - CRC32-based change detection for automatic incremental builds
+  - Package version indexing (latest successful build per port@version)
+  - Crash-safe ACID transactions with automatic recovery
+  - Single-open lifecycle pattern for thread safety
 - Build orchestration with worker pools
 - Multi-file logging system
 - Mount/unmount operations for chroot
