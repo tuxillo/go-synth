@@ -108,7 +108,7 @@ echo "Step 6: Configuring SSH..."
 # Try to find SSH key on CD (phase3 ISO is mounted as cd0)
 SSH_KEY_FILE=""
 for cd in cd0 cd1 cd2; do
-    if [ -f "/dev/${cd}" ]; then
+    if [ -e "/dev/${cd}" ]; then
         # Try to mount and find ssh_key.pub
         mkdir -p /tmp/phase3-cd
         if mount_cd9660 "/dev/${cd}" /tmp/phase3-cd 2>/dev/null; then
