@@ -184,8 +184,8 @@ None - all dependencies resolved
 
 ## Phase 2: Minimal BuildDB (bbolt) 🟡
 
-**Status**: 🟡 In Progress (75% Complete, 9/12 tasks)  
-**Timeline**: Started 2025-11-27 | Target: TBD (3.5-7.5 hours remaining)  
+**Status**: 🟡 In Progress (83% Complete, 10/12 tasks)  
+**Timeline**: Started 2025-11-27 | Target: TBD (0.5-3.5 hours remaining)  
 **Dependencies**: Phase 1 completion (✅ 9/9 exit criteria met)
 
 ### 🎯 Goals
@@ -202,7 +202,7 @@ None - all dependencies resolved
 - ✅ Migration from existing `builddb/crc.go` to bbolt - commits 52d5393, d34a083, 24beab5
 - ✅ UUID infrastructure and build record lifecycle - commits 03aa961, 65ccadd
 
-### 🚧 Task Breakdown (9/12 complete - 75% DONE)
+### 🚧 Task Breakdown (10/12 complete - 83% DONE)
 1. ✅ Add bbolt dependency (DONE 2025-11-27) - commit 6a6ff7b
 2. ✅ Create DB wrapper with Open/Close (DONE 2025-11-27) - commit 48569e6
 3. ✅ Build record CRUD operations (DONE 2025-11-27) - commit d1b91d9
@@ -220,9 +220,21 @@ None - all dependencies resolved
    - Added 4 error inspection helpers (IsValidationError, IsRecordNotFound, etc.)
    - Added comprehensive tests in builddb/errors_test.go (11 tests, all passing)
    - All errors implement Unwrap() for errors.Is/As compatibility
-8. ❌ Unit tests for builddb API functions (3 hours)
+8. ✅ Unit tests for builddb API functions (DONE 2025-11-27) - commit TBD
+    - Created builddb/db_test.go with 15 test functions and 93 subtests (1,124 lines)
+    - Created testdata fixtures (builddb/testdata/ports/ with vim and python test ports)
+    - Test coverage: 11.0% → 84.5% (exceeded 80% target)
+    - All 26 tests passing (15 db.go + 11 errors.go)
+    - No race conditions detected: `go test -race ./builddb` passed
+    - Test groups:
+      * Database lifecycle (OpenDB, Close)
+      * Build record CRUD (SaveRecord, GetRecord, UpdateRecordStatus)
+      * Package index operations (UpdatePackageIndex, LatestFor)
+      * CRC operations (UpdateCRC, GetCRC, NeedsBuild, ComputePortCRC)
+      * Concurrent access (read/write workloads)
+    - 6 helper functions (setupTestDB, cleanupTestDB, createTestRecord, assertRecordEqual, createTestPortDir, verifyBucketsExist)
 9. ❌ Integration test (1.5 hours)
-10. ✅ Godoc documentation (DONE 2025-11-27) - commit TBD
+10. ✅ Godoc documentation (DONE 2025-11-27) - commit e6f7c42
     - Enhanced package-level documentation in builddb/errors.go
     - Added usage examples to all error types (DatabaseError, RecordError, etc.)
     - Enhanced helper function documentation (IsValidationError, IsDatabaseError, etc.)
@@ -231,7 +243,7 @@ None - all dependencies resolved
 11. ❌ Benchmarks vs. old CRC file (1 hour)
 12. ❌ CLI integration (2 hours)
 
-### ✓ Exit Criteria (4/8 Complete, 3 N/A after legacy deletion)
+### ✓ Exit Criteria (5/8 Complete, 3 N/A after legacy deletion)
 - ✅ `NeedsBuild()` returns false when CRC unchanged; true otherwise (Task 5)
 - ✅ Successful build writes records to all three buckets (Task 6E)
 - ✅ `LatestFor()` returns most recent successful build (Task 4)
@@ -239,7 +251,7 @@ None - all dependencies resolved
 - ~~Migration from old CRC file working~~ (N/A - legacy system deleted)
 - ~~Database survives process crash (ACID guarantees)~~ (N/A - bbolt provides this)
 - ~~CLI updated to use new database~~ (N/A - CLI already uses BuildDB after Task 6B)
-- ❌ Unit tests cover all API functions
+- ✅ Unit tests cover all API functions (Task 8 - 84.5% coverage, 93 tests)
 - ❌ Integration test validates full build workflow
 
 ### 💻 Target API

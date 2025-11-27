@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 75% Complete (9/12 tasks)  
+**Status**: 🟡 83% Complete (10/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -308,12 +308,67 @@ crc_index/
   - Better error messages with structured context
 - **Pattern**: Follows `pkg/errors.go` for consistency across codebase
 
-### Task 8: Unit Tests (3 hours)
-- Test `SaveRecord` → `GetRecord` roundtrip
-- Test `UpdateRecordStatus` transitions
-- Test `LatestFor` returns most recent successful build
-- Test `NeedsBuild` logic (match, changed, missing)
-- Test concurrent access (read/write transactions)
+### Task 8: Unit Tests (3 hours) ✅ COMPLETE
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Actual Time**: 3 hours (on estimate)
+- **Result**: Comprehensive test suite for builddb package
+  - Created `builddb/db_test.go` with 15 test functions (1,124 lines)
+  - Created testdata fixtures in `builddb/testdata/ports/`:
+    * `editors/vim/` - Makefile, distinfo, pkg-descr
+    * `lang/python/` - Makefile, patches/patch-setup.py
+  - Test Statistics:
+    * 93 subtests covering all API functions
+    * Coverage: 11.0% → 84.5% (exceeded 80% target)
+    * All 26 tests passing (15 db.go + 11 errors.go)
+    * Race detector: PASS (no data races detected)
+  - Test Groups:
+    1. **Database Lifecycle** (TestOpenDB, TestClose):
+       - Create new database, reopen existing, invalid paths
+       - Bucket initialization verification
+       - Idempotent close operations
+    2. **Build Record CRUD** (TestSaveRecord, TestGetRecord, TestUpdateRecordStatus):
+       - Save/retrieve/update records with full roundtrip validation
+       - Empty UUID validation (ValidationError)
+       - Nonexistent UUID handling (RecordError with ErrRecordNotFound)
+       - Status transitions (running → success/failed)
+       - Field immutability verification
+    3. **Package Index** (TestUpdatePackageIndex, TestLatestFor, TestPackageIndexWorkflow):
+       - Create/update index entries with `portdir@version` keys
+       - Retrieve latest builds per port/version
+       - Orphaned record detection (index points to missing build)
+       - Multiple versions of same port independence
+       - Full workflow: save → index → retrieve latest
+    4. **CRC Operations** (TestUpdateCRC, TestGetCRC, TestNeedsBuild, TestCRCWorkflow):
+       - Binary encoding (4-byte little-endian uint32)
+       - CRC match/mismatch detection for incremental builds
+       - Edge cases: CRC=0, CRC=0xFFFFFFFF
+       - Incremental build workflow: first build → rebuild same → port changes
+    5. **ComputePortCRC** (TestComputePortCRC):
+       - Content-based CRC computation (testdata ports)
+       - Idempotent/deterministic CRC generation
+       - File content change detection
+       - File rename detection (path hashing)
+       - Directory exclusions (work/, .git/, .svn/, CVS/)
+       - Different ports have different CRCs
+    6. **Concurrent Access** (TestConcurrentAccess):
+       - Concurrent reads (10 goroutines)
+       - Concurrent writes to different keys (5 writers)
+       - Mixed read/write workload (no data corruption)
+       - Verified bbolt MVCC handles concurrency safely
+  - Helper Functions (6):
+    * setupTestDB() - creates temp database
+    * cleanupTestDB() - closes and cleans up
+    * createTestRecord() - fixture builder
+    * assertRecordEqual() - deep equality check
+    * createTestPortDir() - creates test ports with files
+    * verifyBucketsExist() - validates bucket initialization
+- **Benefits**:
+  - High confidence in API correctness
+  - Edge cases covered (empty values, corrupted data, orphans)
+  - Concurrent access verified (no race conditions)
+  - Content-based CRC tested with real port structures
+  - Test coverage exceeds target (84.5% vs 80% goal)
 
 ### Task 9: Integration Test (1.5 hours)
 - Simulate full build workflow:
