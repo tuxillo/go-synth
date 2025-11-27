@@ -3,7 +3,53 @@
 **Status**: 🔵 Ready to Start  
 **Last Updated**: 2025-11-27  
 **Dependencies**: Phase 3 complete ✅  
-**Total Time**: 27 hours estimated
+**Total Time**: 30 hours estimated (27h implementation + 3h VM setup)
+
+## ⚠️ Prerequisites: VM Testing Infrastructure
+
+**Phase 4 requires a DragonFlyBSD VM for testing mount operations.**
+
+Before starting Phase 4 implementation (Tasks 1-10), **Task 0 must be completed**:
+
+### Task 0: Local DragonFlyBSD VM Testing Infrastructure ✅ COMPLETE
+
+**Why We Need This**:
+- Phase 4 implements 27 mount points (nullfs, tmpfs, devfs, procfs)
+- Tests require root privileges + BSD-specific system calls
+- Existing E2E tests skip 5 critical integration tests (require root + BSD)
+- Cannot verify Phase 4 functionality without real BSD environment
+
+**What Was Built**:
+- QEMU/KVM-based DragonFlyBSD 6.4.0 VM
+- Programmatic VM lifecycle management (create, start, stop, destroy, snapshot)
+- SSH-based file sync and command execution
+- Makefile integration (`make vm-*` targets)
+- Comprehensive documentation (`docs/testing/VM_TESTING.md`)
+
+**First-Time Setup (15 minutes)**:
+```bash
+make vm-setup      # Download ISO, create disk
+make vm-install    # Manual OS installation
+# SSH in, run provision script
+make vm-snapshot   # Save clean state
+```
+
+**Daily Development Workflow**:
+```bash
+make vm-start      # Boot VM (30s)
+# Edit code locally
+make vm-quick      # Sync + test Phase 4
+make vm-stop       # Shut down
+```
+
+**Files Created**:
+- `scripts/vm/` - 9 VM management scripts (~500 lines)
+- `docs/testing/VM_TESTING.md` - Complete documentation (~600 lines)
+- `Makefile` - VM management targets (~150 lines)
+
+**See**: `docs/testing/VM_TESTING.md` for complete setup and usage instructions.
+
+---
 
 ## Overview
 
@@ -24,11 +70,14 @@ Phase 4 extracts mount and chroot operations from the build package into a clean
 - Add context support for cancellation/timeout
 - Comprehensive testing (unit + integration)
 
-## Task Progress: 0/10 Complete (0%)
+## Task Progress: 1/11 Complete (9%)
 
-### ✅ Completed: 0 tasks
+### ✅ Completed: 1 task
+- Task 0: VM Testing Infrastructure ✅
+
 ### 🚧 In Progress: 0 tasks
-### ❌ Remaining: 10 tasks
+
+### ❌ Remaining: 10 tasks (Tasks 1-10)
 
 ---
 

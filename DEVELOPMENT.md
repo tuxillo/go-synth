@@ -537,6 +537,124 @@ type ExecCommand struct {
 - **New Code**: ~2,200 lines (interface, BSD impl, tests, docs)
 - **Chroot Calls to Replace**: 5 locations in build/phases.go
 
+### 🖥️ VM Testing Infrastructure (Task 0) ✅
+
+**Status**: Complete (2025-11-27)  
+**Time**: 3 hours
+
+#### Why We Need This
+
+Phase 4 requires testing BSD-specific mount operations (nullfs, tmpfs, devfs, procfs) that:
+- Require root privileges
+- Need real BSD system calls
+- Cannot be mocked without losing verification value
+- Must test 27 mount points per worker
+
+Existing E2E tests (4,875 lines) skip 5 critical integration tests requiring root + BSD.
+
+#### What Was Built
+
+A complete DragonFlyBSD VM testing environment:
+
+**Components**:
+- QEMU/KVM-based VM (DragonFlyBSD 6.4.0)
+- 9 management scripts (`scripts/vm/`, ~500 lines)
+- Makefile integration (`make vm-*` targets, ~150 lines)
+- Comprehensive documentation (`docs/testing/VM_TESTING.md`, ~600 lines)
+
+**Key Features**:
+- Programmatic lifecycle (create, start, stop, destroy, snapshot)
+- SSH-based file sync and command execution
+- Snapshot-based restoration (instant reset to clean state)
+- Local testing (OpenCode has full access to files)
+- Deterministic (create/destroy/recreate easily)
+
+#### Quick Start
+
+**First-time setup** (15 minutes, run once):
+```bash
+make vm-setup      # Download ISO, create disk
+make vm-install    # Manual OS installation
+# SSH in: ssh -p 2222 root@localhost
+# Run: ./scripts/vm/provision.sh
+make vm-snapshot   # Save clean state
+```
+
+**Daily development**:
+```bash
+make vm-start      # Boot VM (30s)
+# Edit code locally
+make vm-quick      # Sync + test Phase 4
+make vm-stop       # Shut down
+```
+
+#### Makefile Targets
+
+**Lifecycle**:
+- `make vm-setup` - Download ISO, create disk (first-time)
+- `make vm-install` - Boot VM for OS installation (first-time)
+- `make vm-snapshot` - Save clean VM state
+- `make vm-start` - Start VM
+- `make vm-stop` - Stop VM
+- `make vm-destroy` - Delete VM (prompts for confirmation)
+- `make vm-restore` - Reset to clean snapshot
+- `make vm-ssh` - SSH into VM
+- `make vm-status` - Show VM status
+
+**Testing**:
+- `make vm-sync` - Sync project files to VM
+- `make vm-build` - Build dsynth in VM
+- `make vm-test-unit` - Run unit tests
+- `make vm-test-integration` - Run integration tests
+- `make vm-test-phase4` - Run Phase 4 mount tests (requires root)
+- `make vm-test-e2e` - Run end-to-end tests
+- `make vm-test-all` - Run all tests
+- `make vm-quick` - Quick cycle: sync + Phase 4 tests
+
+**Help**:
+- `make vm-help` - Show all VM targets
+
+#### Documentation
+
+See **[VM Testing Guide](docs/testing/VM_TESTING.md)** for:
+- Architecture diagram
+- Troubleshooting guide
+- Advanced usage (multiple VMs, performance tuning)
+- Maintenance procedures
+- Integration with Phase 4
+
+#### Files Created
+
+```
+scripts/vm/
+├── fetch-dfly-image.sh      # Download DragonFlyBSD ISO
+├── create-disk.sh           # Create 20GB QCOW2 disk
+├── snapshot-clean.sh        # Save clean VM state
+├── restore-vm.sh            # Reset to clean snapshot
+├── destroy-vm.sh            # Delete VM and files
+├── start-vm.sh              # Boot VM with QEMU/KVM
+├── stop-vm.sh               # Shut down VM
+├── setup-ssh-keys.sh        # Configure passwordless SSH
+└── provision.sh             # Configure VM (doas, packages)
+
+docs/testing/
+└── VM_TESTING.md            # Complete documentation
+
+Makefile                     # VM management targets
+```
+
+#### Prerequisites for Phase 4
+
+**Task 0 (VM Infrastructure) is a hard prerequisite** for Phase 4 Tasks 1-10.
+
+Without this infrastructure:
+- Cannot test Phase 4 mount operations
+- Cannot verify worker isolation
+- Cannot validate cleanup logic
+- Cannot detect mount race conditions
+
+**Phase 4 implementation must wait until VM infrastructure is available.**
+
 ---
 
 ## Phase 5: Minimal REST API ⚪
