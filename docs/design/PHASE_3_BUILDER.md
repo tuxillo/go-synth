@@ -1,50 +1,477 @@
 # Phase 3: Builder Orchestration
 
+**Status**: 🔵 Ready to Start (Phase 2 complete)  
+**Last Updated**: 2025-11-27
+
 ## Goals
-- Implement worker pool to execute essential build phases in order.
-- Integrate with `pkg` (build order) and `builddb` (records, CRC).
+- Integrate builddb (CRC-based incremental builds) with existing builder orchestration
+- Add build record lifecycle tracking (UUID, status, timestamps)
+- Enable CRC skip mechanism to avoid rebuilding unchanged ports
+- Ensure build statistics accurately reflect skipped/built/failed counts
 
-## MVP Phases
-1. fetch
-2. checksum
-3. extract
-4. patch
-5. build
-6. stage
-7. package
+## Scope (MVP)
+- Integrate `builddb.ComputePortCRC()` and `builddb.NeedsBuild()` before building
+- Generate UUIDs and track build lifecycle (running → success/failed)
+- Update CRC and package index on successful builds
+- Skip unchanged ports based on CRC comparison
+- Validate with integration tests (build same port twice)
 
-## Concurrency Model
-- N workers; channel-based queue of packages in topo order.
-- A package enters run only when deps are successful (by topo order).
+## Non-Goals (Deferred)
+- Environment abstraction (keep existing mount/chroot code for now)
+- Distributed builds or remote workers
+- Advanced build analytics dashboard
+- Web UI or real-time log streaming
+- Package signing or repository management
 
-## Error Handling
-- On phase failure: mark `failed`, stop dependent packages (skip).
-- Graceful cleanup via `defer`/cleanup hooks.
+## Existing Infrastructure
 
-## Stats (MVP)
-- Track totals: success, failed, skipped; duration.
+### Current Build Package Status (~705 lines, 15 functions)
 
-## Interfaces (Proposed)
+**build/build.go** (368 lines):
+- ✅ `BuildContext` struct with worker pool
+- ✅ `BuildStats` tracking (Total, Success, Failed, Skipped, Duration)
+- ✅ `DoBuild()` - main orchestration entry point
+- ✅ Worker goroutines with channel-based queue
+- ✅ Topological ordering via `pkg.GetBuildOrder()`
+- ✅ Dependency waiting mechanism (`waitForDependencies()`)
+- ✅ Mount management with cleanup function
+- ✅ `BuildStateRegistry` integration
+- ✅ Progress printing and stats tracking
+
+**build/phases.go** (207 lines):
+- ✅ `executePhase()` - executes individual build phases via chroot
+- ✅ 7 MVP phases: fetch, checksum, extract, patch, configure, build, stage, package
+- ✅ Phase-specific make command construction
+- ✅ Dependency package installation (`installDependencyPackages()`)
+- ✅ Chroot execution with proper environment (PORTSDIR, WRKDIRPREFIX, etc.)
+
+**build/fetch.go** (130 lines):
+- ✅ `DoFetchOnly()` - standalone fetch mode
+- ✅ `fetchPackageDistfiles()` - fetch distfiles for a package
+- ✅ `FetchRecursive()` - recursive dependency fetching
+
+**Key Structures:**
 ```go
-type BuildStats struct { Total, Success, Failed, Skipped int; Duration time.Duration }
-
-type Builder struct {
-    Env      environment.Environment
-    DB       *builddb.DB
-    Workers  int
+type BuildStats struct {
+    Total    int
+    Success  int
+    Failed   int
+    Skipped  int
+    Ignored  int
+    Duration time.Duration
 }
 
-func (b *Builder) Run(pkgs []*pkg.Package) (*BuildStats, error)
+type Worker struct {
+    ID        int
+    Mount     *mount.Worker
+    Current   *pkg.Package
+    Status    string
+    StartTime time.Time
+}
+
+type BuildContext struct {
+    cfg       *config.Config
+    logger    *log.Logger
+    registry  *pkg.BuildStateRegistry
+    buildDB   *builddb.DB  // Already referenced!
+    workers   []*Worker
+    queue     chan *pkg.Package
+    stats     BuildStats
+    statsMu   sync.Mutex
+    startTime time.Time
+    wg        sync.WaitGroup
+}
 ```
 
-## Tasks
-- Implement queue + worker lifecycle (start, run, stop).
-- Wire per-phase execution via `Env.Execute(port, phase)`.
-- Persist `running/success/failed` to `builds` and update CRC on success.
-- Collate stats and return.
+**What's Missing:**
+- ❌ CRC checking before queuing packages
+- ❌ UUID generation for build records
+- ❌ Build record lifecycle (SaveRecord, UpdateRecordStatus)
+- ❌ CRC and package index updates on success
+- ❌ Integration tests validating CRC skip mechanism
+
+## Target Integration Points
+
+### 1. Pre-Build CRC Check (in DoBuild, before queuing)
+```go
+// Before queuing a package, check if it needs building
+crc, err := builddb.ComputePortCRC(filepath.Join(cfg.DPortsPath, p.PortDir))
+if err != nil {
+    logger.Error(fmt.Sprintf("Failed to compute CRC for %s: %v", p.PortDir, err))
+    // Continue with build (fail-safe)
+}
+
+needsBuild, err := ctx.buildDB.NeedsBuild(p.PortDir, crc)
+if err != nil {
+    logger.Error(fmt.Sprintf("Failed to check NeedsBuild for %s: %v", p.PortDir, err))
+    // Continue with build (fail-safe)
+}
+
+if !needsBuild {
+    // CRC matches, skip this build
+    ctx.registry.AddFlags(p, pkg.PkgFSuccess)
+    ctx.statsMu.Lock()
+    ctx.stats.Skipped++
+    ctx.statsMu.Unlock()
+    logger.Success(p.PortDir + " (CRC match, skipped)")
+    continue
+}
+```
+
+### 2. Build Record Lifecycle (in buildPackage)
+```go
+// Generate UUID for this build
+buildUUID := uuid.New().String()
+
+// Save initial record with status="running"
+rec := &builddb.BuildRecord{
+    UUID:      buildUUID,
+    PortDir:   p.PortDir,
+    Version:   p.Version,
+    Status:    "running",
+    StartTime: time.Now(),
+}
+if err := ctx.buildDB.SaveRecord(rec); err != nil {
+    logger.Error(fmt.Sprintf("Failed to save build record: %v", err))
+    // Continue anyway (fail-safe)
+}
+
+// Execute build phases...
+success := ctx.executeBuildPhases(worker, p)
+
+// Update record status
+endTime := time.Now()
+finalStatus := "success"
+if !success {
+    finalStatus = "failed"
+}
+
+if err := ctx.buildDB.UpdateRecordStatus(buildUUID, finalStatus, endTime); err != nil {
+    logger.Error(fmt.Sprintf("Failed to update build record: %v", err))
+}
+```
+
+### 3. CRC Update on Success (in buildPackage, after success)
+```go
+if success {
+    // Compute final CRC
+    crc, err := builddb.ComputePortCRC(filepath.Join(cfg.DPortsPath, p.PortDir))
+    if err != nil {
+        logger.Error(fmt.Sprintf("Failed to compute CRC after build: %v", err))
+    } else {
+        // Update CRC index
+        if err := ctx.buildDB.UpdateCRC(p.PortDir, crc); err != nil {
+            logger.Error(fmt.Sprintf("Failed to update CRC: %v", err))
+        }
+        
+        // Update package index
+        if err := ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, buildUUID); err != nil {
+            logger.Error(fmt.Sprintf("Failed to update package index: %v", err))
+        }
+    }
+}
+```
+
+## Task Breakdown
+
+### Task 1: Pre-Build CRC Check Integration (3 hours)
+**Objective**: Skip unchanged ports before queuing them for build
+
+**Implementation Steps:**
+1. Add CRC computation before queuing in `DoBuild()` (after line 127)
+2. Call `builddb.ComputePortCRC()` for each package
+3. Call `builddb.NeedsBuild(portDir, currentCRC)` to check if build needed
+4. If `needsBuild == false`:
+   - Mark package as `PkgFSuccess` in registry
+   - Increment `stats.Skipped` counter
+   - Log "CRC match, skipped" message
+   - Skip queuing (continue to next package)
+5. If `needsBuild == true` or error:
+   - Queue package normally (fail-safe on errors)
+6. Handle errors gracefully (log but don't fail build)
+
+**Files to Modify:**
+- `build/build.go` - Add CRC check in `DoBuild()` (lines 127-145)
+
+**Testing:**
+- Build a port successfully
+- Run build again without changes
+- Verify port is skipped (stats.Skipped increments)
+- Verify log shows "CRC match, skipped"
+
+**Success Criteria:**
+- Unchanged ports are skipped
+- Skipped count in stats is accurate
+- Logs clearly indicate CRC-based skips
+
+---
+
+### Task 2: Build Record Lifecycle Tracking (4 hours)
+**Objective**: Track each build with UUID, status, and timestamps in builddb
+
+**Implementation Steps:**
+1. Import `github.com/google/uuid` in `build/build.go` (already imported)
+2. Generate UUID at start of `buildPackage()` method
+3. Create `BuildRecord` with status="running"
+4. Call `ctx.buildDB.SaveRecord(rec)` before build phases
+5. After build completes, call `ctx.buildDB.UpdateRecordStatus(uuid, status, endTime)`
+   - status = "success" if `success == true`
+   - status = "failed" if `success == false`
+6. Handle errors gracefully (log but don't fail build)
+7. Store UUID in worker or context for reference
+
+**Files to Modify:**
+- `build/build.go` - Modify `buildPackage()` method (lines 202-280)
+
+**Testing:**
+- Build a port successfully
+- Check database has record with status="success"
+- Build a port that fails
+- Check database has record with status="failed"
+- Verify timestamps are accurate
+
+**Success Criteria:**
+- Every build creates a record in builddb
+- Status transitions: running → success/failed
+- Timestamps accurately reflect build duration
+- Database queries return correct records
+
+---
+
+### Task 3: CRC and Package Index Update on Success (2 hours)
+**Objective**: Update CRC and package index after successful builds
+
+**Implementation Steps:**
+1. After successful build (in `buildPackage`, after line 181)
+2. Compute final CRC: `builddb.ComputePortCRC(portPath)`
+3. Update CRC index: `ctx.buildDB.UpdateCRC(p.PortDir, crc)`
+4. Update package index: `ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, buildUUID)`
+5. Handle errors gracefully (log but don't fail build)
+6. Ensure CRC is NOT updated on failed builds
+
+**Files to Modify:**
+- `build/build.go` - Add CRC/index updates in `buildPackage()` (after line 181)
+
+**Testing:**
+- Build a port successfully
+- Check CRC is stored in database
+- Check package index points to build UUID
+- Build same port again
+- Verify it's skipped (Task 1 integration)
+
+**Success Criteria:**
+- CRC updated only on success
+- Package index points to latest successful build
+- Failed builds don't corrupt CRC/index
+- Next build of same port is skipped
+
+---
+
+### Task 4: Error Handling and Logging (2 hours)
+**Objective**: Add structured error handling for builddb operations
+
+**Implementation Steps:**
+1. Check for builddb structured errors (DatabaseError, RecordError, etc.)
+2. Add appropriate error logging for each builddb call
+3. Implement fail-safe behavior:
+   - CRC computation error → continue with build
+   - NeedsBuild error → continue with build
+   - SaveRecord error → log but continue
+   - UpdateRecordStatus error → log but continue
+   - UpdateCRC error → log but continue
+4. Add debug logging for CRC values
+5. Ensure builddb errors never cause build orchestration to fail
+
+**Files to Modify:**
+- `build/build.go` - Add error handling around all builddb calls
+
+**Testing:**
+- Simulate builddb errors (mock or invalid database)
+- Verify builds continue despite errors
+- Verify errors are logged appropriately
+- Verify no panics or crashes
+
+**Success Criteria:**
+- All builddb errors are caught and logged
+- Build orchestration continues on builddb errors
+- Logs provide useful debugging information
+- No panics or crashes on builddb failures
+
+---
+
+### Task 5: Integration Tests (3 hours)
+**Objective**: Validate end-to-end CRC skip mechanism with real builds
+
+**Test Scenarios:**
+1. **First Build Workflow**
+   - Build a small port (e.g., `misc/help2man`)
+   - Verify build succeeds
+   - Verify build record created in database
+   - Verify CRC stored in database
+   - Verify package index updated
+
+2. **Incremental Build (Skip)**
+   - Build same port again without changes
+   - Verify port is skipped (CRC match)
+   - Verify stats.Skipped increments
+   - Verify no new build record created
+   - Verify log shows "CRC match, skipped"
+
+3. **Rebuild After Change**
+   - Modify port Makefile (add comment)
+   - Build port again
+   - Verify port is rebuilt (CRC mismatch)
+   - Verify new build record created
+   - Verify CRC updated in database
+
+4. **Failed Build Handling**
+   - Force a build to fail (invalid patch)
+   - Verify build record shows status="failed"
+   - Verify CRC is NOT updated
+   - Verify package index is NOT updated
+   - Rebuild after fixing
+   - Verify port builds successfully
+
+5. **Multi-Port Dependency Chain**
+   - Build port A with dependency port B
+   - Both ports build successfully
+   - Build again without changes
+   - Verify both ports skipped (CRC match)
+   - Modify port A only
+   - Verify port A rebuilds, port B skipped
+
+**Files to Create:**
+- `build/integration_test.go` (new file)
+
+**Testing Infrastructure:**
+- Use test fixtures from `builddb/testdata/ports/`
+- Create small test ports if needed
+- Use temporary build directories
+- Clean up after tests
+
+**Success Criteria:**
+- All 5 test scenarios pass
+- CRC skip mechanism validated end-to-end
+- Build statistics accurate
+- No race conditions (run with `-race`)
+
+---
+
+### Task 6: Documentation and Examples (2 hours)
+**Objective**: Document Phase 3 changes and provide usage examples
+
+**Documentation Updates:**
+1. Update `DEVELOPMENT.md`:
+   - Mark Phase 3 as complete
+   - Update progress percentages
+   - Add Task 1-6 completion status
+2. Update `PHASE_3_BUILDER.md`:
+   - Add actual implementation details
+   - Document integration points
+   - Add code examples
+3. Add godoc comments:
+   - Update `BuildContext` struct comments
+   - Update `buildPackage()` method comments
+   - Add comments for CRC integration points
+4. Create examples:
+   - Example: Build with CRC skip
+   - Example: Query build records
+   - Example: View build history
+
+**Files to Modify:**
+- `DEVELOPMENT.md` - Phase 3 progress update
+- `docs/design/PHASE_3_BUILDER.md` - Implementation details
+- `build/build.go` - Enhanced godoc comments
+
+**Success Criteria:**
+- Documentation clearly explains CRC integration
+- Examples demonstrate typical usage
+- Phase 3 marked as complete in DEVELOPMENT.md
+- Godoc is comprehensive and accurate
+
+---
 
 ## Exit Criteria
-- Builds a small set of ports; correct stats; CRC skip works.
+
+- ✅ **Task 1**: Unchanged ports are skipped based on CRC comparison
+- ✅ **Task 2**: Build records track lifecycle (UUID, status, timestamps)
+- ✅ **Task 3**: CRC and package index updated on successful builds
+- ✅ **Task 4**: Structured error handling for all builddb operations
+- ✅ **Task 5**: Integration tests validate CRC skip mechanism end-to-end
+- ✅ **Task 6**: Documentation updated and examples provided
+
+**Validation:**
+- Build same port twice → second build skipped
+- Modify port → rebuild triggered
+- Failed builds don't update CRC/index
+- Build statistics accurate (Total, Success, Failed, Skipped)
+- All integration tests pass with `-race`
+
+## Estimated Effort
+
+**Total**: 16 hours
+- Task 1: Pre-Build CRC Check (3h)
+- Task 2: Build Record Lifecycle (4h)
+- Task 3: CRC/Index Update (2h)
+- Task 4: Error Handling (2h)
+- Task 5: Integration Tests (3h)
+- Task 6: Documentation (2h)
+
+**Critical Path**: Tasks 1-3 must be done sequentially
+**Parallelizable**: Tasks 4-6 can be done alongside Tasks 1-3
 
 ## Dependencies
-- Phases 1–2 complete.
+
+✅ **Phase 1**: pkg library complete (Parse, Resolve, TopoOrder)
+✅ **Phase 2**: BuildDB complete (84.5% coverage, all tests passing)
+✅ **Existing Build Infrastructure**: ~705 lines, 15 functions, worker pool operational
+
+## Key Design Decisions
+
+### 1. Fail-Safe Error Handling
+**Decision**: BuildDB errors should not cause build orchestration to fail
+**Rationale**: Build should succeed even if tracking fails (logging is degraded, not broken)
+**Implementation**: Log all builddb errors, continue with build
+
+### 2. CRC Computation Timing
+**Decision**: Compute CRC before queuing (Task 1) and after success (Task 3)
+**Rationale**: Early CRC check avoids queueing unchanged ports; post-build CRC captures final state
+**Implementation**: Two CRC computation points in `DoBuild()` and `buildPackage()`
+
+### 3. Build Record Persistence
+**Decision**: Save record with status="running" before build starts
+**Rationale**: Track in-progress builds; useful for crash recovery and debugging
+**Implementation**: SaveRecord at start, UpdateRecordStatus at end
+
+### 4. CRC Skip Logging
+**Decision**: Clearly log when ports are skipped due to CRC match
+**Rationale**: Users need to understand why builds are fast; debugging aid
+**Implementation**: Log message: "editors/vim@9.0.0 (CRC match, skipped)"
+
+### 5. Integration Test Coverage
+**Decision**: Focus on CRC skip mechanism validation, not full build testing
+**Rationale**: Phase 3 goal is builddb integration; full build testing is Phase 6
+**Implementation**: 5 test scenarios covering CRC skip workflows
+
+## Future Enhancements (Phase 4+)
+
+**Deferred to Later Phases:**
+- Environment abstraction (Phase 4)
+- Advanced build analytics dashboard
+- Real-time build progress API (Phase 5)
+- Distributed worker coordination
+- Build log storage in database
+- Historical build analytics and trends
+
+## References
+
+- [Phase 2: BuildDB](PHASE_2_BUILDDB.md) - BuildDB API reference
+- [Phase 1: Library](PHASE_1_LIBRARY.md) - pkg library documentation
+- [IDEAS_MVP.md](IDEAS_MVP.md) - Overall MVP architecture
+- [DEVELOPMENT.md](../../DEVELOPMENT.md) - Project status and milestones
+
+---
+
+**Last Updated**: 2025-11-27  
+**Phase Status**: 🔵 Ready to Start  
+**Estimated Completion**: 16 hours (1-2 weeks)

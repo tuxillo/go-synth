@@ -313,54 +313,106 @@ func (db *DB) UpdateCRC(portDir string, crc uint32) error
 
 ---
 
-## Phase 3: Builder Orchestration ⚪
+## Phase 3: Builder Orchestration 🔵
 
-**Status**: ⚪ Planned  
-**Timeline**: Not started | Target: TBD  
-**Dependencies**: Phases 1-2 completion
+**Status**: 🔵 Ready to Start (Phase 2 complete)  
+**Timeline**: Not started | Target: TBD (16 hours estimated)  
+**Dependencies**: Phases 1-2 completion (✅ Complete)
 
 ### 🎯 Goals
-- Implement worker pool for parallel build execution
-- Execute essential build phases in correct order
-- Integrate with pkg (build order) and builddb (tracking)
+- Integrate builddb (CRC-based incremental builds) with existing builder
+- Add build record lifecycle tracking (UUID, status, timestamps)
+- Enable CRC skip mechanism to avoid rebuilding unchanged ports
+- Ensure build statistics accurately reflect skipped/built/failed counts
 
 ### 📦 Main Deliverables
-- Worker pool with configurable concurrency
-- Queue-based task distribution respecting topological order
-- Build phase execution (7 MVP phases: fetch, checksum, extract, patch, build, stage, package)
-- Error propagation to dependent packages
-- Build statistics tracking
+- Pre-build CRC checking to skip unchanged ports
+- Build record lifecycle (running → success/failed)
+- CRC and package index updates on successful builds
+- Comprehensive integration tests
+- Documentation and examples
 
-### ✓ Exit Criteria
-- Builds small set of ports with correct parallelism
-- Dependent packages skip when dependency fails
-- Statistics accurately reflect success/failed/skipped counts
-- CRC skip mechanism works across builds
+### 🚧 Task Breakdown (0/6 complete)
+1. ❌ **Pre-Build CRC Check Integration** (3 hours)
+   - Check CRC before queuing packages
+   - Skip unchanged ports (CRC match)
+   - Update stats.Skipped counter
+   
+2. ❌ **Build Record Lifecycle Tracking** (4 hours)
+   - Generate UUID for each build
+   - Save record with status="running"
+   - Update status to "success"/"failed"
+   - Track timestamps
+   
+3. ❌ **CRC and Package Index Update** (2 hours)
+   - Update CRC after successful builds
+   - Update package index with UUID
+   - Ensure failed builds don't update CRC
+   
+4. ❌ **Error Handling and Logging** (2 hours)
+   - Structured error handling for builddb operations
+   - Fail-safe behavior (log but continue)
+   - Debug logging for CRC values
+   
+5. ❌ **Integration Tests** (3 hours)
+   - First build workflow
+   - Incremental build (skip on CRC match)
+   - Rebuild after change (CRC mismatch)
+   - Failed build handling
+   - Multi-port dependency chains
+   
+6. ❌ **Documentation and Examples** (2 hours)
+   - Update DEVELOPMENT.md
+   - Update PHASE_3_BUILDER.md
+   - Add godoc comments
+   - Create usage examples
 
-### 💻 Proposed API
-```go
-type BuildStats struct { 
-    Total, Success, Failed, Skipped int
-    Duration time.Duration 
-}
+### ✓ Exit Criteria (0/6 complete)
+- ❌ Unchanged ports are skipped based on CRC comparison
+- ❌ Build records track lifecycle (UUID, status, timestamps)
+- ❌ CRC and package index updated on successful builds
+- ❌ Structured error handling for all builddb operations
+- ❌ Integration tests validate CRC skip mechanism end-to-end
+- ❌ Documentation updated and examples provided
 
-type Builder struct {
-    Env      environment.Environment
-    DB       *builddb.DB
-    Workers  int
-}
+### 📊 Existing Infrastructure (~705 lines)
+**build/build.go** (368 lines):
+- ✅ BuildContext with worker pool and buildDB reference
+- ✅ DoBuild() orchestration with topological ordering
+- ✅ Worker goroutines with channel-based queue
+- ✅ Dependency waiting mechanism
+- ✅ Mount management with cleanup
 
-func (b *Builder) Run(pkgs []*pkg.Package) (*BuildStats, error)
-```
+**build/phases.go** (207 lines):
+- ✅ executePhase() with 7 MVP phases
+- ✅ Chroot execution with proper environment
+- ✅ Phase-specific handling
+
+**build/fetch.go** (130 lines):
+- ✅ Distfile fetching logic
+
+### 💻 Integration Points
+The existing builder already has:
+- `BuildContext.buildDB *builddb.DB` field
+- BuildStats struct with Total, Success, Failed, Skipped counters
+- Worker pool and queue infrastructure
+- Topological ordering via pkg.GetBuildOrder()
+
+Phase 3 adds:
+- CRC checking before queuing (`builddb.NeedsBuild()`)
+- Build record lifecycle (`SaveRecord`, `UpdateRecordStatus`)
+- CRC updates on success (`UpdateCRC`, `UpdatePackageIndex`)
 
 ### 📖 Documentation
-- **[Phase 3 Plan](docs/design/PHASE_3_BUILDER.md)** - Complete specification
+- **[Phase 3 Plan](docs/design/PHASE_3_BUILDER.md)** - Complete specification with 6 tasks
+- **[Phase 2 BuildDB](docs/design/PHASE_2_BUILDDB.md)** - BuildDB API reference
 
 ### 🔑 Key Decisions
-- Channel-based worker queue
-- Topological order ensures dependencies build first
-- Graceful cleanup via defer/cleanup hooks
-- Package-level phases (not port-level) for MVP
+- Fail-safe error handling (log builddb errors, continue with build)
+- CRC computation: before queuing (skip check) and after success (update)
+- Build record persistence: save "running" at start, update at end
+- Clear logging for CRC-based skips
+- Integration tests focus on CRC skip mechanism validation
 
 ---
 
@@ -612,12 +664,17 @@ Rationale: Package should contain only metadata, not build-time state
 ## 📈 Project Status Summary
 
 ### Overall Progress
-- **Phase 1**: 🟢 100% core complete (9/9 exit criteria met) - documentation tasks remaining
+- **Phase 1**: 🟢 100% complete (9/9 exit criteria met)
 - **Phase 1.5**: 🟢 100% complete (fidelity verification + C-ism removal)
-- **Phase 2-7**: ⚪ Planned (ready to start)
-- **Total Estimated Remaining**: ~5-8 hours for Phase 1 documentation, then ~50-70 hours for Phases 2-7
+- **Phase 2**: 🟢 92% complete (11/12 tasks - benchmarks deferred)
+- **Phase 3**: 🔵 Ready to start (16 hours estimated)
+- **Phase 4-7**: ⚪ Planned
+- **Total Estimated Remaining**: ~16 hours for Phase 3, then ~40-50 hours for Phases 4-7
 
 ### Recent Milestones
+- ✅ 2025-11-27: Phase 2 Task 9 complete - Integration tests (5 workflows, 23 subtests)
+- ✅ 2025-11-27: Phase 2 Task 8 complete - Unit tests (84.5% coverage, 93 subtests)
+- ✅ 2025-11-27: Phase 2 Tasks 1-7 complete - BuildDB with bbolt implementation
 - ✅ 2025-11-26: Phase 1 Task 6 complete - Developer guide with 5 runnable examples
 - ✅ 2025-11-26: Phase 1 Task 5 complete - Comprehensive godoc documentation added
 - ✅ 2025-11-25: Phase 1 Task 4 complete - Removed global state, pkgRegistry now parameter-based
@@ -637,9 +694,10 @@ Rationale: Package should contain only metadata, not build-time state
 - ✅ 2025-11-21: Cycle detection implemented and tested
 
 ### Next Milestones
-- 🎯 Task 7: Add integration tests (~2-3h)
-- 🎯 Task 8: Improve error test coverage (~2-3h)
-- 🎯 Phase 1 quality tasks completion
+- 🎯 Phase 3 Task 1: Pre-Build CRC Check Integration (~3h)
+- 🎯 Phase 3 Task 2: Build Record Lifecycle Tracking (~4h)
+- 🎯 Phase 3 Task 3: CRC and Package Index Update (~2h)
+- 🎯 Phase 3 completion (6 tasks, ~16 hours total)
 
 ### Known Issues
 See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for complete list.
