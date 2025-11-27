@@ -59,6 +59,21 @@ gh pr create --repo otheruser/somerepo
 - Resolves dependencies automatically using topological sorting
 - Provides comprehensive logging and progress tracking
 
+### Project Location
+**Repository Path**: `$HOME/s/go-synth` (typically `/home/antonioh/s/go-synth`)
+
+### Essential Documentation Structure
+- **`DEVELOPMENT.md`** (root) - **PRIMARY DEVELOPMENT GUIDE**: Phase tracking, task status, exit criteria, contribution workflow
+- **`docs/design/`** - **PHASE DESIGN DOCUMENTS**: Detailed specifications for each phase
+  - `PHASE_1_LIBRARY.md` - Library extraction (pkg package)
+  - `PHASE_2_BUILDDB.md` - Build database with bbolt
+  - `PHASE_3_BUILDER.md` - Builder orchestration
+  - `PHASE_4_ENVIRONMENT.md` - Environment abstraction
+  - `PHASE_5_MIN_API.md` - Minimal REST API
+  - `PHASE_6_TESTING.md` - Testing strategy
+  - `PHASE_7_INTEGRATION.md` - Integration & migration
+  - Plus planning docs: `IDEAS.md`, `IDEAS_MVP.md`, `FUTURE_BACKLOG.md`
+
 ## Architecture Summary
 
 ### Core Components
@@ -85,16 +100,43 @@ gh pr create --repo otheruser/somerepo
 ## Development Commands
 
 ### Contribution Workflow (Local Agents)
+
+#### Mandatory Documentation Updates
+**CRITICAL**: NO CODE CHANGES WITHOUT DOCUMENTATION UPDATES. Every commit that changes functionality MUST update all relevant documentation in the same commit.
+
+**Required Documentation Updates for Every Commit:**
+
+1. **DEVELOPMENT.md** (ALWAYS check this first)
+   - Update task status (pending → in_progress → completed)
+   - Update phase progress percentages
+   - Update exit criteria status
+   - Add commit hashes to completed tasks
+   - Update "Current Status" and "Recent Milestones" sections
+
+2. **Phase Design Document** (`docs/design/PHASE_N_*.md`)
+   - Update task status in the relevant phase document
+   - Mark deliverables as complete with commit references
+   - Update implementation notes and decisions
+   - Document any deviations from the plan
+
+3. **README.md** (if user-facing changes)
+   - Update features list
+   - Update API examples
+   - Update architecture diagrams or descriptions
+   - Add/update usage examples
+
+4. **AGENTS.md** (if architecture/workflow changes)
+   - Update component descriptions
+   - Update implementation status
+   - Update code patterns and workflows
+
+**The Rule**: If you wrote code → you MUST update docs. No exceptions. Documentation is not optional.
+
+#### Commit Requirements
 - Each completed step (e.g. API change, test addition, doc update) must be committed locally.
-- **CRITICAL**: Every commit that makes a functional change MUST include updates to ALL relevant documentation files (.md) in the same commit.
-  - If you modify code behavior, update relevant docs in the same commit
-  - If you complete a task, update progress tracking docs (PHASE_1_TODO.md, PHASE_1_LIBRARY.md, README.md, etc.)
-  - If you add/remove features, update AGENTS.md, README.md, and any affected design docs
-  - Documentation updates are NOT optional - they are part of the change
-  - Never commit code changes without corresponding doc updates
 - **CRITICAL**: Every commit MUST include Co-authored-by trailer for the AI model used.
   - Format: `Co-authored-by: <Model Name> <ai-model@example.com>`
-  - Example: `Co-authored-by: Claude 4.5 Sonnet <claude-4.5-sonnet@anthropic.com>`
+  - Example: `Co-authored-by: Claude 3.7 Sonnet <claude-3.7-sonnet@anthropic.com>`
   - Example: `Co-authored-by: GPT-4 <gpt-4@openai.com>`
   - The commit author is already set to Antonio Huete Jimenez with proper email
   - This properly attributes AI assistance in the git history
@@ -159,10 +201,19 @@ sudo ./dsynth build editors/vim shells/bash devel/git
 - **`config/config.go`** - Configuration parsing and management
 - **`/etc/dsynth/dsynth.ini`** - Runtime configuration (created by `init`)
 
-### Documentation
-- **`README.md`** - Comprehensive 263-line user guide
-- **`IDEAS.md`** - Detailed 729-line architectural planning document
-- **`QUICKSTART.md`** - Practical 408-line getting-started guide
+### Documentation (Root Directory)
+- **`DEVELOPMENT.md`** - **PRIMARY**: Phase tracking, task status, contribution workflow (646 lines)
+- **`README.md`** - User guide with features, configuration, examples (411 lines)
+- **`AGENTS.md`** - This file: Development guide for agents and developers (405 lines)
+- **`QUICKSTART.md`** - Practical getting-started guide (408 lines)
+
+### Design Documentation (docs/design/ Directory)
+- **`IDEAS.md`** - Comprehensive architectural vision (729 lines)
+- **`IDEAS_MVP.md`** - Minimum viable product scope
+- **`PHASE_1_LIBRARY.md`** - Phase 1 specification and status
+- **`PHASE_2_BUILDDB.md`** - Phase 2 specification and status
+- **`PHASE_3_BUILDER.md` through `PHASE_7_INTEGRATION.md`** - Future phase specs
+- **`FUTURE_BACKLOG.md`** - Deferred features
 
 ### Build Artifacts (Runtime)
 - **`dsynth`** - Compiled binary
@@ -392,11 +443,21 @@ See `IDEAS.md` for comprehensive architectural plans:
 
 ## Getting Help
 
-- Read comprehensive documentation: `README.md`, `QUICKSTART.md`
-- Check architectural plans: `IDEAS.md`
-- Examine existing code patterns in implemented features
-- Use debug mode (`-d`) for troubleshooting
-- Review build logs for detailed error information
+### Documentation Reading Order for New Contributors
+1. **`DEVELOPMENT.md`** - Start here! Understand phases, current status, and workflow
+2. **`docs/design/PHASE_N_*.md`** - Read the current phase document for detailed tasks
+3. **`AGENTS.md`** - This file: Development patterns and workflows
+4. **`README.md`** - User-facing features and usage
+5. **`QUICKSTART.md`** - Practical examples
+6. **`docs/design/IDEAS.md`** - Deep dive into architectural vision
+
+### Quick References
+- Current phase status: Check **`DEVELOPMENT.md`** Phase Status section
+- Task list: Check **`DEVELOPMENT.md`** and relevant phase document in `docs/design/`
+- Code patterns: This file (AGENTS.md) "Common Workflows" section
+- Architectural decisions: `docs/design/PHASE_N_*.md` "Key Decisions" sections
+- Debug mode: Use `-d` flag for troubleshooting
+- Build logs: `/build/logs/` directory
 
 ---
 
