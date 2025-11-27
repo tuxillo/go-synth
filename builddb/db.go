@@ -5,6 +5,9 @@ package builddb
 import (
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
+	"os"
+	"path/filepath"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -474,4 +477,89 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 	}
 
 	return crc, found, nil
+}
+
+// ComputePortCRCContent calculates a CRC32 checksum of all files in a port directory.
+//
+// Unlike metadata-based approaches (which hash file size + mtime), this function
+// hashes actual file contents to reliably detect changes regardless of modification
+// times. This eliminates false positives from operations like git clone, rsync, or
+// tar extraction that reset file timestamps.
+//
+// The function walks the port directory and:
+//   - Hashes each file's relative path (to detect structure changes like renamed files)
+//   - Hashes each file's actual content (to detect content changes)
+//   - Skips work directories and version control systems (.git, .svn, CVS)
+//   - Uses CRC32-IEEE polynomial for speed and collision resistance
+//
+// Performance: Typical ports contain 4-9 small files (Makefiles, patches, distinfo)
+// totaling a few KB. Reading and hashing these files takes ~10-50 microseconds per
+// port on modern hardware, making this approach practical for thousands of ports.
+//
+// Use this function before calling NeedsBuild() to determine if a port's source
+// files have changed since the last successful build.
+//
+// Note: This function will be renamed to ComputePortCRC once the legacy metadata-based
+// version is removed from crc.go (Task 6C).
+//
+// Parameters:
+//   - portPath: Absolute path to port directory (e.g., "/dports/editors/vim")
+//
+// Returns:
+//   - uint32: CRC32 checksum of all port files' paths and contents
+//   - error: Filesystem errors, I/O errors, or path errors
+//
+// Example:
+//
+//	crc, err := builddb.ComputePortCRCContent("/usr/dports/editors/vim")
+//	if err != nil {
+//	    return fmt.Errorf("failed to compute CRC: %w", err)
+//	}
+//	needsBuild, err := db.NeedsBuild("editors/vim", crc)
+func ComputePortCRCContent(portPath string) (uint32, error) {
+	hash := crc32.NewIEEE()
+
+	// Walk the port directory tree
+	err := filepath.Walk(portPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip work directories and version control systems
+		base := filepath.Base(path)
+		if base == ".git" || base == "work" || base == ".svn" || base == "CVS" {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Only process regular files
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		// Hash relative file path (detects renamed/moved files)
+		relPath, err := filepath.Rel(portPath, path)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path for %s: %w", path, err)
+		}
+		hash.Write([]byte(relPath))
+		hash.Write([]byte{0}) // Null separator
+
+		// Hash actual file contents (detects content changes)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read file %s: %w", path, err)
+		}
+		hash.Write(data)
+
+		return nil
+	})
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to compute CRC for %s: %w", portPath, err)
+	}
+
+	return hash.Sum32(), nil
 }

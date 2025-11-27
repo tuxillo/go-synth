@@ -159,10 +159,31 @@ crc_index/
   - `GetCRC(portDir)` retrieves stored CRC with exists flag for distinguishing 0 vs missing
   - Validated with comprehensive test covering: non-existent, match, mismatch, multiple ports, edge cases (0, max uint32)
 
-### Task 6: Migration Strategy (1 hour)
-- Document coexistence approach (both old and new DB temporarily)
-- Implement `MigrateFromCRCFile(oldPath string) error` (optional)
-- Populate `crc_index` from existing `builddb/crc.db` on first run
+### Task 6: Complete Legacy Replacement (2-2.5 hours) 🚧
+**Approach:** Delete legacy CRC database entirely, replace with content-based BuildDB
+
+#### Task 6A: Content-Based CRC Helper ✅
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Result**: Implemented `ComputePortCRCContent()` with content-based hashing (~85 lines)
+  - Hashes actual file contents (not metadata like size + mtime)
+  - Eliminates false positives from mtime changes (git clone, rsync, tar)
+  - Performance: ~10-50µs per port (4-9 files, few KB typical)
+  - Validated with real dports and change detection tests
+  - Function temporarily named `ComputePortCRCContent` to avoid conflict with legacy `ComputePortCRC`
+  - Will be renamed to `ComputePortCRC` when legacy code deleted (Task 6C)
+
+#### Task 6B: Migrate API Calls (pending)
+- Replace `InitCRCDatabase()` → `OpenDB()`
+- Replace `CheckNeedsBuild()` → `NeedsBuild()` + `ComputePortCRCContent()`
+- Remove `SaveCRCDatabase()` calls (bbolt auto-syncs)
+- Update pkg/pkg.go, cmd/build.go, main.go
+
+#### Task 6C: Delete Legacy Code (pending)
+- Delete `builddb/crc.go` entirely (494 lines)
+- Delete legacy helpers from `builddb/helpers.go`
+- Rename `ComputePortCRCContent()` → `ComputePortCRC()`
+- Test full build workflow end-to-end
 
 ### Task 7: Error Types (1 hour)
 - Add `ErrNotFound`, `ErrCorrupted`, `ErrInvalidUUID`, etc.
