@@ -52,15 +52,19 @@ fi
 echo ""
 
 # Build QEMU command based on phase
+# Following golang/build approach: virtio-scsi disk, multiple -drive for CDs
 QEMU_CMD="qemu-system-x86_64"
 QEMU_ARGS=(
-    -machine accel=kvm
-    -cpu host
-    -smp "${VM_CPUS}"
-    -m "${VM_MEMORY}"
     -display none
     -serial stdio
     -monitor none
+    -m "${VM_MEMORY}"
+    -smp "${VM_CPUS}"
+    -machine accel=kvm
+    -cpu host
+    -net nic,model=virtio
+    -net user
+    -device virtio-scsi-pci,id=scsi0
 )
 
 case "${PHASE}" in
@@ -78,10 +82,11 @@ case "${PHASE}" in
         qemu-img create -f qcow2 "${VM_DISK}" "${VM_DISK_SIZE}"
         
         QEMU_ARGS+=(
-            -drive "file=${VM_DISK},format=qcow2,if=virtio"
-            -cdrom "${VM_IMAGE}"                    # cd0: Boot from installer
-            -drive "file=${PHASE_ISO},media=cdrom"  # cd1: Phase script
-            -drive "file=${VM_IMAGE},media=cdrom"   # cd2: Clean source for cpdup
+            -drive "file=${VM_DISK},if=none,format=qcow2,cache=none,id=myscsi"
+            -device scsi-hd,drive=myscsi,bus=scsi0.0
+            -drive "file=${VM_IMAGE},media=cdrom"      # cd0: Installer ISO (bootable)
+            -drive "file=${PHASE_ISO},media=cdrom"     # cd1: Phase1 script
+            -drive "file=${VM_IMAGE},media=cdrom"      # cd2: Clean ISO for cpdup
         )
         ;;
         
@@ -89,10 +94,9 @@ case "${PHASE}" in
         # Phase 2: Package Updates
         # Need: disk (boot), phase2 ISO (script)
         QEMU_ARGS+=(
-            -drive "file=${VM_DISK},format=qcow2,if=virtio"
-            -cdrom "${PHASE_ISO}"                   # cd0: Phase script
-            -net nic,model=e1000
-            -net user
+            -drive "file=${VM_DISK},if=none,format=qcow2,cache=none,id=myscsi"
+            -device scsi-hd,drive=myscsi,bus=scsi0.0
+            -drive "file=${PHASE_ISO},media=cdrom"     # cd0: Phase2 script
         )
         ;;
         
@@ -100,10 +104,9 @@ case "${PHASE}" in
         # Phase 3: Provisioning
         # Need: disk (boot), phase3 ISO (script)
         QEMU_ARGS+=(
-            -drive "file=${VM_DISK},format=qcow2,if=virtio"
-            -cdrom "${PHASE_ISO}"                   # cd0: Phase script
-            -net nic,model=e1000
-            -net user
+            -drive "file=${VM_DISK},if=none,format=qcow2,cache=none,id=myscsi"
+            -device scsi-hd,drive=myscsi,bus=scsi0.0
+            -drive "file=${PHASE_ISO},media=cdrom"     # cd0: Phase3 script
         )
         ;;
         
@@ -122,8 +125,15 @@ echo "This may take several minutes..."
 echo ""
 echo "----------------------------------------"
 
-# Run QEMU and wait for it to finish
-"${QEMU_CMD}" "${QEMU_ARGS[@]}"
+if [ "${PHASE}" = "1" ]; then
+    # Phase 1: Need to set console in boot loader
+    # Pipe boot commands like golang/build does
+    (sleep 1; echo 9; echo "set console=comconsole"; echo boot) | \
+        "${QEMU_CMD}" "${QEMU_ARGS[@]}"
+else
+    # Phase 2 & 3: Just boot normally
+    "${QEMU_CMD}" "${QEMU_ARGS[@]}"
+fi
 
 EXIT_CODE=$?
 
