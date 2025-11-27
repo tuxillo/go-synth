@@ -23,15 +23,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 
 # Parse arguments
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <script-path> <output-iso>" >&2
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <script-path> <output-iso> [data-dir]" >&2
     echo "" >&2
     echo "Example: $0 phase1-install.sh phase1.iso" >&2
+    echo "Example: $0 phase3-provision.sh phase3.iso /tmp/phase3-data" >&2
     exit 1
 fi
 
 SCRIPT_PATH="$1"
 OUTPUT_ISO="$2"
+DATA_DIR="${3:-}"  # Optional data directory to include in ISO
 
 # Validate inputs
 if [ ! -f "${SCRIPT_PATH}" ]; then
@@ -58,6 +60,12 @@ echo "  Script: ${SCRIPT_PATH}"
 # Copy script to temp directory
 cp "${SCRIPT_PATH}" "${TEMP_DIR}/${SCRIPT_NAME}"
 chmod +x "${TEMP_DIR}/${SCRIPT_NAME}"
+
+# Copy optional data directory if provided
+if [ -n "${DATA_DIR}" ] && [ -d "${DATA_DIR}" ]; then
+    echo "  Including data from: ${DATA_DIR}"
+    cp -r "${DATA_DIR}"/* "${TEMP_DIR}/" 2>/dev/null || true
+fi
 
 # Create pfi.conf
 cat > "${TEMP_DIR}/pfi.conf" <<EOF

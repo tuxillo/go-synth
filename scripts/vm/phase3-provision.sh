@@ -51,18 +51,16 @@ chmod 755 /usr/dports
 echo "Step 3: Configuring Go environment..."
 cat >> /root/.profile <<'EOF'
 
-# Go environment
-export GOROOT=/usr/local/go
+# Go environment (using pkg-installed Go at /usr/local/bin/go)
 export GOPATH=/root/go
 export GOCACHE=/root/.cache/go-build
-export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
+export PATH=$PATH:$GOPATH/bin
 EOF
 
 # Also set for current session
-export GOROOT=/usr/local/go
 export GOPATH=/root/go
 export GOCACHE=/root/.cache/go-build
-export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
+export PATH=$PATH:$GOPATH/bin
 
 # Create Go directories
 mkdir -p "$GOPATH/bin"
@@ -104,20 +102,37 @@ HISTSIZE=1000
 HISTFILESIZE=2000
 EOF
 
-# Step 6: Set up SSH authorized_keys (if SSH key provided via environment)
+# Step 6: Set up SSH authorized_keys (read from ISO)
 echo "Step 6: Configuring SSH..."
-if [ -n "${SSH_PUBLIC_KEY:-}" ]; then
-    echo "  Adding SSH public key to authorized_keys..."
-    echo "${SSH_PUBLIC_KEY}" >> /root/.ssh/authorized_keys
-    chmod 600 /root/.ssh/authorized_keys
-else
-    echo "  No SSH_PUBLIC_KEY provided, skipping key setup"
-fi
 
-# Ensure SSH directory has correct permissions
-chmod 700 /root/.ssh
-if [ -f /root/.ssh/authorized_keys ]; then
+# Try to find SSH key on CD (phase3 ISO is mounted as cd0)
+SSH_KEY_FILE=""
+for cd in cd0 cd1 cd2; do
+    if [ -f "/dev/${cd}" ]; then
+        # Try to mount and find ssh_key.pub
+        mkdir -p /tmp/phase3-cd
+        if mount_cd9660 "/dev/${cd}" /tmp/phase3-cd 2>/dev/null; then
+            if [ -f /tmp/phase3-cd/ssh_key.pub ]; then
+                SSH_KEY_FILE="/tmp/phase3-cd/ssh_key.pub"
+                echo "  Found SSH key on ${cd}"
+                break
+            fi
+            umount /tmp/phase3-cd 2>/dev/null || true
+        fi
+    fi
+done
+
+if [ -n "${SSH_KEY_FILE}" ] && [ -f "${SSH_KEY_FILE}" ]; then
+    echo "  Installing SSH public key..."
+    mkdir -p /root/.ssh
+    cat "${SSH_KEY_FILE}" >> /root/.ssh/authorized_keys
+    chmod 700 /root/.ssh
     chmod 600 /root/.ssh/authorized_keys
+    echo "  ✓ SSH key installed"
+    # Cleanup mount
+    umount /tmp/phase3-cd 2>/dev/null || true
+else
+    echo "  ⚠ No SSH key found on ISO, SSH will require password"
 fi
 
 # Step 7: Test doas configuration
@@ -133,8 +148,9 @@ fi
 echo "Step 8: Verifying Go installation..."
 if command -v go &> /dev/null; then
     echo "  ✓ Go version: $(go version)"
-    echo "  ✓ GOROOT: $GOROOT"
+    echo "  ✓ Go binary: $(which go)"
     echo "  ✓ GOPATH: $GOPATH"
+    echo "  ✓ GOCACHE: $GOCACHE"
 else
     echo "  ✗ Go not found!"
     exit 1

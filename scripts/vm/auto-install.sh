@@ -186,13 +186,17 @@ else
     echo "✓ Using existing SSH key: ${VM_SSH_KEY}"
 fi
 
-# Export public key for phase3
-export SSH_PUBLIC_KEY="$(cat "${VM_SSH_KEY}.pub")"
+# Create Phase 3 data directory with SSH key
+PHASE3_DATA="${VM_DIR}/phase3-data"
+mkdir -p "${PHASE3_DATA}"
+cp "${VM_SSH_KEY}.pub" "${PHASE3_DATA}/ssh_key.pub"
+echo "✓ SSH public key prepared for installation"
 
-# Create Phase 3 ISO
+# Create Phase 3 ISO with SSH key data
 "${SCRIPT_DIR}/make-phase-iso.sh" \
     "${SCRIPT_DIR}/phase3-provision.sh" \
-    "${PHASE3_ISO}"
+    "${PHASE3_ISO}" \
+    "${PHASE3_DATA}"
 
 echo ""
 echo "Starting Phase 3 provisioning..."
