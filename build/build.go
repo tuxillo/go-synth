@@ -130,6 +130,29 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				continue
 			}
 
+			// Check if build is needed based on CRC (incremental builds)
+			portPath := filepath.Join(cfg.DPortsPath, p.Category, p.Name)
+			currentCRC, err := builddb.ComputePortCRC(portPath)
+			if err != nil {
+				// Log warning but continue with build (fail-safe)
+				logger.Error(fmt.Sprintf("Failed to compute CRC for %s: %v", p.PortDir, err))
+			} else {
+				// Check if port has changed since last successful build
+				needsBuild, err := ctx.buildDB.NeedsBuild(p.PortDir, currentCRC)
+				if err != nil {
+					// Log warning but continue with build (fail-safe)
+					logger.Error(fmt.Sprintf("Failed to check NeedsBuild for %s: %v", p.PortDir, err))
+				} else if !needsBuild {
+					// CRC matches last successful build, skip this port
+					ctx.registry.AddFlags(p, pkg.PkgFSuccess)
+					ctx.statsMu.Lock()
+					ctx.stats.Skipped++
+					ctx.statsMu.Unlock()
+					logger.Success(fmt.Sprintf("%s (CRC match, skipped)", p.PortDir))
+					continue
+				}
+			}
+
 			// Wait for dependencies
 			if !ctx.waitForDependencies(p) {
 				// Dependency failed, mark as skipped
