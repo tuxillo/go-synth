@@ -1,6 +1,7 @@
 package build
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,12 +9,23 @@ import (
 	"strings"
 
 	"dsynth/config"
+	"dsynth/environment"
 	"dsynth/log"
 	"dsynth/pkg"
 )
 
+// loggerWriter adapts log.PackageLogger to io.Writer interface
+type loggerWriter struct {
+	logger *log.PackageLogger
+}
+
+func (lw *loggerWriter) Write(p []byte) (n int, err error) {
+	lw.logger.Write(p)
+	return len(p), nil
+}
+
 // executePhase executes a single build phase
-func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Config, registry *pkg.BuildStateRegistry, logger *log.PackageLogger) error {
+func executePhase(ctx context.Context, worker *Worker, p *pkg.Package, phase string, cfg *config.Config, registry *pkg.BuildStateRegistry, logger *log.PackageLogger) error {
 	// Build the make command
 	portPath := filepath.Join("/xports", p.Category, p.Name)
 
@@ -39,7 +51,7 @@ func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Conf
 	switch phase {
 	case "install-pkgs":
 		// Install dependency packages before building
-		return installDependencyPackages(worker, p, cfg, registry, logger)
+		return installDependencyPackages(ctx, worker, p, cfg, registry, logger)
 
 	case "fetch":
 		args = append(args, "BATCH=yes", "fetch")
@@ -84,25 +96,40 @@ func executePhase(worker *Worker, p *pkg.Package, phase string, cfg *config.Conf
 		return fmt.Errorf("unknown phase: %s", phase)
 	}
 
-	// Execute in chroot
-	cmd := exec.Command("chroot", worker.Mount.BaseDir, "/usr/bin/make")
-	cmd.Args = append([]string{"chroot", worker.Mount.BaseDir, "/usr/bin/make"}, args...)
-	cmd.Dir = "/"
+	// Build environment command
+	// Create io.Writer adapter for logger
+	logWriter := &loggerWriter{logger: logger}
 
-	// Capture output
-	logger.WriteCommand(strings.Join(cmd.Args, " "))
-	output, err := cmd.CombinedOutput()
-	logger.Write(output)
+	execCmd := &environment.ExecCommand{
+		Command: "/usr/bin/make",
+		Args:    args,
+		Env: map[string]string{
+			"PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin",
+		},
+		Stdout: logWriter,
+		Stderr: logWriter,
+	}
 
+	// Log command for debugging
+	cmdStr := fmt.Sprintf("/usr/bin/make %s", strings.Join(args, " "))
+	logger.WriteCommand(cmdStr)
+
+	// Execute in isolated environment
+	result, err := worker.Env.Execute(ctx, execCmd)
 	if err != nil {
-		return fmt.Errorf("phase failed: %w", err)
+		// Execution failure (not non-zero exit code)
+		return fmt.Errorf("phase execution failed: %w", err)
+	}
+
+	if result.ExitCode != 0 {
+		return fmt.Errorf("phase failed with exit code %d", result.ExitCode)
 	}
 
 	return nil
 }
 
 // installDependencyPackages installs required dependency packages
-func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry, logger *log.PackageLogger) error {
+func installDependencyPackages(ctx context.Context, worker *Worker, p *pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry, logger *log.PackageLogger) error {
 	// Collect all dependency packages (just the filenames)
 	depPkgs := make(map[string]bool)
 
@@ -134,15 +161,25 @@ func installDependencyPackages(worker *Worker, p *pkg.Package, cfg *config.Confi
 		// Package path inside chroot - use /packages/All/ like C dsynth
 		pkgPath := filepath.Join("/packages/All", pkgFile)
 
-		cmd := exec.Command("chroot", worker.Mount.BaseDir, "pkg", "add", pkgPath)
-		output, err := cmd.CombinedOutput()
-		logger.Write(output)
+		logWriter := &loggerWriter{logger: logger}
+		execCmd := &environment.ExecCommand{
+			Command: "/usr/sbin/pkg",
+			Args:    []string{"add", pkgPath},
+			Stdout:  logWriter,
+			Stderr:  logWriter,
+		}
 
+		result, err := worker.Env.Execute(ctx, execCmd)
 		if err != nil {
-			// Some failures are acceptable (already installed, etc)
-			if !strings.Contains(string(output), "already installed") {
-				logger.WriteWarning(fmt.Sprintf("Package install warning: %v", err))
-			}
+			// Execution failed - log warning but don't fail build
+			logger.WriteWarning(fmt.Sprintf("Package install execution failed for %s: %v", pkgFile, err))
+			continue
+		}
+
+		if result.ExitCode != 0 {
+			// pkg add failed, but this might be acceptable (already installed)
+			// Output already captured by logger, just log warning
+			logger.WriteWarning(fmt.Sprintf("Package install returned exit code %d for %s", result.ExitCode, pkgFile))
 		}
 	}
 
@@ -181,25 +218,41 @@ func cleanupWorkDir(worker *Worker, p *pkg.Package) error {
 }
 
 // installMissingPackages installs packages that are missing but required
-func installMissingPackages(worker *Worker, requiredPkgs []string, cfg *config.Config, logger *log.PackageLogger) error {
+func installMissingPackages(ctx context.Context, worker *Worker, requiredPkgs []string, cfg *config.Config, logger *log.PackageLogger) error {
 	for _, pkgFile := range requiredPkgs {
 		// Use /packages/All/ like C dsynth
 		pkgPath := filepath.Join("/packages/All", pkgFile)
 
 		// Check if already installed
-		checkCmd := exec.Command("chroot", worker.Mount.BaseDir, "pkg", "info", "-e", pkgFile)
-		if err := checkCmd.Run(); err == nil {
+		checkCmd := &environment.ExecCommand{
+			Command: "/usr/sbin/pkg",
+			Args:    []string{"info", "-e", pkgFile},
+		}
+
+		checkResult, err := worker.Env.Execute(ctx, checkCmd)
+		if err == nil && checkResult.ExitCode == 0 {
 			// Already installed
 			continue
 		}
 
 		// Install package
-		cmd := exec.Command("chroot", worker.Mount.BaseDir, "pkg", "add", pkgPath)
-		output, err := cmd.CombinedOutput()
+		logWriter := &loggerWriter{logger: logger}
+		installCmd := &environment.ExecCommand{
+			Command: "/usr/sbin/pkg",
+			Args:    []string{"add", pkgPath},
+			Stdout:  logWriter,
+			Stderr:  logWriter,
+		}
 
+		result, err := worker.Env.Execute(ctx, installCmd)
 		if err != nil {
-			logger.WriteWarning(fmt.Sprintf("Failed to install %s: %v\n%s", pkgFile, err, output))
+			logger.WriteWarning(fmt.Sprintf("Failed to install %s: execution error: %v", pkgFile, err))
 			return fmt.Errorf("failed to install required package %s: %w", pkgFile, err)
+		}
+
+		if result.ExitCode != 0 {
+			logger.WriteWarning(fmt.Sprintf("Failed to install %s: exit code %d", pkgFile, result.ExitCode))
+			return fmt.Errorf("failed to install required package %s: exit code %d", pkgFile, result.ExitCode)
 		}
 	}
 

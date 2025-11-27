@@ -58,6 +58,7 @@
 package build
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,6 +67,7 @@ import (
 
 	"dsynth/builddb"
 	"dsynth/config"
+	"dsynth/environment"
 	"dsynth/log"
 	"dsynth/mount"
 	"dsynth/pkg"
@@ -86,7 +88,8 @@ type BuildStats struct {
 // Worker represents a build worker
 type Worker struct {
 	ID        int
-	Mount     *mount.Worker
+	Env       environment.Environment // Environment for isolated execution
+	Mount     *mount.Worker           // Deprecated: Use Env instead (kept for Task 6 compatibility)
 	Current   *pkg.Package
 	Status    string
 	StartTime time.Time
@@ -97,6 +100,7 @@ type Worker struct {
 // It manages worker pools, dependency tracking, and integrates with builddb
 // for CRC-based incremental builds and build record lifecycle tracking.
 type BuildContext struct {
+	ctx       context.Context
 	cfg       *config.Config
 	logger    *log.Logger
 	registry  *pkg.BuildStateRegistry
@@ -131,6 +135,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	buildOrder := pkg.GetBuildOrder(packages)
 
 	ctx := &BuildContext{
+		ctx:       context.Background(),
 		cfg:       cfg,
 		logger:    logger,
 		registry:  pkg.NewBuildStateRegistry(),
@@ -175,16 +180,33 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 	ctx.workers = make([]*Worker, numWorkers)
 	for i := 0; i < numWorkers; i++ {
+		// Create isolated environment for this worker
+		env, err := environment.New("bsd")
+		if err != nil {
+			logger.Error(fmt.Sprintf("Worker %d: failed to create environment: %v", i, err))
+			cleanup()
+			return nil, cleanup, fmt.Errorf("worker %d environment creation failed: %w", i, err)
+		}
+
+		// Setup environment (mounts, directories, etc.)
+		if err := env.Setup(i, cfg); err != nil {
+			logger.Error(fmt.Sprintf("Worker %d: environment setup failed: %v", i, err))
+			cleanup()
+			return nil, cleanup, fmt.Errorf("worker %d environment setup failed: %w", i, err)
+		}
+
 		ctx.workers[i] = &Worker{
 			ID:     i,
+			Env:    env, // New environment abstraction
 			Status: "idle",
-			Mount: &mount.Worker{
+			Mount: &mount.Worker{ // Deprecated: kept for compatibility (Task 7 removes)
 				Index:   i,
 				BaseDir: fmt.Sprintf("%s/SL%02d", cfg.BuildBase, i),
 			},
 		}
 
-		// Setup mounts for each worker
+		// Setup mounts for each worker (DEPRECATED: Remove in Task 7)
+		// Keeping temporarily for backward compatibility with cleanup
 		if err := mount.DoWorkerMounts(ctx.workers[i].Mount, cfg); err != nil {
 			logger.Error(fmt.Sprintf("Failed to setup mounts for worker %d: %v", i, err))
 			cleanup() // Cleanup any workers we did create
@@ -355,7 +377,7 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 		ctx.registry.SetLastPhase(p, phase)
 		pkgLogger.WritePhase(phase)
 
-		if err := executePhase(worker, p, phase, ctx.cfg, ctx.registry, pkgLogger); err != nil {
+		if err := executePhase(ctx.ctx, worker, p, phase, ctx.cfg, ctx.registry, pkgLogger); err != nil {
 			duration := time.Since(startTime)
 			pkgLogger.WriteFailure(duration, fmt.Sprintf("Phase %s failed: %v", phase, err))
 
