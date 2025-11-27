@@ -453,46 +453,89 @@ Phase 3 adds:
 
 ---
 
-## Phase 4: Environment Abstraction ⚪
+## Phase 4: Environment Abstraction 🔵
 
-**Status**: ⚪ Planned  
+**Status**: 🔵 Ready to Start  
 **Timeline**: Not started | Target: TBD  
-**Dependencies**: Phase 3 completion
+**Dependencies**: Phase 3 completion (✅ Complete - 2025-11-27)
 
 ### 🎯 Goals
 - Define minimal environment interface for build isolation
 - Implement FreeBSD/DragonFly backend using existing dsynth conventions
-- Provide phase execution with chroot isolation
+- Extract mount/chroot operations from build package
+- Enable future backends (jails, containers)
+- Improve testability with mock environments
 
 ### 📦 Main Deliverables
 - Environment interface with Setup/Execute/Cleanup methods
-- DragonFly/FreeBSD implementation using nullfs/tmpfs + chroot
-- Mount management and cleanup (even on failure)
-- Integration with Builder from Phase 3
+- BSD implementation (extracts 294 lines from mount/mount.go)
+- Context support for cancellation/timeout
+- Structured error types
+- Comprehensive testing (unit + integration)
+- Remove direct chroot calls from build package
 
-### ✓ Exit Criteria
-- Each phase runs in isolated chroot environment
-- Successful execution returns clean status
-- Failed execution cleans up mounts properly
-- Root privilege validation fails early
+### 🚧 Task Breakdown (0/10 complete - 0%)
+1. ❌ Define Environment Interface (2h)
+2. ❌ Implement BSD Environment - Mount Logic (2h)
+3. ❌ Implement BSD Environment - Setup() (2h)
+4. ❌ Implement BSD Environment - Execute() (2h)
+5. ❌ Implement BSD Environment - Cleanup() (1h)
+6. ❌ Update build/phases.go (3h)
+7. ❌ Update Worker Lifecycle (2h)
+8. ❌ Add Context and Error Handling (3h)
+9. ❌ Unit Tests (4h)
+10. ❌ Integration Tests and Documentation (4h)
 
-### 💻 Proposed API
+**Total**: 27 hours estimated
+
+### ✓ Exit Criteria (0/10 complete)
+- [ ] Environment interface defined and documented
+- [ ] BSD implementation complete (Setup, Execute, Cleanup)
+- [ ] All mount logic moved to environment package
+- [ ] All chroot calls go through Environment.Execute()
+- [ ] Workers use Environment for isolation
+- [ ] Context support for cancellation/timeout
+- [ ] Structured error types with >80% test coverage
+- [ ] Unit tests pass without root
+- [ ] Integration tests pass with root
+- [ ] mount package marked deprecated
+
+### 💻 Target API
 ```go
 type Environment interface {
     Setup(workerID int, cfg *config.Config) error
-    Execute(port *pkg.Package, phase string) error
+    Execute(ctx context.Context, cmd *ExecCommand) (*ExecResult, error)
     Cleanup() error
+    GetBasePath() string
+}
+
+type ExecCommand struct {
+    Command string
+    Args    []string
+    Env     map[string]string
+    Stdout  io.Writer
+    Stderr  io.Writer
+    Timeout time.Duration
 }
 ```
 
 ### 📖 Documentation
-- **[Phase 4 Plan](docs/design/PHASE_4_ENVIRONMENT.md)** - Complete specification
+- **[Phase 4 Overview](docs/design/PHASE_4_ENVIRONMENT.md)** - Complete specification (450 lines)
+- **[Phase 4 TODO](docs/design/PHASE_4_TODO.md)** - Detailed task breakdown (700 lines)
 
 ### 🔑 Key Decisions
 - Use existing nullfs/tmpfs + chroot (proven by original dsynth)
-- Map ports tree to `/xports` in chroot
-- Signal trapping for cleanup on interruption
-- Requires root - validate early and fail fast
+- Extract all mount operations from mount package
+- Context support for cancellation (Ctrl+C, timeout)
+- Structured errors (MountError, SetupError, ExecutionError, CleanupError)
+- Mock environment for testing without root
+- Deprecate mount package in Phase 4, remove in Phase 7
+
+### 📊 Code Impact
+- **Code to Extract**: 294 lines (mount/mount.go → environment/bsd/)
+- **Code to Update**: ~150 lines (build/build.go, build/phases.go)
+- **New Code**: ~2,200 lines (interface, BSD impl, tests, docs)
+- **Chroot Calls to Replace**: 5 locations in build/phases.go
 
 ---
 
