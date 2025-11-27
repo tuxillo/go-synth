@@ -184,8 +184,8 @@ None - all dependencies resolved
 
 ## Phase 2: Minimal BuildDB (bbolt) 🟡
 
-**Status**: 🟡 In Progress (33% Complete, 4/12 tasks)  
-**Timeline**: Started 2025-11-27 | Target: TBD (8-12 hours remaining)  
+**Status**: 🟡 In Progress (42% Complete, 5/12 tasks)  
+**Timeline**: Started 2025-11-27 | Target: TBD (6.5-10.5 hours remaining)  
 **Dependencies**: Phase 1 completion (✅ 9/9 exit criteria met)
 
 ### 🎯 Goals
@@ -193,21 +193,21 @@ None - all dependencies resolved
 - Enable incremental builds by skipping unchanged ports
 - Replace custom binary CRC database with proper embedded database
 
-### 📦 Main Deliverables (4/6 Complete)
+### 📦 Main Deliverables (5/6 Complete)
 - ✅ bbolt integration (`go.etcd.io/bbolt` dependency) - commit 6a6ff7b
 - ✅ Database schema with three buckets: `builds`, `packages`, `crc_index` - commit 48569e6
 - ✅ BuildRecord API for CRUD operations - commit d1b91d9
-- ✅ Package tracking with LatestFor() and UpdatePackageIndex() - commit TBD
-- ❌ NeedsBuild() function using CRC comparison
+- ✅ Package tracking with LatestFor() and UpdatePackageIndex() - commit d6413c3
+- ✅ NeedsBuild() and CRC operations (NeedsBuild, UpdateCRC, GetCRC) - commit TBD
 - ❌ Migration from existing `builddb/crc.go` to bbolt
 - ❌ Unit and integration tests
 
-### 🚧 Task Breakdown (4/12 complete)
+### 🚧 Task Breakdown (5/12 complete)
 1. ✅ Add bbolt dependency (DONE 2025-11-27)
 2. ✅ Create DB wrapper with Open/Close (DONE 2025-11-27)
 3. ✅ Build record CRUD operations (DONE 2025-11-27)
 4. ✅ Package tracking (LatestFor, UpdatePackageIndex) (DONE 2025-11-27)
-5. ❌ CRC operations (NeedsBuild, UpdateCRC) (1.5 hours)
+5. ✅ CRC operations (NeedsBuild, UpdateCRC, GetCRC) (DONE 2025-11-27)
 6. ❌ Migration strategy and utilities (1 hour)
 7. ❌ Structured error types (1 hour)
 8. ❌ Unit tests (3 hours)

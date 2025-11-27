@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 33% Complete (4/12 tasks)  
+**Status**: 🟡 42% Complete (5/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -150,11 +150,14 @@ crc_index/
   - Key format: `portdir@version` (e.g., "editors/vim@9.0.1")
   - Validated with comprehensive test covering nil cases, CRUD cycle, and index updates
 
-### Task 5: CRC Operations (1.5 hours)
-- Implement `NeedsBuild(portDir, currentCRC) (bool, error)`
-- Implement `UpdateCRC(portDir, crc) error`
-- Implement `GetCRC(portDir) (uint32, bool, error)`
-- Use binary encoding for CRC values
+### Task 5: CRC Operations (1.5 hours) ✅
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Result**: Implemented all three CRC operations (~120 lines)
+  - `NeedsBuild(portDir, currentCRC)` compares current vs stored CRC, returns true if changed/missing
+  - `UpdateCRC(portDir, crc)` stores CRC as 4-byte little-endian binary in crc_index bucket
+  - `GetCRC(portDir)` retrieves stored CRC with exists flag for distinguishing 0 vs missing
+  - Validated with comprehensive test covering: non-existent, match, mismatch, multiple ports, edge cases (0, max uint32)
 
 ### Task 6: Migration Strategy (1 hour)
 - Document coexistence approach (both old and new DB temporarily)
@@ -201,14 +204,14 @@ crc_index/
 
 ## Deliverables
 
-### Completed (4/6)
+### Completed (5/6)
 - ✅ bbolt dependency added (go.etcd.io/bbolt v1.4.3)
 - ✅ bbolt integration (`builddb/db.go` with OpenDB/Close)
 - ✅ Build record CRUD operations (SaveRecord, GetRecord, UpdateRecordStatus)
 - ✅ Package tracking (LatestFor, UpdatePackageIndex)
+- ✅ CRC indexing with NeedsBuild logic (NeedsBuild, UpdateCRC, GetCRC)
 
-### Incomplete (2/6)
-- ❌ CRC indexing with NeedsBuild logic
+### Incomplete (1/6)
 - ❌ Unit and integration tests
 - ❌ Migration from old CRC file
 - ❌ CLI integration

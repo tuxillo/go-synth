@@ -357,3 +357,121 @@ func (db *DB) UpdatePackageIndex(portDir, version, uuid string) error {
 
 	return nil
 }
+
+// NeedsBuild determines whether a port needs to be rebuilt based on CRC comparison.
+//
+// The function compares the provided currentCRC against the stored CRC in the crc_index
+// bucket. Returns true if the port needs rebuilding (CRC changed or no stored CRC exists),
+// and false if the CRC matches (port unchanged).
+//
+// This is the primary function for incremental build detection - call it before starting
+// a build to determine if the port's source files have changed.
+//
+// Parameters:
+//   - portDir: The port directory path (e.g., "editors/vim")
+//   - currentCRC: The CRC32 checksum of the port's current state
+//
+// Returns:
+//   - bool: true if build is needed (CRC changed or missing), false if unchanged
+//   - error: Any database access errors
+func (db *DB) NeedsBuild(portDir string, currentCRC uint32) (bool, error) {
+	storedCRC, exists, err := db.GetCRC(portDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if build needed for %s: %w", portDir, err)
+	}
+
+	// No stored CRC means this port has never been built
+	if !exists {
+		return true, nil
+	}
+
+	// CRC mismatch means port has changed
+	return storedCRC != currentCRC, nil
+}
+
+// UpdateCRC updates the stored CRC checksum for a given port directory.
+//
+// This function should be called after a successful build to record the port's
+// current state. The CRC is stored as a 4-byte binary value (little-endian uint32)
+// in the crc_index bucket.
+//
+// Parameters:
+//   - portDir: The port directory path (e.g., "editors/vim")
+//   - crc: The CRC32 checksum to store
+//
+// Returns:
+//   - error: Any database errors that occur during the update
+func (db *DB) UpdateCRC(portDir string, crc uint32) error {
+	key := []byte(portDir)
+	value := make([]byte, 4)
+
+	// Store CRC as little-endian binary (4 bytes)
+	value[0] = byte(crc)
+	value[1] = byte(crc >> 8)
+	value[2] = byte(crc >> 16)
+	value[3] = byte(crc >> 24)
+
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		crcIndex := tx.Bucket([]byte("crc_index"))
+		if crcIndex == nil {
+			return fmt.Errorf("crc_index bucket not found")
+		}
+
+		return crcIndex.Put(key, value)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update CRC for %s: %w", portDir, err)
+	}
+
+	return nil
+}
+
+// GetCRC retrieves the stored CRC checksum for a given port directory.
+//
+// The function reads the 4-byte binary CRC value from the crc_index bucket
+// and returns it as a uint32. The second return value indicates whether a
+// CRC exists for this port (false means the port has never been built).
+//
+// Parameters:
+//   - portDir: The port directory path (e.g., "editors/vim")
+//
+// Returns:
+//   - uint32: The stored CRC32 checksum (0 if not found)
+//   - bool: true if a CRC was found, false if no entry exists
+//   - error: Any database access errors
+func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
+	key := []byte(portDir)
+	var crc uint32
+	var found bool
+
+	err := db.db.View(func(tx *bolt.Tx) error {
+		crcIndex := tx.Bucket([]byte("crc_index"))
+		if crcIndex == nil {
+			return fmt.Errorf("crc_index bucket not found")
+		}
+
+		value := crcIndex.Get(key)
+		if value == nil {
+			// No CRC stored for this port
+			found = false
+			return nil
+		}
+
+		// Validate value length
+		if len(value) != 4 {
+			return fmt.Errorf("invalid CRC value length: expected 4 bytes, got %d", len(value))
+		}
+
+		// Read little-endian binary CRC (4 bytes)
+		crc = uint32(value[0]) | uint32(value[1])<<8 | uint32(value[2])<<16 | uint32(value[3])<<24
+		found = true
+		return nil
+	})
+
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get CRC for %s: %w", portDir, err)
+	}
+
+	return crc, found, nil
+}
