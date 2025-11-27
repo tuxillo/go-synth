@@ -416,11 +416,6 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		cleanup()
 	}
 
-	// Save CRC database
-	if err := pkg.SaveCRCDatabase(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to save CRC database: %v\n", err)
-	}
-
 	// Print statistics
 	fmt.Println()
 	fmt.Println("Build Statistics:")

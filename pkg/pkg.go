@@ -649,16 +649,13 @@ func ResolveDependencies(packages []*Package, cfg *config.Config, registry *Buil
 //	}
 //	fmt.Printf("%d packages need rebuilding\n", needBuild)
 func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry *BuildStateRegistry) (int, error) {
-	// Initialize CRC database
-	crcDB, err := builddb.InitCRCDatabase(cfg)
+	// Initialize BuildDB
+	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
+	buildDB, err := builddb.OpenDB(dbPath)
 	if err != nil {
-		return 0, fmt.Errorf("failed to initialize CRC database: %w", err)
+		return 0, fmt.Errorf("failed to open build database: %w", err)
 	}
-
-	// DEBUG: Check database status
-	total, _ := crcDB.Stats()
-	fmt.Printf("\nDEBUG: CRC Database has %d entries\n", total)
-	fmt.Printf("DEBUG: Database path: %s\n", filepath.Join(cfg.BuildBase, "dsynth.db"))
+	defer buildDB.Close()
 
 	fmt.Println("\nChecking which packages need rebuilding...")
 
@@ -687,7 +684,24 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 		}
 
 		// Check if build is needed
-		if crcDB.CheckNeedsBuild(pkg, cfg) {
+		portPath := filepath.Join(cfg.DPortsPath, pkg.Category, pkg.Name)
+		currentCRC, err := builddb.ComputePortCRCContent(portPath)
+		if err != nil {
+			// On error computing CRC, rebuild to be safe
+			fmt.Printf("  %s: needs rebuild (CRC computation error: %v)\n", pkg.PortDir, err)
+			needBuild++
+			continue
+		}
+
+		needsBuild, err := buildDB.NeedsBuild(pkg.PortDir, currentCRC)
+		if err != nil {
+			// On database error, rebuild to be safe
+			fmt.Printf("  %s: needs rebuild (DB error: %v)\n", pkg.PortDir, err)
+			needBuild++
+			continue
+		}
+
+		if needsBuild {
 			needBuild++
 			fmt.Printf("  %s: needs rebuild\n", pkg.PortDir)
 		} else {
@@ -706,22 +720,6 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 	fmt.Printf("  %d packages are up-to-date\n", checked-needBuild)
 
 	return needBuild, nil
-}
-
-// SaveCRCDatabase saves the CRC database after builds
-// Deprecated: Use builddb.SaveCRCDatabase() directly
-func SaveCRCDatabase() error {
-	// Note: builddb manages its own global instance
-	// This function is kept for backward compatibility
-	// Real implementation is in builddb package
-	return nil // builddb manages saves automatically
-}
-
-// UpdateCRCAfterBuild updates CRC database for a successfully built package
-// Deprecated: Use builddb methods directly
-func UpdateCRCAfterBuild(pkg *Package, cfg *config.Config) {
-	// Note: This is now handled by builddb package
-	// Kept for backward compatibility
 }
 
 // GetInstalledPackages queries the system's package database and returns

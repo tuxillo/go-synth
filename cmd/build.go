@@ -110,11 +110,6 @@ func runBuild(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Save CRC database
-	if err := pkg.SaveCRCDatabase(); err != nil {
-		fmt.Printf("Warning: failed to save CRC database: %v\n", err)
-	}
-
 	// Print statistics
 	fmt.Printf("\nBuild Statistics:\n")
 	fmt.Printf("  Total packages: %d\n", stats.Total)

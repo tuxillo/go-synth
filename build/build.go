@@ -237,8 +237,14 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	duration := time.Since(startTime)
 	pkgLogger.WriteSuccess(duration)
 
-	// Update CRC database
-	pkg.UpdateCRCAfterBuild(p, ctx.cfg)
+	// TODO: Update CRC database after successful build
+	// This requires:
+	//   1. Add buildDB *builddb.DB to BuildContext
+	//   2. Pass buildDB to DoBuild() function
+	//   3. Compute CRC: builddb.ComputePortCRCContent(portPath)
+	//   4. Update CRC: ctx.buildDB.UpdateCRC(p.PortDir, crc)
+	//   5. Update package index: ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, buildUUID)
+	// This will be implemented in a future task (Task 6D or Task 7)
 
 	return true
 }

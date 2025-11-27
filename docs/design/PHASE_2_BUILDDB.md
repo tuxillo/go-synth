@@ -173,11 +173,19 @@ crc_index/
   - Function temporarily named `ComputePortCRCContent` to avoid conflict with legacy `ComputePortCRC`
   - Will be renamed to `ComputePortCRC` when legacy code deleted (Task 6C)
 
-#### Task 6B: Migrate API Calls (pending)
-- Replace `InitCRCDatabase()` → `OpenDB()`
-- Replace `CheckNeedsBuild()` → `NeedsBuild()` + `ComputePortCRCContent()`
-- Remove `SaveCRCDatabase()` calls (bbolt auto-syncs)
-- Update pkg/pkg.go, cmd/build.go, main.go
+#### Task 6B: Migrate API Calls ✅
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Changes**:
+  - ✅ Replaced `InitCRCDatabase()` → `builddb.OpenDB()` in pkg/pkg.go:651-656
+  - ✅ Replaced `CheckNeedsBuild()` → `NeedsBuild()` + `ComputePortCRCContent()` in pkg/pkg.go:689-697
+  - ✅ Deleted `SaveCRCDatabase()` function from pkg/pkg.go (lines 725-732)
+  - ✅ Deleted `UpdateCRCAfterBuild()` function from pkg/pkg.go (lines 734-739)
+  - ✅ Deleted `SaveCRCDatabase()` call from cmd/build.go (lines 113-116)
+  - ✅ Deleted `SaveCRCDatabase()` call from main.go (lines 419-422)
+  - ✅ Removed deprecated `UpdateCRCAfterBuild()` call from build/build.go:241
+  - ✅ Added TODO comment for post-build CRC updates (requires buildDB in BuildContext)
+- **Result**: All legacy API calls removed; buildDB properly integrated; compiles successfully
 
 #### Task 6C: Delete Legacy Code (pending)
 - Delete `builddb/crc.go` entirely (494 lines)
@@ -256,7 +264,7 @@ crc_index/
 - ✅ Optional migration utility to import old CRC data
 - ✅ CLI updated to use new database
 
-**Phase 2 Status**: In progress (3/12 tasks, 25% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-3 completed 2025-11-27 (dependency + DB wrapper + CRUD). No blockers.
+**Phase 2 Status**: In progress (5.5/12 tasks, 46% complete). Phase 1 complete (9/9 exit criteria met), providing stable `pkg` API for port metadata. Tasks 1-5 completed 2025-11-27 (dependency + DB wrapper + CRUD + tracking + CRC). Task 6A-6B completed (content-based CRC + API migration). Next: Task 6C (delete legacy code). No blockers.
 
 ## Dependencies
 - Phase 1 (`pkg` provides stable `PortDir`, `Version`, and `Package` API)
