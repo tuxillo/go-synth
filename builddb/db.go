@@ -58,26 +58,26 @@ func OpenDB(path string) (*DB, error) {
 	// Open database with user read/write permissions only (0600)
 	bdb, err := bolt.Open(path, 0600, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, &DatabaseError{Op: "open", Err: err}
 	}
 
 	// Initialize required buckets in a single write transaction
 	err = bdb.Update(func(tx *bolt.Tx) error {
 		// Create builds bucket for storing BuildRecord JSON
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketBuilds)); err != nil {
-			return fmt.Errorf("create builds bucket: %w", err)
+			return &DatabaseError{Op: "create bucket", Bucket: BucketBuilds, Err: err}
 		}
 
 		// Create packages bucket for tracking latest successful builds
 		// Key format: "portdir@version" -> UUID
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketPackages)); err != nil {
-			return fmt.Errorf("create packages bucket: %w", err)
+			return &DatabaseError{Op: "create bucket", Bucket: BucketPackages, Err: err}
 		}
 
 		// Create crc_index bucket for fast CRC lookups
 		// Key: portdir -> binary uint32 CRC value
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketCRCIndex)); err != nil {
-			return fmt.Errorf("create crc_index bucket: %w", err)
+			return &DatabaseError{Op: "create bucket", Bucket: BucketCRCIndex, Err: err}
 		}
 
 		return nil
@@ -139,26 +139,26 @@ func (db *DB) Close() error {
 //	}
 func (db *DB) SaveRecord(rec *BuildRecord) error {
 	if rec.UUID == "" {
-		return fmt.Errorf("build record UUID cannot be empty")
+		return &ValidationError{Field: "record.UUID", Err: ErrEmptyUUID}
 	}
 
 	// Marshal BuildRecord to JSON
 	data, err := json.Marshal(rec)
 	if err != nil {
-		return fmt.Errorf("failed to marshal build record: %w", err)
+		return &RecordError{Op: "marshal", UUID: rec.UUID, Err: err}
 	}
 
 	// Store in builds bucket
 	err = db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(BucketBuilds))
 		if bucket == nil {
-			return fmt.Errorf("builds bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketBuilds, Err: ErrBucketNotFound}
 		}
 		return bucket.Put([]byte(rec.UUID), data)
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to save build record: %w", err)
+		return &RecordError{Op: "save", UUID: rec.UUID, Err: err}
 	}
 
 	return nil
@@ -182,7 +182,7 @@ func (db *DB) SaveRecord(rec *BuildRecord) error {
 //	fmt.Printf("Build status: %s\n", rec.Status)
 func (db *DB) GetRecord(uuid string) (*BuildRecord, error) {
 	if uuid == "" {
-		return nil, fmt.Errorf("UUID cannot be empty")
+		return nil, &ValidationError{Field: "uuid", Err: ErrEmptyUUID}
 	}
 
 	var rec BuildRecord
@@ -190,12 +190,12 @@ func (db *DB) GetRecord(uuid string) (*BuildRecord, error) {
 	err := db.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(BucketBuilds))
 		if bucket == nil {
-			return fmt.Errorf("builds bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketBuilds, Err: ErrBucketNotFound}
 		}
 
 		data := bucket.Get([]byte(uuid))
 		if data == nil {
-			return fmt.Errorf("build record not found: %s", uuid)
+			return &RecordError{Op: "get", UUID: uuid, Err: ErrRecordNotFound}
 		}
 
 		return json.Unmarshal(data, &rec)
@@ -228,25 +228,25 @@ func (db *DB) GetRecord(uuid string) (*BuildRecord, error) {
 //	}
 func (db *DB) UpdateRecordStatus(uuid, status string, endTime time.Time) error {
 	if uuid == "" {
-		return fmt.Errorf("UUID cannot be empty")
+		return &ValidationError{Field: "uuid", Err: ErrEmptyUUID}
 	}
 
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(BucketBuilds))
 		if bucket == nil {
-			return fmt.Errorf("builds bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketBuilds, Err: ErrBucketNotFound}
 		}
 
 		// Read existing record
 		data := bucket.Get([]byte(uuid))
 		if data == nil {
-			return fmt.Errorf("build record not found: %s", uuid)
+			return &RecordError{Op: "update status", UUID: uuid, Err: ErrRecordNotFound}
 		}
 
 		// Unmarshal, update, marshal
 		var rec BuildRecord
 		if err := json.Unmarshal(data, &rec); err != nil {
-			return fmt.Errorf("failed to unmarshal build record: %w", err)
+			return &RecordError{Op: "unmarshal", UUID: uuid, Err: err}
 		}
 
 		rec.Status = status
@@ -254,7 +254,7 @@ func (db *DB) UpdateRecordStatus(uuid, status string, endTime time.Time) error {
 
 		updatedData, err := json.Marshal(&rec)
 		if err != nil {
-			return fmt.Errorf("failed to marshal updated record: %w", err)
+			return &RecordError{Op: "marshal", UUID: uuid, Err: err}
 		}
 
 		// Save back
@@ -262,7 +262,7 @@ func (db *DB) UpdateRecordStatus(uuid, status string, endTime time.Time) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to update build record status: %w", err)
+		return &RecordError{Op: "update status", UUID: uuid, Err: err}
 	}
 
 	return nil
@@ -289,7 +289,7 @@ func (db *DB) LatestFor(portDir, version string) (*BuildRecord, error) {
 	err := db.db.View(func(tx *bolt.Tx) error {
 		packages := tx.Bucket([]byte("packages"))
 		if packages == nil {
-			return fmt.Errorf("packages bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketPackages, Err: ErrBucketNotFound}
 		}
 
 		// Look up UUID in packages bucket
@@ -302,26 +302,31 @@ func (db *DB) LatestFor(portDir, version string) (*BuildRecord, error) {
 		// Retrieve the full record from builds bucket
 		builds := tx.Bucket([]byte("builds"))
 		if builds == nil {
-			return fmt.Errorf("builds bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketBuilds, Err: ErrBucketNotFound}
 		}
 
 		recordBytes := builds.Get(uuidBytes)
 		if recordBytes == nil {
 			// UUID points to non-existent record - data inconsistency
-			return fmt.Errorf("package index references non-existent build UUID: %s", string(uuidBytes))
+			return &PackageIndexError{
+				Op:      "validate",
+				PortDir: portDir,
+				Version: version,
+				Err:     ErrOrphanedRecord,
+			}
 		}
 
 		// Unmarshal the build record
 		rec = &BuildRecord{}
 		if err := json.Unmarshal(recordBytes, rec); err != nil {
-			return fmt.Errorf("failed to unmarshal build record: %w", err)
+			return &RecordError{Op: "unmarshal", UUID: string(uuidBytes), Err: err}
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve latest build for %s@%s: %w", portDir, version, err)
+		return nil, &PackageIndexError{Op: "lookup", PortDir: portDir, Version: version, Err: err}
 	}
 
 	return rec, nil
@@ -348,14 +353,14 @@ func (db *DB) UpdatePackageIndex(portDir, version, uuid string) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		packages := tx.Bucket([]byte("packages"))
 		if packages == nil {
-			return fmt.Errorf("packages bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketPackages, Err: ErrBucketNotFound}
 		}
 
 		return packages.Put(key, value)
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to update package index for %s@%s: %w", portDir, version, err)
+		return &PackageIndexError{Op: "update", PortDir: portDir, Version: version, Err: err}
 	}
 
 	return nil
@@ -380,7 +385,7 @@ func (db *DB) UpdatePackageIndex(portDir, version, uuid string) error {
 func (db *DB) NeedsBuild(portDir string, currentCRC uint32) (bool, error) {
 	storedCRC, exists, err := db.GetCRC(portDir)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if build needed for %s: %w", portDir, err)
+		return false, &CRCError{Op: "check needs build", PortDir: portDir, Err: err}
 	}
 
 	// No stored CRC means this port has never been built
@@ -417,14 +422,14 @@ func (db *DB) UpdateCRC(portDir string, crc uint32) error {
 	err := db.db.Update(func(tx *bolt.Tx) error {
 		crcIndex := tx.Bucket([]byte("crc_index"))
 		if crcIndex == nil {
-			return fmt.Errorf("crc_index bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketCRCIndex, Err: ErrBucketNotFound}
 		}
 
 		return crcIndex.Put(key, value)
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to update CRC for %s: %w", portDir, err)
+		return &CRCError{Op: "update", PortDir: portDir, Err: err}
 	}
 
 	return nil
@@ -451,7 +456,7 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 	err := db.db.View(func(tx *bolt.Tx) error {
 		crcIndex := tx.Bucket([]byte("crc_index"))
 		if crcIndex == nil {
-			return fmt.Errorf("crc_index bucket not found")
+			return &DatabaseError{Op: "get bucket", Bucket: BucketCRCIndex, Err: ErrBucketNotFound}
 		}
 
 		value := crcIndex.Get(key)
@@ -463,7 +468,11 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 
 		// Validate value length
 		if len(value) != 4 {
-			return fmt.Errorf("invalid CRC value length: expected 4 bytes, got %d", len(value))
+			return &ValidationError{
+				Field: "crc",
+				Value: fmt.Sprintf("%d bytes", len(value)),
+				Err:   ErrCorruptedData,
+			}
 		}
 
 		// Read little-endian binary CRC (4 bytes)
@@ -473,7 +482,7 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 	})
 
 	if err != nil {
-		return 0, false, fmt.Errorf("failed to get CRC for %s: %w", portDir, err)
+		return 0, false, &CRCError{Op: "get", PortDir: portDir, Err: err}
 	}
 
 	return crc, found, nil
@@ -539,7 +548,7 @@ func ComputePortCRC(portPath string) (uint32, error) {
 		// Hash relative file path (detects renamed/moved files)
 		relPath, err := filepath.Rel(portPath, path)
 		if err != nil {
-			return fmt.Errorf("failed to get relative path for %s: %w", path, err)
+			return &CRCError{Op: "compute", PortDir: portPath, Err: err}
 		}
 		hash.Write([]byte(relPath))
 		hash.Write([]byte{0}) // Null separator
@@ -547,7 +556,7 @@ func ComputePortCRC(portPath string) (uint32, error) {
 		// Hash actual file contents (detects content changes)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("failed to read file %s: %w", path, err)
+			return &CRCError{Op: "compute", PortDir: portPath, Err: err}
 		}
 		hash.Write(data)
 
@@ -555,7 +564,7 @@ func ComputePortCRC(portPath string) (uint32, error) {
 	})
 
 	if err != nil {
-		return 0, fmt.Errorf("failed to compute CRC for %s: %w", portPath, err)
+		return 0, &CRCError{Op: "compute", PortDir: portPath, Err: err}
 	}
 
 	return hash.Sum32(), nil

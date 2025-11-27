@@ -1,6 +1,6 @@
 # Phase 2: Minimal BuildDB (bbolt)
 
-**Status**: 🟡 42% Complete (5/12 tasks)  
+**Status**: 🟡 67% Complete (8/12 tasks)  
 **Last Updated**: 2025-11-27
 
 ## Goals
@@ -279,10 +279,34 @@ crc_index/
   5. ⏭️ UUID linkage: Verify packages bucket points to correct build UUID
   6. ⏭️ Database query: Use bbolt CLI or custom tool to inspect build records
 
-### Task 7: Error Types (1 hour)
-- Add `ErrNotFound`, `ErrCorrupted`, `ErrInvalidUUID`, etc.
-- Use sentinel errors for `errors.Is()` checks
-- Add structured error types for detailed context
+### Task 7: Error Types (1 hour) ✅ COMPLETE
+- **Status**: Complete
+- **Completed**: 2025-11-27 (commit TBD)
+- **Actual Time**: 70 minutes (within estimate)
+- **Result**: Comprehensive typed error handling for builddb package
+  - Created `builddb/errors.go` (204 lines) with:
+    * 9 sentinel errors (ErrEmptyUUID, ErrRecordNotFound, ErrBucketNotFound, ErrCorruptedData, ErrOrphanedRecord, etc.)
+    * 5 structured error types (DatabaseError, RecordError, PackageIndexError, CRCError, ValidationError)
+    * 4 error inspection helpers (IsValidationError, IsDatabaseError, IsRecordNotFound, IsBucketNotFound)
+    * All types implement Unwrap() for errors.Is/As compatibility
+  - Updated all 26 error sites in `builddb/db.go` to use typed errors
+  - Created `builddb/errors_test.go` (430 lines) with 11 comprehensive tests covering:
+    * Sentinel error uniqueness
+    * DatabaseError structure and wrapping (3 scenarios)
+    * RecordError with UUID context
+    * PackageIndexError with port@version context
+    * CRCError with port directory context
+    * ValidationError with field and value context
+    * Error inspection helpers (4 helper functions)
+    * Error chaining (multi-level unwrapping)
+  - All tests passing: `go test -v ./builddb` (11 tests, 0.003s)
+- **Benefits**:
+  - Programmatic error inspection with errors.Is/As
+  - Rich context for debugging (operation, UUID, port directory)
+  - Type-safe error handling in calling code
+  - Clear distinction between error categories (validation vs database vs data corruption)
+  - Better error messages with structured context
+- **Pattern**: Follows `pkg/errors.go` for consistency across codebase
 
 ### Task 8: Unit Tests (3 hours)
 - Test `SaveRecord` → `GetRecord` roundtrip

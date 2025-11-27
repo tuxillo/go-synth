@@ -184,8 +184,8 @@ None - all dependencies resolved
 
 ## Phase 2: Minimal BuildDB (bbolt) 🟡
 
-**Status**: 🟡 In Progress (58% Complete, 7/12 tasks)  
-**Timeline**: Started 2025-11-27 | Target: TBD (5.5-9.5 hours remaining)  
+**Status**: 🟡 In Progress (67% Complete, 8/12 tasks)  
+**Timeline**: Started 2025-11-27 | Target: TBD (4.5-8.5 hours remaining)  
 **Dependencies**: Phase 1 completion (✅ 9/9 exit criteria met)
 
 ### 🎯 Goals
@@ -202,7 +202,7 @@ None - all dependencies resolved
 - ✅ Migration from existing `builddb/crc.go` to bbolt - commits 52d5393, d34a083, 24beab5
 - ✅ UUID infrastructure and build record lifecycle - commits 03aa961, 65ccadd
 
-### 🚧 Task Breakdown (7/12 complete)
+### 🚧 Task Breakdown (8/12 complete)
 1. ✅ Add bbolt dependency (DONE 2025-11-27) - commit 6a6ff7b
 2. ✅ Create DB wrapper with Open/Close (DONE 2025-11-27) - commit 48569e6
 3. ✅ Build record CRUD operations (DONE 2025-11-27) - commit d1b91d9
@@ -214,8 +214,13 @@ None - all dependencies resolved
    - 6C: Delete legacy CRC system (commit 24beab5)
    - 6D: BuildDB refactoring + UUID infrastructure (commit 03aa961)
    - 6E: Build record lifecycle (commit 65ccadd)
-7. ❌ Structured error types (1 hour)
-8. ❌ Unit tests (3 hours)
+7. ✅ Structured error types (DONE 2025-11-27) - commit TBD
+   - Created builddb/errors.go with 9 sentinel errors and 5 structured types
+   - Updated all 26 error sites in builddb/db.go to use typed errors
+   - Added 4 error inspection helpers (IsValidationError, IsRecordNotFound, etc.)
+   - Added comprehensive tests in builddb/errors_test.go (11 tests, all passing)
+   - All errors implement Unwrap() for errors.Is/As compatibility
+8. ❌ Unit tests for builddb API functions (3 hours)
 9. ❌ Integration test (1.5 hours)
 10. ❌ Godoc and documentation (1 hour)
 11. ❌ Benchmarks vs. old CRC file (1 hour)
