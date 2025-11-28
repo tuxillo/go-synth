@@ -204,7 +204,7 @@ func doInit(cfg *config.Config) {
 
 func doStatus(cfg *config.Config, portList []string) {
 	// Open database
-	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
+	dbPath := cfg.Database.Path
 	db, err := builddb.OpenDB(dbPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open database: %v\n", err)
@@ -392,7 +392,7 @@ func doPurgeDistfiles(cfg *config.Config) {
 }
 
 func doResetDB(cfg *config.Config) {
-	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
+	dbPath := cfg.Database.Path
 
 	// Check if database exists
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -478,7 +478,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	defer logger.Close()
 
 	// Open BuildDB once for the entire workflow
-	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
+	dbPath := cfg.Database.Path
 	buildDB, err := builddb.OpenDB(dbPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening build database: %v\n", err)
@@ -486,8 +486,8 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	}
 	defer buildDB.Close()
 
-	// Check for legacy CRC migration
-	if migration.DetectMigrationNeeded(cfg) {
+	// Check for legacy CRC migration (if enabled in config)
+	if cfg.Migration.AutoMigrate && migration.DetectMigrationNeeded(cfg) {
 		fmt.Println("\n⚠️  Legacy CRC data detected!")
 		fmt.Printf("Found legacy CRC file: %s/crc_index\n", cfg.BuildBase)
 		fmt.Println("This data will be imported into the new BuildDB.")

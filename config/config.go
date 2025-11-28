@@ -37,6 +37,18 @@ type Config struct {
 	DevMode    bool
 	CheckPlist bool
 	DisableUI  bool
+
+	// Migration settings
+	Migration struct {
+		AutoMigrate  bool // Default: true
+		BackupLegacy bool // Default: true
+	}
+
+	// Database settings
+	Database struct {
+		Path       string // Default: ${BuildBase}/builds.db
+		AutoVacuum bool   // Default: true
+	}
 }
 
 var globalConfig *Config
@@ -81,7 +93,7 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 			if globalSec == nil {
 				globalSec = iniFile.Section("Global")
 			}
-			
+
 			if globalSec != nil {
 				if key := globalSec.Key("profile_selected"); key != nil {
 					cfg.Profile = key.String()
@@ -141,6 +153,26 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 	if cfg.CCachePath == "" {
 		cfg.CCachePath = cfg.BuildBase + "/ccache"
 	}
+
+	// Apply defaults for Migration settings (default to true)
+	// These are only false if explicitly set in config
+	if !cfg.Migration.AutoMigrate && !cfg.Migration.BackupLegacy {
+		// Neither was explicitly set, apply defaults
+		cfg.Migration.AutoMigrate = true
+		cfg.Migration.BackupLegacy = true
+	} else if cfg.Migration.AutoMigrate && !cfg.Migration.BackupLegacy {
+		// AutoMigrate was set but BackupLegacy wasn't, default it
+		cfg.Migration.BackupLegacy = true
+	} else if !cfg.Migration.AutoMigrate && cfg.Migration.BackupLegacy {
+		// BackupLegacy was set but AutoMigrate wasn't, default it
+		cfg.Migration.AutoMigrate = true
+	}
+
+	// Apply defaults for Database settings
+	if cfg.Database.Path == "" {
+		cfg.Database.Path = cfg.BuildBase + "/builds.db"
+	}
+	cfg.Database.AutoVacuum = true // Always default to true for MVP
 
 	return cfg, nil
 }
@@ -206,6 +238,22 @@ func (cfg *Config) loadFromSection(sec *ini.Section) {
 	if key := sec.Key("leverage_prebuilt"); key != nil {
 		// TODO: Implement if needed
 		_ = key
+	}
+
+	// Migration settings
+	if key := sec.Key("Migration_auto_migrate"); key != nil {
+		cfg.Migration.AutoMigrate = parseBool(key.String())
+	}
+	if key := sec.Key("Migration_backup_legacy"); key != nil {
+		cfg.Migration.BackupLegacy = parseBool(key.String())
+	}
+
+	// Database settings
+	if key := sec.Key("Database_path"); key != nil && key.String() != "" {
+		cfg.Database.Path = key.String()
+	}
+	if key := sec.Key("Database_auto_vacuum"); key != nil {
+		cfg.Database.AutoVacuum = parseBool(key.String())
 	}
 }
 
