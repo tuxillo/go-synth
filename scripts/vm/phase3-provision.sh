@@ -47,6 +47,37 @@ chmod 755 /build
 chmod 755 /build/Workers
 chmod 755 /usr/dports
 
+# Step 2b: Clone DPorts (DragonFlyBSD ports tree)
+echo "Step 2b: Cloning DPorts repository (this may take a few minutes)..."
+if [ ! -d /usr/dports/.git ]; then
+    echo "  Cloning DPorts (shallow clone, no history)..."
+    git clone --depth=1 https://github.com/DragonFlyBSD/DPorts.git /usr/dports || {
+        echo "  ⚠ Git clone failed, trying alternative method..."
+        # Fallback: download tarball if git clone fails
+        cd /tmp
+        wget -q https://github.com/DragonFlyBSD/DPorts/archive/refs/heads/master.tar.gz || {
+            echo "  ✗ Failed to download DPorts! Build tests will not work."
+            echo "  ⚠ Continuing with provisioning..."
+        }
+        if [ -f master.tar.gz ]; then
+            tar -xzf master.tar.gz
+            mv DPorts-master/* /usr/dports/
+            rm -rf DPorts-master master.tar.gz
+            echo "  ✓ DPorts downloaded via tarball"
+        fi
+    }
+else
+    echo "  ✓ DPorts already exists, skipping clone"
+fi
+
+# Verify dports installation
+if [ -d /usr/dports/Mk ]; then
+    echo "  ✓ DPorts installed successfully"
+    echo "  ✓ Found $(find /usr/dports -name Makefile -type f | wc -l) ports"
+else
+    echo "  ⚠ DPorts installation may be incomplete"
+fi
+
 # Step 3: Configure Go environment
 echo "Step 3: Configuring Go environment..."
 cat >> /root/.profile <<'EOF'
