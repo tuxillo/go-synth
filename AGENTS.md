@@ -85,7 +85,8 @@ gh pr create --repo otheruser/somerepo
 | `pkg/` | Package metadata, dependency resolution | `pkg/*.go` |
 | `builddb/` | Embedded bbolt database for build tracking and CRC-based incremental builds | `builddb/db.go` (562 lines) |
 | `build/` | Build orchestration with worker pool management | `build/*.go` |
-| `mount/` | Filesystem operations for chroot environments | `mount/mount.go` |
+| `environment/` | Build isolation abstraction (Setup, Execute, Cleanup) with BSD backend | `environment/*.go`, `environment/bsd/*.go` |
+| `mount/` | ⚠️ Deprecated - Filesystem operations (use `environment/` instead) | `mount/mount.go` |
 | `log/` | Multi-file logging system (8 different log types) | `log/*.go` |
 | `util/` | Helper utilities and common functions | `util/util.go` |
 | `cmd/` | Additional command implementations | `cmd/build.go` |
@@ -93,9 +94,12 @@ gh pr create --repo otheruser/somerepo
 ### Key Data Structures
 
 - **`pkg.Package`** - Represents a port/package with metadata, dependencies, and build status
-- **`build.Worker`** - Represents a build worker with mount context
+- **`build.Worker`** - Represents a build worker with environment context
 - **`build.BuildContext`** - Orchestrates the entire build process
 - **`config.Config`** - Holds all configuration settings
+- **`environment.Environment`** - Interface for build isolation (BSD, mock, future backends)
+- **`environment.ExecCommand`** - Command execution specification with context support
+- **`environment.ExecResult`** - Command execution result with exit code and duration
 
 ## Development Commands
 
@@ -260,9 +264,14 @@ Tmpfs_worksize=64g           # Work directory size
   - Package version indexing (latest successful build per port@version)
   - Crash-safe ACID transactions with automatic recovery
   - Single-open lifecycle pattern for thread safety
+- **Environment Abstraction**: Clean isolation layer for build execution (Phase 4 - 82% complete)
+  - Interface-based design supporting multiple backends (BSD, mock, future: jails, containers)
+  - BSD backend with 27-mount chroot environment (nullfs, tmpfs, devfs, procfs)
+  - Context support for cancellation and timeout
+  - Structured error types for debugging
+  - Comprehensive unit tests (38 tests, 91.6% coverage, race-detector clean)
 - Build orchestration with worker pools
 - Multi-file logging system
-- Mount/unmount operations for chroot
 - Signal handling and cleanup
 
 ### ⚠️ Partially Implemented
@@ -271,6 +280,8 @@ Tmpfs_worksize=64g           # Work directory size
 - Error handling and recovery
 
 ### ❌ Not Yet Implemented (TODO items)
+- Integration tests for environment package (Task 10 - requires VM)
+- Environment package documentation (environment/README.md)
 - `status` command implementation
 - `cleanup` command (stale mount/log cleanup)
 - `configure` command (interactive configuration)

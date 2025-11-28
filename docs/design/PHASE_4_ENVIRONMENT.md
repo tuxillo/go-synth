@@ -1,6 +1,6 @@
 # Phase 4: Environment Abstraction
 
-**Status**: 🚧 In Progress (8/10 tasks - 80%)  
+**Status**: 🚧 In Progress (9/11 tasks - 82%)  
 **Last Updated**: 2025-11-28  
 **Completion Date**: TBD  
 **Dependencies**: Phase 3 complete ✅
@@ -10,8 +10,8 @@
 - ✅ Environment Interface (Task 1)
 - ✅ BSD Implementation: Mount Logic, Setup, Execute, Cleanup (Tasks 2-5)
 - ✅ Build Package Integration: phases.go, Worker Lifecycle (Tasks 6-7)
-- ❌ Context & Error Handling (Task 8)
-- ❌ Unit Tests (Task 9)
+- ✅ Context & Error Handling (Task 8)
+- ✅ Unit Tests (Task 9) - 38 tests passing, 91.6% coverage
 - ❌ Integration Tests & Documentation (Task 10)
 
 **See [PHASE_4_TODO.md](PHASE_4_TODO.md) for detailed implementation tasks.**
@@ -57,7 +57,7 @@ Phase 4 extracts build isolation (mount + chroot operations) from the build pack
 
 ## Architecture Overview
 
-### Implementation State (70% Complete - Tasks 0-7 Done)
+### Implementation State (82% Complete - Tasks 0-9 Done)
 
 **What's Been Completed**:
 - ✅ Environment interface defined (Task 1)
@@ -65,10 +65,10 @@ Phase 4 extracts build isolation (mount + chroot operations) from the build pack
 - ✅ Build package fully migrated to use Environment (Tasks 6-7)
 - ✅ mount package usage removed from build package
 - ✅ All chroot calls go through Environment.Execute()
+- ✅ Context and error handling (Task 8) - 4 structured error types
+- ✅ Unit tests (Task 9) - 38 tests, 91.6% coverage, race detector clean
 
 **What Remains**:
-- ❌ Context and error handling improvements (Task 8)
-- ❌ Unit tests (Task 9)
 - ❌ Integration tests and final documentation (Task 10)
 
 ### Original State (Before Phase 4)
@@ -667,7 +667,41 @@ func TestMountPathResolution(t *testing.T) {
 
 **Coverage Target:** >80%
 
-### Integration Tests (Root Required)
+### Integration Tests (BSD VM Required)
+
+**⚠️ Integration tests require a DragonFlyBSD VM with root access.**
+
+Phase 4 includes a **fully automated VM testing infrastructure** (Task 0) that eliminates the need for `sudo` on your host system. The VM provides:
+- Clean, isolated BSD environment for mount operations
+- Snapshot-based restoration for repeatable tests
+- Fast iteration with `make vm-quick` workflow
+- No risk to host system
+
+**VM Setup (First Time - 15 minutes, fully automated):**
+```bash
+make vm-setup         # Download ISO, create disk
+make vm-auto-install  # Fully automated OS installation (no interaction)
+# VM is ready with clean snapshot!
+```
+
+**Daily Development Workflow:**
+```bash
+make vm-start         # Boot VM (30s)
+# Edit code locally
+make vm-quick         # Sync code + run Phase 4 tests
+make vm-stop          # Shut down VM
+```
+
+**Manual Test Execution:**
+```bash
+make vm-sync          # Sync code to VM
+make vm-ssh           # SSH into VM
+# Inside VM:
+cd /root/go-synth
+doas go test -tags=integration ./environment/bsd/
+```
+
+**See:** `docs/testing/VM_TESTING.md` for complete VM setup and usage documentation.
 
 **Packages to Test:**
 - `environment/bsd/integration_test.go`
@@ -680,7 +714,7 @@ func TestMountPathResolution(t *testing.T) {
 5. Signal handling
 6. Mount retry logic
 
-**Example:**
+**Example Integration Test:**
 
 ```go
 //go:build integration
@@ -705,7 +739,7 @@ func TestBSD_FullLifecycle(t *testing.T) {
 }
 ```
 
-**Run with:** `sudo go test -tags=integration ./environment/bsd/`
+**Run in VM:** `doas go test -tags=integration ./environment/bsd/`
 
 ---
 
@@ -770,13 +804,13 @@ Phase 4 is complete when:
 ### Code Quality
 - [x] No `exec.Command("chroot")` calls outside environment package (Task 6) ✅
 - [x] No mount operations outside environment package (Task 7) ✅
-- [ ] Structured error types for all failure modes (Task 8 - pending)
-- [ ] >80% test coverage for environment package (Task 9 - pending)
+- [x] Structured error types for all failure modes (Task 8) ✅
+- [x] >80% test coverage for environment package (Task 9 - 91.6%) ✅
 
 ### Testing
-- [ ] Unit tests pass without root (Task 9 - pending)
+- [x] Unit tests pass without root (Task 9) ✅
+- [x] All tests pass with `-race` flag (Task 9) ✅
 - [ ] Integration tests pass with root (skip if not root) (Task 10 - pending)
-- [ ] All tests pass with `-race` flag (Task 10 - pending)
 - [x] Builds succeed on FreeBSD/DragonFly (Verified - compiles cleanly) ✅
 
 ### Backward Compatibility
@@ -786,10 +820,10 @@ Phase 4 is complete when:
 
 ### Documentation
 - [x] Godoc for all exported types (Tasks 1-5) ✅
-- [ ] PHASE_4_TODO.md completed (7/10 tasks done - 70%)
+- [x] PHASE_4_TODO.md updated (9/11 tasks done - 82%) ✅
 - [ ] environment/README.md created (Task 10 - pending)
-- [x] DEVELOPMENT.md updated (Updated to 70% complete) ✅
-- [ ] Phase 4 marked complete (3 tasks remaining)
+- [x] DEVELOPMENT.md updated (Updated to 82% complete) ✅
+- [ ] Phase 4 marked complete (1 task remaining)
 
 ---
 

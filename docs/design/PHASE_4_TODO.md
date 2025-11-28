@@ -1,6 +1,6 @@
 # Phase 4: Environment Abstraction - Task Breakdown
 
-**Status**: 🚧 In Progress (8/10 tasks - 80%)  
+**Status**: 🚧 In Progress (9/11 tasks - 82%)  
 **Last Updated**: 2025-11-28  
 **Dependencies**: Phase 3 complete ✅  
 **Total Time**: 30 hours estimated (27h implementation + 3h VM setup)
@@ -77,9 +77,9 @@ Phase 4 extracts mount and chroot operations from the build package into a clean
 - Add context support for cancellation/timeout
 - Comprehensive testing (unit + integration)
 
-## Task Progress: 8/11 Complete (73%) → Task 8 Ready
+## Task Progress: 9/11 Complete (82%) → Task 10 Ready
 
-### ✅ Completed: 8 tasks
+### ✅ Completed: 9 tasks
 - Task 0: VM Testing Infrastructure ✅
 - Task 1: Define Environment Interface ✅
 - Task 2: Implement BSD Environment - Mount Logic ✅
@@ -88,10 +88,12 @@ Phase 4 extracts mount and chroot operations from the build package into a clean
 - Task 5: Implement BSD Environment - Cleanup() ✅
 - Task 6: Update build/phases.go ✅
 - Task 7: Update Worker Lifecycle ✅
+- Task 8: Add Context and Error Handling ✅
+- Task 9: Unit Tests ✅
 
 ### 🚧 In Progress: 0 tasks
 
-### ❌ Remaining: 3 tasks (Tasks 8-10)
+### ❌ Remaining: 1 task (Task 10)
 
 ---
 
@@ -1240,7 +1242,7 @@ Add context support for cancellation and structured error types.
 
 **Priority**: 🔴 High  
 **Effort**: 4 hours  
-**Status**: ❌ Not Started
+**Status**: ✅ Complete (2025-11-28)
 
 ### Objective
 Test environment logic without requiring root or real mounts.
@@ -1405,28 +1407,30 @@ Test environment logic without requiring root or real mounts.
    - Test helper functions
    - Test error messages
 
-### Files to Create
-- `environment/mock.go` (~150 lines)
-- `environment/mock_test.go` (~100 lines)
-- `environment/environment_test.go` (~80 lines)
-- `environment/bsd/bsd_test.go` (~200 lines)
-- `environment/errors_test.go` (~100 lines)
+### Files Created ✅
+- `environment/mock.go` (195 lines) ✅
+- `environment/mock_test.go` (295 lines) ✅
+- `environment/environment_test.go` (321 lines) ✅
+- `environment/bsd/bsd_test.go` (479 lines) ✅
+- Error tests integrated into `environment_test.go` (no separate errors_test.go) ✅
+
+**Total**: 1,290 lines of test code, 38 passing tests
 
 ### Testing Checklist
-- [ ] Mock environment works
-- [ ] All error types tested
-- [ ] Path resolution tested
-- [ ] Context cancellation tested
-- [ ] No root required for unit tests
-- [ ] All tests pass
-- [ ] Run with -race flag
-- [ ] Coverage >80%
+- [x] Mock environment works
+- [x] All error types tested
+- [x] Path resolution tested
+- [x] Context cancellation tested
+- [x] No root required for unit tests
+- [x] All tests pass
+- [x] Run with -race flag
+- [x] Coverage >80%
 
 ### Success Criteria
-- >80% test coverage for environment package
-- All tests pass without root
-- Mock can simulate all scenarios
-- Tests run with -race detector
+- ✅ >80% test coverage for environment package (91.6%)
+- ✅ All tests pass without root (38 tests passing)
+- ✅ Mock can simulate all scenarios
+- ✅ Tests run with -race detector (pass)
 
 ### Dependencies
 - Tasks 1-5 (Implementation complete)
@@ -1445,89 +1449,122 @@ Validate with real mounts and document everything.
 ### Implementation Steps
 
 1. **Create integration tests** (environment/bsd/integration_test.go)
-   ```go
-   //go:build integration
-   // +build integration
-   
-   package bsd
-   
-   import (
-       "context"
-       "dsynth/config"
-       "os"
-       "os/exec"
-       "strings"
-       "testing"
-   )
-   
-   func TestBSD_FullLifecycle(t *testing.T) {
-       if os.Getuid() != 0 {
-           t.Skip("requires root")
-       }
-       
-       cfg := &config.Config{
-           BuildBase:     "/tmp/test-build",
-           DPortsPath:    "/usr/ports",
-           PackagesPath:  "/tmp/test-packages",
-           DistFilesPath: "/tmp/test-distfiles",
-           OptionsPath:   "/tmp/test-options",
-           SystemPath:    "/",
-       }
-       
-       env := NewBSDEnvironment()
-       
-       // Setup
-       if err := env.Setup(99, cfg); err != nil {
-           t.Fatalf("Setup() failed: %v", err)
-       }
-       defer env.Cleanup()
-       
-       // Verify mounts
-       output, err := exec.Command("mount").Output()
-       if err != nil {
-           t.Fatalf("mount command failed: %v", err)
-       }
-       
-       mountOutput := string(output)
-       expectedMounts := []string{
-           "/tmp/test-build/SL99 ",
-           "/tmp/test-build/SL99/xports",
-           "/tmp/test-build/SL99/dev",
-       }
-       
-       for _, mount := range expectedMounts {
-           if !strings.Contains(mountOutput, mount) {
-               t.Errorf("mount %q not found in output", mount)
-           }
-       }
-       
-       // Execute simple command
-       cmd := &ExecCommand{
-           Command: "/bin/echo",
-           Args:    []string{"hello"},
-       }
-       
-       result, err := env.Execute(context.Background(), cmd)
-       if err != nil {
-           t.Fatalf("Execute() failed: %v", err)
-       }
-       
-       if result.ExitCode != 0 {
-           t.Errorf("Execute() exit code = %d, want 0", result.ExitCode)
-       }
-       
-       // Cleanup
-       if err := env.Cleanup(); err != nil {
-           t.Fatalf("Cleanup() failed: %v", err)
-       }
-       
-       // Verify no mounts remain
-       output, _ = exec.Command("mount").Output()
-       if strings.Contains(string(output), "/tmp/test-build/SL99") {
-           t.Error("mounts still present after cleanup")
-       }
-   }
-   ```
+    
+    **⚠️ Integration tests MUST be run in the DragonFlyBSD VM (Task 0).**
+    
+    The VM testing infrastructure provides:
+    - Clean BSD environment with root access
+    - Snapshot-based restoration for repeatable tests
+    - No need for `sudo` on host system
+    - Fast iteration with automated sync
+    
+    **VM Workflow for Integration Testing:**
+    ```bash
+    # First time setup (15 minutes, fully automated)
+    make vm-setup         # Download ISO, create disk
+    make vm-auto-install  # Automated OS installation
+    
+    # Daily workflow
+    make vm-start         # Boot VM (30s)
+    make vm-sync          # Sync code to VM
+    make vm-ssh           # SSH into VM
+    
+    # Inside VM, run integration tests:
+    cd /root/go-synth
+    doas go test -v -tags=integration ./environment/bsd/
+    
+    # Or quick workflow (sync + test):
+    make vm-quick         # Syncs and runs Phase 4 tests
+    
+    # When done:
+    make vm-stop          # Shut down VM
+    ```
+    
+    **See:** `docs/testing/VM_TESTING.md` for complete documentation.
+    
+    ```go
+    //go:build integration
+    // +build integration
+    
+    package bsd
+    
+    import (
+        "context"
+        "dsynth/config"
+        "os"
+        "os/exec"
+        "strings"
+        "testing"
+    )
+    
+    func TestBSD_FullLifecycle(t *testing.T) {
+        if os.Getuid() != 0 {
+            t.Skip("requires root")
+        }
+        
+        cfg := &config.Config{
+            BuildBase:     "/tmp/test-build",
+            DPortsPath:    "/usr/ports",
+            PackagesPath:  "/tmp/test-packages",
+            DistFilesPath: "/tmp/test-distfiles",
+            OptionsPath:   "/tmp/test-options",
+            SystemPath:    "/",
+        }
+        
+        env := NewBSDEnvironment()
+        
+        // Setup
+        if err := env.Setup(99, cfg); err != nil {
+            t.Fatalf("Setup() failed: %v", err)
+        }
+        defer env.Cleanup()
+        
+        // Verify mounts
+        output, err := exec.Command("mount").Output()
+        if err != nil {
+            t.Fatalf("mount command failed: %v", err)
+        }
+        
+        mountOutput := string(output)
+        expectedMounts := []string{
+            "/tmp/test-build/SL99 ",
+            "/tmp/test-build/SL99/xports",
+            "/tmp/test-build/SL99/dev",
+        }
+        
+        for _, mount := range expectedMounts {
+            if !strings.Contains(mountOutput, mount) {
+                t.Errorf("mount %q not found in output", mount)
+            }
+        }
+        
+        // Execute simple command
+        cmd := &ExecCommand{
+            Command: "/bin/echo",
+            Args:    []string{"hello"},
+        }
+        
+        result, err := env.Execute(context.Background(), cmd)
+        if err != nil {
+            t.Fatalf("Execute() failed: %v", err)
+        }
+        
+        if result.ExitCode != 0 {
+            t.Errorf("Execute() exit code = %d, want 0", result.ExitCode)
+        }
+        
+        // Cleanup
+        if err := env.Cleanup(); err != nil {
+            t.Fatalf("Cleanup() failed: %v", err)
+        }
+        
+        // Verify no mounts remain
+        output, _ = exec.Command("mount").Output()
+        if strings.Contains(string(output), "/tmp/test-build/SL99") {
+            t.Error("mounts still present after cleanup")
+        }
+    }
+    ```
 
 2. **Create environment README** (environment/README.md)
    ```markdown
@@ -1615,10 +1652,11 @@ Validate with real mounts and document everything.
 - `DEVELOPMENT.md` (Phase 4 status updates)
 
 ### Testing Checklist
-- [ ] Integration tests pass (with root)
+- [ ] VM infrastructure ready (Task 0) ✅
+- [ ] Integration tests pass in VM (with doas)
 - [ ] All mounts cleaned up after tests
 - [ ] No leftover directories
-- [ ] Tests skip gracefully without root
+- [ ] Tests skip gracefully without root (host system)
 
 ### Success Criteria
 - Integration tests validate full lifecycle
