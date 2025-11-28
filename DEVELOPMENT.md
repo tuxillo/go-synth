@@ -453,10 +453,11 @@ Phase 3 adds:
 
 ---
 
-## Phase 4: Environment Abstraction 🟡
+## Phase 4: Environment Abstraction 🟢
 
 **Status**: 🟢 Complete  
 **Timeline**: Started 2025-11-27 | Completed 2025-11-28  
+**Completion Date**: 2025-11-28  
 **Dependencies**: Phase 3 completion (✅ Complete - 2025-11-27)
 
 ### 🎯 Goals
@@ -483,12 +484,15 @@ Phase 3 adds:
 6. ✅ Update build/phases.go (3h) - **COMPLETE** (2025-11-28)
 7. ✅ Update Worker Lifecycle (2h) - **COMPLETE** (2025-11-28)
 8. ✅ Add Context and Error Handling (3h) - **COMPLETE** (2025-11-28)
-9. ✅ Unit Tests (4h) - **COMPLETE** (2025-11-28)
-10. ✅ Integration Tests and Documentation (4h) - **COMPLETE** (2025-11-28)
+9. ✅ Unit Tests (4h) - **COMPLETE** (2025-11-28) - 38 tests, 91.6% coverage
+10. ✅ Integration Tests and Documentation (4h) - **COMPLETE** (2025-11-28) - 8 tests, 100% pass rate
 
 **Total**: 27 hours estimated
 
-### ✓ Exit Criteria (10/10 complete)
+### ✓ Exit Criteria (10/10 complete) ✅
+
+**All criteria met! Phase 4 100% complete.**
+
 - [x] Environment interface defined and documented
 - [x] BSD implementation complete (Setup, Execute, Cleanup) - 100%
 - [x] All mount logic moved to environment package
@@ -498,7 +502,7 @@ Phase 3 adds:
 - [x] mount package usage removed from build package
 - [x] Structured error types with >80% test coverage (91.6%)
 - [x] Unit tests pass without root (38 tests)
-- [x] Integration tests pass with root (8 tests)
+- [x] Integration tests pass with root in VM (8 tests, 100% pass rate)
 
 ### 💻 Target API
 ```go
@@ -547,6 +551,13 @@ type ExecCommand struct {
 - Critical path resolution (`$/` → SystemDir)
 - Fail-safe mount error handling
 - Auto-registered backends ("bsd", "mock")
+
+**Critical Bug Fixed** (2025-11-28):
+- **Context timeout handling**: Execute() was not respecting context timeouts properly
+- **Root cause**: Error handling checked ExitError before context state
+- **Fix**: Reordered error checks to verify context.Err() FIRST (environment/bsd/bsd.go:421-448)
+- **Impact**: Now properly handles Ctrl+C interrupts and command timeouts
+- **Discovered by**: Integration test TestIntegration_ExecuteTimeout
 
 ### 📖 Documentation
 - **[Phase 4 Overview](docs/design/PHASE_4_ENVIRONMENT.md)** - Complete specification (450 lines)
@@ -1004,11 +1015,17 @@ Rationale: Package should contain only metadata, not build-time state
 - **Phase 1**: 🟢 100% complete (9/9 exit criteria met)
 - **Phase 1.5**: 🟢 100% complete (fidelity verification + C-ism removal)
 - **Phase 2**: 🟢 92% complete (11/12 tasks - benchmarks deferred)
-- **Phase 3**: 🔵 Ready to start (16 hours estimated)
-- **Phase 4-7**: ⚪ Planned
-- **Total Estimated Remaining**: ~16 hours for Phase 3, then ~40-50 hours for Phases 4-7
+- **Phase 3**: 🟢 100% complete (6/6 tasks complete)
+- **Phase 4**: 🟢 100% complete (10/10 tasks complete)
+- **Phase 5-7**: ⚪ Planned
+- **Total Estimated Remaining**: ~40-50 hours for Phases 5-7
 
 ### Recent Milestones
+- ✅ 2025-11-28: Phase 4 complete - Environment abstraction with BSD backend (10/10 tasks, 100%)
+- ✅ 2025-11-28: Phase 4 integration tests complete - 8 tests passing in VM (100% pass rate)
+- ✅ 2025-11-28: Critical context timeout bug fixed in Execute() (discovered by integration tests)
+- ✅ 2025-11-28: Phase 4 unit tests complete - 38 tests, 91.6% coverage, race-detector clean
+- ✅ 2025-11-27: Phase 3 complete - Builder orchestration with builddb integration
 - ✅ 2025-11-27: Phase 2 Task 9 complete - Integration tests (5 workflows, 23 subtests)
 - ✅ 2025-11-27: Phase 2 Task 8 complete - Unit tests (84.5% coverage, 93 subtests)
 - ✅ 2025-11-27: Phase 2 Tasks 1-7 complete - BuildDB with bbolt implementation
@@ -1031,10 +1048,9 @@ Rationale: Package should contain only metadata, not build-time state
 - ✅ 2025-11-21: Cycle detection implemented and tested
 
 ### Next Milestones
-- 🎯 Phase 3 Task 1: Pre-Build CRC Check Integration (~3h)
-- 🎯 Phase 3 Task 2: Build Record Lifecycle Tracking (~4h)
-- 🎯 Phase 3 Task 3: CRC and Package Index Update (~2h)
-- 🎯 Phase 3 completion (6 tasks, ~16 hours total)
+- 🎯 Phase 5: Minimal REST API (optional, ~15 hours)
+- 🎯 Phase 6: Testing Strategy completion (~8 hours remaining)
+- 🎯 Phase 7: Integration & Migration (final phase, ~12 hours)
 
 ### Known Issues
 See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for complete list.

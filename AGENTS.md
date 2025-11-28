@@ -85,7 +85,7 @@ gh pr create --repo otheruser/somerepo
 | `pkg/` | Package metadata, dependency resolution | `pkg/*.go` |
 | `builddb/` | Embedded bbolt database for build tracking and CRC-based incremental builds | `builddb/db.go` (562 lines) |
 | `build/` | Build orchestration with worker pool management | `build/*.go` |
-| `environment/` | Build isolation abstraction (Setup, Execute, Cleanup) with BSD backend | `environment/*.go`, `environment/bsd/*.go` |
+| `environment/` | ✅ Build isolation abstraction (Setup, Execute, Cleanup) with BSD backend - **Phase 4 Complete** | `environment/*.go`, `environment/bsd/*.go` |
 | `mount/` | ⚠️ Deprecated - Filesystem operations (use `environment/` instead) | `mount/mount.go` |
 | `log/` | Multi-file logging system (8 different log types) | `log/*.go` |
 | `util/` | Helper utilities and common functions | `util/util.go` |
@@ -264,12 +264,13 @@ Tmpfs_worksize=64g           # Work directory size
   - Package version indexing (latest successful build per port@version)
   - Crash-safe ACID transactions with automatic recovery
   - Single-open lifecycle pattern for thread safety
-- **Environment Abstraction**: Clean isolation layer for build execution (Phase 4 - 82% complete)
+- **Environment Abstraction**: Clean isolation layer for build execution - **Phase 4 Complete ✅**
   - Interface-based design supporting multiple backends (BSD, mock, future: jails, containers)
   - BSD backend with 27-mount chroot environment (nullfs, tmpfs, devfs, procfs)
   - Context support for cancellation and timeout
   - Structured error types for debugging
-  - Comprehensive unit tests (38 tests, 91.6% coverage, race-detector clean)
+  - Comprehensive test suite: 38 unit tests (91.6% coverage) + 8 integration tests (VM)
+  - Critical bug fixed: Context timeout handling in Execute()
 - Build orchestration with worker pools
 - Multi-file logging system
 - Signal handling and cleanup
@@ -280,8 +281,6 @@ Tmpfs_worksize=64g           # Work directory size
 - Error handling and recovery
 
 ### ❌ Not Yet Implemented (TODO items)
-- Integration tests for environment package (Task 10 - requires VM)
-- Environment package documentation (environment/README.md)
 - `status` command implementation
 - `cleanup` command (stale mount/log cleanup)
 - `configure` command (interactive configuration)

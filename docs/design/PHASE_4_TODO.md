@@ -1443,7 +1443,8 @@ Test environment logic without requiring root or real mounts.
 
 **Priority**: 🟡 Medium  
 **Effort**: 4 hours  
-**Status**: ✅ Complete (2025-11-28)
+**Status**: ✅ Complete (2025-11-28)  
+**Completion**: 8 integration tests passing in VM, context timeout bug fixed
 
 ### Objective
 Validate with real mounts and document everything.
@@ -1740,5 +1741,50 @@ Task 8 can overlap with Tasks 6-7
 
 ---
 
-**Last Updated**: 2025-11-27  
-**Phase Status**: 🔵 Ready to Start
+## Critical Bug Fixed During Task 10
+
+**Bug**: Context timeout handling in Execute() not working properly  
+**Discovered**: 2025-11-28, during integration test TestIntegration_ExecuteTimeout  
+**Fixed**: 2025-11-28  
+**Location**: environment/bsd/bsd.go:421-448
+
+### Problem
+When a context times out, `exec.CommandContext` kills the process with a signal (SIGKILL). This results in an `*exec.ExitError`, NOT `context.DeadlineExceeded`. The original error handling code checked for ExitError first and returned success (nil error), then checked for context.DeadlineExceeded which was never reached.
+
+### Root Cause
+```go
+// WRONG (original order):
+if exitErr, ok := err.(*exec.ExitError); ok {
+    return result, nil  // Returns success even though context timed out!
+}
+if errors.Is(err, context.DeadlineExceeded) {
+    return error  // Never reached
+}
+```
+
+### Solution
+Check the context state BEFORE checking for ExitError:
+
+```go
+// CORRECT (fixed order):
+if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
+    return error  // Check context FIRST
+}
+if errors.Is(execCtx.Err(), context.Canceled) {
+    return error
+}
+if exitErr, ok := err.(*exec.ExitError); ok {
+    return result, nil  // Only after checking context
+}
+```
+
+### Impact
+- Now properly handles Ctrl+C interrupts
+- Command timeouts work correctly
+- Integration test TestIntegration_ExecuteTimeout passes
+- No more silent failures when context is cancelled
+
+---
+
+**Last Updated**: 2025-11-28  
+**Phase Status**: 🟢 Complete

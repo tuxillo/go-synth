@@ -419,16 +419,10 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 	// Handle errors with proper semantics
 	// CRITICAL: Non-zero exit code is NOT an error from Execute's perspective
 	if err != nil {
-		// Try to extract exit code from error
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Command ran but returned non-zero exit code
-			// This is SUCCESS from Execute's perspective (err=nil)
-			result.ExitCode = exitErr.ExitCode()
-			return result, nil
-		}
-
-		// Check for timeout
-		if errors.Is(err, context.DeadlineExceeded) {
+		// Check for timeout FIRST (before ExitError)
+		// When context times out, CommandContext kills the process, resulting in ExitError
+		// We must check context state to distinguish timeout from genuine exit code
+		if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
 			result.ExitCode = -1
 			return result, &environment.ErrExecutionFailed{
 				Op:      "timeout",
@@ -437,14 +431,22 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 			}
 		}
 
-		// Check for cancellation
-		if errors.Is(err, context.Canceled) {
+		// Check for cancellation SECOND (before ExitError)
+		if errors.Is(execCtx.Err(), context.Canceled) {
 			result.ExitCode = -1
 			return result, &environment.ErrExecutionFailed{
 				Op:      "cancel",
 				Command: cmd.Command,
 				Err:     fmt.Errorf("command cancelled: %w", err),
 			}
+		}
+
+		// Try to extract exit code from error
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Command ran but returned non-zero exit code
+			// This is SUCCESS from Execute's perspective (err=nil)
+			result.ExitCode = exitErr.ExitCode()
+			return result, nil
 		}
 
 		// Execution failed (chroot not found, permission denied, etc)
