@@ -1190,21 +1190,124 @@ Rationale: Package should contain only metadata, not build-time state
 - 🎯 Test with more complex ports (editors/vim, www/nginx, etc.)
 - 🎯 Parallel build testing (multiple workers)
 
-### Known Issues
-See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for complete list.
+---
 
-**⚠️ Critical:**
-- None - all critical architecture work complete! 🎉
+## 🔧 Active Development Tracking
 
-**🔶 Medium:**
-- Missing integration tests
-- Error path test coverage incomplete
+> **Note**: This section tracks active work during heavy development.  
+> Once the project is public/stable, items will migrate to GitHub Issues.  
+> GitHub repo: https://github.com/tuxillo/go-synth
 
-**🔹 Low:**
-- No context.Context support
-- BulkQueue implementation exposed
-- No benchmark tests
-- Pre-existing race condition in BuildStateRegistry (not related to Phase 1.5 changes)
+### 🐛 Active Bugs
+
+**Critical** (🔴 Blocks core functionality):
+- None! 🎉
+
+**High** (🟠 Significant impact):
+- None currently
+
+**Medium** (🟡 Quality/usability):
+- None currently
+
+**Low** (🔵 Polish/minor):
+- Race condition in BuildStateRegistry (pre-existing, low frequency)
+
+---
+
+### ⚠️ Known Issues
+
+**Architectural/Design**:
+- No context.Context support in pkg APIs (by design for now)
+- BulkQueue implementation detail exposed (Phase 2 - refactor later)
+
+**Testing**:
+- Integration tests missing for some edge cases
+- Error path test coverage ~70% (target: 85%+)
+- No benchmark tests (Phase 2 Task 12 - deferred)
+
+**Documentation**:
+- Phase 7 Tasks 8-9 incomplete (optional post-MVP)
+- Phase 2 Task 12 benchmarks deferred
+- Phase 6 Task 6 CI/CD setup deferred
+
+**Reference**: See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed Phase 1 issues.
+
+---
+
+### ✨ Planned Features
+
+**High Priority** (Next sprint):
+- [ ] Test with complex ports (editors/vim, www/nginx, lang/python)
+- [ ] Parallel build validation (multiple workers under load)
+- [ ] Performance profiling and optimization
+
+**Medium Priority** (Post-MVP enhancements):
+- [ ] Phase 5: REST API for remote monitoring (~15 hours)
+- [ ] Ncurses UI (like original dsynth)
+- [ ] Build queue management
+- [ ] Notification system (email, webhooks)
+- [ ] Profile switching (multiple build configurations)
+
+**Low Priority** (Future exploration):
+- [ ] Distributed builds across multiple machines
+- [ ] Additional backends (jails, containers)
+- [ ] Web dashboard for build monitoring
+- [ ] Build artifact caching
+- [ ] Automatic dependency updates
+- [ ] Hook system for custom actions
+- [ ] Advanced NUMA support
+- [ ] Remote builder support
+- [ ] Package signing
+
+**Reference**: See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for detailed future plans.
+
+---
+
+### 📋 How to Use This Section
+
+**During Active Development**:
+1. **Found a bug?** Add to "Active Bugs" with severity
+2. **Hit a limitation?** Add to "Known Issues" with context
+3. **Want a feature?** Add to "Planned Features" with priority
+4. **Fixed something?** Remove from this section, document in phase/commit
+
+**When Ready for Public**:
+- Migrate open items to GitHub Issues
+- Keep this section as a lightweight snapshot
+- Direct contributors to GitHub for new reports
+
+**Template for New Items**:
+```markdown
+Bugs:
+- **[Component]** Brief description (discovered: YYYY-MM-DD)
+  - Impact: What breaks or fails
+  - Workaround: (if any)
+
+Issues:
+- **[Component]** Brief description
+  - Context: Why this exists
+  - Plan: When/how to address
+
+Features:
+- [ ] **[Component]** Brief description
+  - Benefit: Why we want this
+  - Effort: Rough estimate (hours/days)
+```
+
+---
+
+### 🎯 Current Focus (Week of 2025-11-28)
+
+**This Week**:
+- ✅ Phase 7 MVP completion (DONE!)
+- ✅ Documentation updates (in progress)
+- 🎯 Test with real-world ports
+- 🎯 Validate parallel builds
+
+**Next Week**:
+- Performance profiling
+- Consider Phase 5 REST API
+- Plan ncurses UI approach
 
 ---
 
