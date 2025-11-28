@@ -1409,3 +1409,189 @@ Second Run:
 
 **Project Complete**: This is the final phase. After Phase 7, go-synth MVP is **complete** 
 and ready for production use! 🎉
+
+---
+
+## Issues Appendix
+
+### Critical Issues Discovered During VM Testing (2025-11-28)
+
+After implementing Tasks 1-7, E2E integration tests passed successfully but **actual port builds failed** when tested in the DragonFlyBSD VM. This section documents the issues discovered and their resolutions.
+
+#### Issue #1: BSD Backend Not Registered (CRITICAL) 🚨
+
+**Discovered**: 2025-11-28 during first real port build attempt (`misc/hello`)  
+**Status**: 🔴 BLOCKING - prevents all builds  
+**Priority**: Critical
+
+**Symptoms**:
+```bash
+$ cd /root/go-synth && ./dsynth build misc/hello
+Building 1 port(s)...
+...
+Build error: worker 0 environment creation failed: unknown environment backend: bsd
+```
+
+**Root Cause**:
+- The `environment/bsd` package has an `init()` function that registers the BSD backend
+- Neither `main.go` nor `build/build.go` imports the `environment/bsd` package
+- The `init()` function never runs, so the backend never gets registered with the environment registry
+
+**Code Analysis**:
+```go
+// environment/bsd/bsd.go:15-18
+func init() {
+    // Register this backend with the environment package
+    environment.Register("bsd", NewBSDEnvironment)
+}
+
+// build/build.go:182
+env, err := environment.New("bsd")  // ← Tries to use "bsd" backend
+
+// main.go imports (lines 12-25)
+import (
+    "dsynth/build"
+    "dsynth/builddb"
+    "dsynth/config"
+    // ... no "dsynth/environment/bsd" import! ←
+)
+
+// build/build.go imports (lines 61-75)
+import (
+    "dsynth/builddb"
+    "dsynth/config"
+    "dsynth/environment"
+    // ... no "dsynth/environment/bsd" import! ←
+)
+```
+
+**Impact**:
+- **All port builds fail** - the build system cannot create worker environments
+- E2E tests passed because they only tested CLI commands (init, status, reset-db), not actual builds
+- This is a **critical architectural bug** that prevents MVP completion
+
+**Fix Required**:
+Add blank import to trigger side-effect registration:
+```go
+// Option 1: In main.go
+import (
+    _ "dsynth/environment/bsd"  // Register BSD backend
+)
+
+// Option 2: In build/build.go  
+import (
+    _ "dsynth/environment/bsd"  // Register BSD backend
+)
+```
+
+**Recommended**: Add to `main.go` since it's the entry point and makes the dependency explicit.
+
+**Testing**:
+- [ ] Build compiles successfully
+- [ ] `dsynth build misc/hello` creates worker environments
+- [ ] No "unknown environment backend" error
+
+---
+
+#### Issue #2: Dependency Resolution Showing Incorrect In-Degrees 🐛
+
+**Discovered**: 2025-11-28 during first real port build attempt (`misc/hello`)  
+**Status**: 🟡 HIGH - causes build failures  
+**Priority**: High
+
+**Symptoms**:
+```bash
+$ ./dsynth build misc/hello
+Building 1 port(s)...
+Resolving dependencies...
+  Processed 10/1 packages...  Resolved 10 total packages
+Building dependency graph...
+  Linked 10 packages
+...
+DEBUG GetBuildOrder: Total packages: 1
+DEBUG: misc/hello in-degree=6 (depends on 6, depended by 0)
+DEBUG: Queue start size: 0
+Warning: circular dependencies detected (0/1 packages in order)
+DEBUG: Packages not in result:
+  misc/hello: in-degree=6
+DEBUG: Final result: 0 packages
+
+Starting build: 0 packages (0 skipped, 0 ignored)
+```
+
+**Root Cause** (Hypothesis):
+- `misc/hello` is being reported with `in-degree=6` but there's only 1 package total
+- The dependency resolver may be including implicit dependencies (e.g., from Makefile.inc, bsd.port.mk)
+- This creates a phantom circular dependency that prevents queuing
+- Topological sort returns 0 packages because all have non-zero in-degree
+
+**Code Analysis**:
+```bash
+$ cat /usr/dports/misc/hello/Makefile | grep -E "^(BUILD_DEPENDS|LIB_DEPENDS|RUN_DEPENDS)"
+# (no output - misc/hello has NO explicit dependencies)
+```
+
+`misc/hello` should have in-degree=0 (no dependencies), but the system reports in-degree=6.
+
+**Impact**:
+- Simple ports cannot be built
+- Build order calculation fails with warnings
+- 0 packages queued for building (nothing gets built)
+- Even the simplest "hello world" port fails
+
+**Possible Causes**:
+1. **Implicit dependencies**: pkg parser may be picking up bsd.port.mk includes as dependencies
+2. **Self-referencing**: Port somehow depends on itself (cycle of size 1)
+3. **Base system dependencies**: Toolchain deps (gcc, make, etc.) being added incorrectly
+4. **Bug in ResolveDependencies**: May be adding phantom edges to dependency graph
+
+**Investigation Needed**:
+1. Add debug logging to `pkg.ResolveDependencies()` to see what dependencies are being added
+2. Check if `misc/hello` depends on anything from bsd.port.mk
+3. Verify GetBuildOrder() topological sort algorithm
+4. Test with debug output enabled: `DEBUG=1 ./dsynth build misc/hello`
+
+**Fix Options**:
+- Option A: Fix dependency resolution to not include base system deps
+- Option B: Add special handling for ports with no explicit dependencies
+- Option C: Debug and fix the topological sort implementation
+
+**Testing**:
+- [ ] `misc/hello` shows in-degree=0
+- [ ] Build order returns 1 package
+- [ ] No circular dependency warning
+- [ ] Port actually builds successfully
+
+---
+
+### Resolution Strategy
+
+**Phase 7 completion is BLOCKED** until these issues are resolved:
+
+1. **Immediate** (15 minutes): Fix Issue #1 (BSD backend registration)
+   - Add `_ "dsynth/environment/bsd"` import to main.go
+   - Rebuild and verify no "unknown backend" error
+   - Commit as Bug Fix #1
+
+2. **High Priority** (1-2 hours): Fix Issue #2 (dependency resolution)
+   - Add debug logging to dependency resolver
+   - Identify source of phantom dependencies
+   - Fix root cause
+   - Test with misc/hello
+   - Commit as Bug Fix #2
+
+3. **Validation** (30 minutes): Full E2E test in VM
+   - Build misc/hello successfully
+   - Verify BuildDB records created
+   - Verify CRC tracking works
+   - Test second build (CRC skip)
+   - Verify log output includes UUIDs
+
+4. **Documentation** (30 minutes):
+   - Document issues and resolutions in this appendix
+   - Update Task 7 status with "VM validation complete"
+   - Update DEVELOPMENT.md with bug fix commits
+
+**Total Estimated Time**: 2.5-3 hours to resolve both issues
+
+**Expected Outcome**: Working end-to-end port builds with full CLI integration, completing Phase 7 and the MVP milestone.
