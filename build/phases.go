@@ -209,7 +209,7 @@ func copyFile(src, dst string) error {
 
 // cleanupWorkDir cleans up the work directory after build
 func cleanupWorkDir(worker *Worker, p *pkg.Package) error {
-	constructionPath := filepath.Join(worker.Mount.BaseDir, "construction")
+	constructionPath := filepath.Join(worker.Env.GetBasePath(), "construction")
 	workDir := filepath.Join(constructionPath, p.Category, p.Name)
 
 	// Remove work directory

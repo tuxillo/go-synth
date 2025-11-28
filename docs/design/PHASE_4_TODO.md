@@ -1,6 +1,6 @@
 # Phase 4: Environment Abstraction - Task Breakdown
 
-**Status**: 🚧 In Progress (6/10 tasks - 60%)  
+**Status**: 🚧 In Progress (7/10 tasks - 70%)  
 **Last Updated**: 2025-11-28  
 **Dependencies**: Phase 3 complete ✅  
 **Total Time**: 30 hours estimated (27h implementation + 3h VM setup)
@@ -77,9 +77,9 @@ Phase 4 extracts mount and chroot operations from the build package into a clean
 - Add context support for cancellation/timeout
 - Comprehensive testing (unit + integration)
 
-## Task Progress: 7/11 Complete (64%) → Task 7 Ready
+## Task Progress: 8/11 Complete (73%) → Task 8 Ready
 
-### ✅ Completed: 7 tasks
+### ✅ Completed: 8 tasks
 - Task 0: VM Testing Infrastructure ✅
 - Task 1: Define Environment Interface ✅
 - Task 2: Implement BSD Environment - Mount Logic ✅
@@ -87,10 +87,11 @@ Phase 4 extracts mount and chroot operations from the build package into a clean
 - Task 4: Implement BSD Environment - Execute() ✅
 - Task 5: Implement BSD Environment - Cleanup() ✅
 - Task 6: Update build/phases.go ✅
+- Task 7: Update Worker Lifecycle ✅
 
 ### 🚧 In Progress: 0 tasks
 
-### ❌ Remaining: 4 tasks (Tasks 7-10)
+### ❌ Remaining: 3 tasks (Tasks 8-10)
 
 ---
 
@@ -937,7 +938,7 @@ Remove all direct chroot calls and use Environment.Execute() instead.
 
 **Priority**: 🔴 High  
 **Effort**: 2 hours  
-**Status**: ❌ Not Started
+**Status**: ✅ Complete (2025-11-28)
 
 ### Objective
 Update Worker struct to own Environment and manage its lifecycle.

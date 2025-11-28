@@ -69,7 +69,6 @@ import (
 	"dsynth/config"
 	"dsynth/environment"
 	"dsynth/log"
-	"dsynth/mount"
 	"dsynth/pkg"
 
 	"github.com/google/uuid"
@@ -89,7 +88,6 @@ type BuildStats struct {
 type Worker struct {
 	ID        int
 	Env       environment.Environment // Environment for isolated execution
-	Mount     *mount.Worker           // Deprecated: Use Env instead (kept for Task 6 compatibility)
 	Current   *pkg.Package
 	Status    string
 	StartTime time.Time
@@ -146,11 +144,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 	// Create cleanup function
 	cleanup := func() {
-		fmt.Fprintf(os.Stderr, "Cleaning up worker mounts...\n")
+		fmt.Fprintf(os.Stderr, "Cleaning up worker environments...\n")
 		for i, worker := range ctx.workers {
-			if worker != nil {
-				if err := mount.DoWorkerUnmounts(worker.Mount, cfg); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to unmount worker %d: %v\n", i, err)
+			if worker != nil && worker.Env != nil {
+				if err := worker.Env.Cleanup(); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to cleanup worker %d: %v\n", i, err)
 				}
 			}
 		}
@@ -197,20 +195,8 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 		ctx.workers[i] = &Worker{
 			ID:     i,
-			Env:    env, // New environment abstraction
+			Env:    env,
 			Status: "idle",
-			Mount: &mount.Worker{ // Deprecated: kept for compatibility (Task 7 removes)
-				Index:   i,
-				BaseDir: fmt.Sprintf("%s/SL%02d", cfg.BuildBase, i),
-			},
-		}
-
-		// Setup mounts for each worker (DEPRECATED: Remove in Task 7)
-		// Keeping temporarily for backward compatibility with cleanup
-		if err := mount.DoWorkerMounts(ctx.workers[i].Mount, cfg); err != nil {
-			logger.Error(fmt.Sprintf("Failed to setup mounts for worker %d: %v", i, err))
-			cleanup() // Cleanup any workers we did create
-			return nil, cleanup, fmt.Errorf("worker %d mount failed: %w", i, err)
 		}
 
 		// Start worker goroutine
