@@ -443,7 +443,7 @@ Updated CLI build commands (`build`, `just-build`, `force`) to use the new pipel
 **Priority**: Medium  
 **Dependencies**: Task 2  
 **Completed**: 2025-11-28  
-**Commit**: (pending)
+**Commit**: 85d736c
 
 #### Description
 
