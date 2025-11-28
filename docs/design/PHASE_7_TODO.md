@@ -244,16 +244,18 @@ This ensures users can upgrade without losing build history.
 
 ---
 
-### Task 2: Wire CLI Build Commands ⚪
+### Task 2: Wire CLI Build Commands ✅ COMPLETE
 
-**Estimated Time**: 3 hours  
+**Actual Time**: 2 hours  
 **Priority**: Critical  
-**Dependencies**: Task 1
+**Dependencies**: Task 1  
+**Completed**: 2025-11-28  
+**Commit**: (pending)
 
 #### Description
 
-Update CLI build commands (`build`, `just-build`, `force`) to use the new pipeline 
-(pkg → builddb → build → environment).
+Updated CLI build commands (`build`, `just-build`, `force`) to use the new pipeline 
+(pkg → builddb → build → environment) with improved UX.
 
 #### Implementation Steps
 
@@ -390,14 +392,45 @@ Update CLI build commands (`build`, `just-build`, `force`) to use the new pipeli
    }()
    ```
 
+#### Implementation Completed
+
+**Changes made to `main.go`**:
+- Added `migration` import
+- Added migration check with user prompt after BuildDB opens (lines 325-350)
+- Improved build plan display with package counts and first 10 ports (lines 404-430)
+- Enhanced stats display with symbols (✓, ✗, -) and better formatting (lines 464-477)
+- Removed all DEBUG output
+- Verified command mappings (`build`, `force`, `just-build`)
+- Compiled successfully (5.0M binary)
+
+**Migration Integration**:
+- Detects legacy CRC file at `${BuildBase}/crc_index`
+- Shows warning with emoji and prompts user
+- Auto-migrates with `-y` flag (respects `cfg.YesAll`)
+- Graceful skip option with warning message
+
+**Build Plan Display**:
+- Shows total packages, to build, to skip
+- Lists first 10 packages to build
+- Shows "... and N more" for >10 packages
+- Clean, user-friendly format
+
+**Stats Display**:
+- "Build Complete!" header with separator
+- Checkmarks for success (✓), X for failures (✗), dash for skipped (-)
+- Better aligned formatting
+- Duration shown prominently
+
 #### Testing Checklist
 
-- [ ] `dsynth build editors/vim` works end-to-end
-- [ ] `dsynth force editors/vim` bypasses CRC check
-- [ ] `-y` flag skips confirmation prompt
-- [ ] `-d` flag enables debug logging
-- [ ] Build plan displays correctly
-- [ ] Statistics shown after build
+- [x] Binary compiles successfully with `go build .`
+- [x] Command mappings verified (build, force, just-build)
+- [ ] `dsynth build editors/vim` works end-to-end (requires BSD + ports)
+- [ ] `dsynth force editors/vim` bypasses CRC check (requires BSD + ports)
+- [ ] `-y` flag skips confirmation prompt (requires BSD + ports)
+- [ ] Migration prompt appears with legacy file (requires legacy data)
+- [ ] Build plan displays correctly (requires actual build)
+- [ ] Statistics shown after build (requires actual build)
 - [ ] Exit code 0 on success, 1 on failure
 - [ ] Ctrl-C gracefully cleans up workers
 - [ ] Migration prompt appears on first run

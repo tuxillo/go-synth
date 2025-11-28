@@ -13,6 +13,7 @@ import (
 	"dsynth/builddb"
 	"dsynth/config"
 	"dsynth/log"
+	"dsynth/migration"
 	"dsynth/pkg"
 	"dsynth/util"
 )
@@ -321,16 +322,33 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	}
 	defer buildDB.Close()
 
-	// DEBUG: Print config values
-	fmt.Printf("\nDEBUG: Config loaded:\n")
-	fmt.Printf("  Profile: %s\n", cfg.Profile)
-	fmt.Printf("  BuildBase: %s\n", cfg.BuildBase)
-	fmt.Printf("  OptionsPath: %s\n", cfg.OptionsPath)
-	fmt.Printf("  PackagesPath: %s\n", cfg.PackagesPath)
-	fmt.Printf("  RepositoryPath: %s\n", cfg.RepositoryPath)
-	fmt.Printf("  DistFilesPath: %s\n", cfg.DistFilesPath)
-	fmt.Printf("  DPortsPath: %s\n", cfg.DPortsPath)
-	fmt.Println()
+	// Check for legacy CRC migration
+	if migration.DetectMigrationNeeded(cfg) {
+		fmt.Println("\n⚠️  Legacy CRC data detected!")
+		fmt.Printf("Found legacy CRC file: %s/crc_index\n", cfg.BuildBase)
+		fmt.Println("This data will be imported into the new BuildDB.")
+
+		if !cfg.YesAll {
+			fmt.Print("Migrate legacy data now? [Y/n]: ")
+			var response string
+			fmt.Scanln(&response)
+			if strings.EqualFold(response, "n") || strings.EqualFold(response, "no") {
+				fmt.Println("Skipping migration. Note: CRC skip functionality requires migration.")
+			} else {
+				if err := migration.MigrateLegacyCRC(cfg, buildDB); err != nil {
+					fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
+					os.Exit(1)
+				}
+			}
+		} else {
+			// Auto-migrate with -y flag
+			fmt.Println("Auto-migrating legacy CRC data (-y flag)...")
+			if err := migration.MigrateLegacyCRC(cfg, buildDB); err != nil {
+				fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
+				os.Exit(1)
+			}
+		}
+	}
 
 	// Setup signal handler for cleanup
 	sigChan := make(chan os.Signal, 1)
@@ -383,20 +401,31 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		os.Exit(1)
 	}
 
-	// DEBUG: Print what packages are marked for build vs skipped
-	fmt.Println("\nDEBUG: Package status (first 10):")
-	for i, p := range packages {
-		if i >= 10 {
-			break
-		}
-		fmt.Printf("  %s: Flags=%08x PkgFile=%s\n", p.PortDir, registry.GetFlags(p), p.PkgFile)
+	// Display build plan summary
+	totalPkgs := len(packages)
+	skipCount := totalPkgs - needBuild
 
-		// Check if package file actually exists
-		pkgPath := filepath.Join(cfg.PackagesPath, "All", p.PkgFile)
-		if _, err := os.Stat(pkgPath); err == nil {
-			fmt.Printf("    -> Package EXISTS at %s\n", pkgPath)
-		} else {
-			fmt.Printf("    -> Package NOT FOUND at %s (err: %v)\n", pkgPath, err)
+	fmt.Println("\nBuild Plan:")
+	fmt.Printf("  Total packages: %d\n", totalPkgs)
+	fmt.Printf("  To build: %d\n", needBuild)
+	fmt.Printf("  To skip: %d\n", skipCount)
+
+	if needBuild > 0 {
+		fmt.Println("\nPackages to build:")
+		count := 0
+		for _, p := range packages {
+			flags := registry.GetFlags(p)
+			// Show packages that are NOT already packaged
+			if !flags.Has(pkg.PkgFPackaged) {
+				fmt.Printf("  - %s\n", p.PortDir)
+				count++
+				if count >= 10 {
+					if needBuild > 10 {
+						fmt.Printf("  ... and %d more\n", needBuild-10)
+					}
+					break
+				}
+			}
 		}
 	}
 	fmt.Println()
@@ -433,13 +462,18 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 
 	// Print statistics
 	fmt.Println()
-	fmt.Println("Build Statistics:")
-	fmt.Printf("  Total packages: %d\n", stats.Total)
-	fmt.Printf("  Success: %d\n", stats.Success)
-	fmt.Printf("  Failed: %d\n", stats.Failed)
-	fmt.Printf("  Skipped: %d\n", stats.Skipped)
-	fmt.Printf("  Ignored: %d\n", stats.Ignored)
-	fmt.Printf("  Duration: %s\n\n", stats.Duration)
+	fmt.Println("Build Complete!")
+	fmt.Println("================")
+	fmt.Printf("  Total packages:  %d\n", stats.Total)
+	fmt.Printf("  ✓ Success:       %d\n", stats.Success)
+	if stats.Failed > 0 {
+		fmt.Printf("  ✗ Failed:        %d\n", stats.Failed)
+	} else {
+		fmt.Printf("  ✗ Failed:        %d\n", stats.Failed)
+	}
+	fmt.Printf("  - Skipped:       %d\n", stats.Skipped)
+	fmt.Printf("  - Ignored:       %d\n", stats.Ignored)
+	fmt.Printf("  Duration:        %s\n\n", stats.Duration)
 
 	// Also update repo if not just-build mode
 	if !justBuild {
