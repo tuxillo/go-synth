@@ -55,6 +55,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -524,6 +525,14 @@ func (e *BSDEnvironment) Cleanup() error {
 		ms := e.mounts[i]
 		target := ms.target
 
+		// doUnmount expects relative path, but ms.target is absolute
+		// Convert absolute path to relative by removing baseDir prefix
+		relPath, err := filepath.Rel(e.baseDir, target)
+		if err != nil {
+			log.Printf("[Cleanup] WARNING: Failed to convert %s to relative path: %v", target, err)
+			relPath = target // Fallback to absolute path
+		}
+
 		log.Printf("[Cleanup] Unmounting %s (attempt 1/%d)", target, maxRetries)
 
 		// Retry loop for busy mounts
@@ -531,7 +540,7 @@ func (e *BSDEnvironment) Cleanup() error {
 		unmounted := false
 
 		for attempt := 1; attempt <= maxRetries; attempt++ {
-			err := e.doUnmount(target)
+			err := e.doUnmount(relPath)
 			if err == nil {
 				log.Printf("[Cleanup] Successfully unmounted %s", target)
 				unmounted = true
@@ -587,6 +596,9 @@ func (e *BSDEnvironment) Cleanup() error {
 // Returns a slice of mount targets that are still mounted according to the
 // system mount table. This is used for debugging and validation during Cleanup.
 //
+// The function parses the output of the `mount` command to check if each mount
+// point from e.mounts is still present in the system mount table.
+//
 // Example:
 //
 //	remaining := env.listRemainingMounts()
@@ -596,14 +608,39 @@ func (e *BSDEnvironment) Cleanup() error {
 func (e *BSDEnvironment) listRemainingMounts() []string {
 	var remaining []string
 
+	// Get the current mount table from the system
+	cmd := exec.Command("mount")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If we can't run mount, fall back to checking directory existence
+		log.Printf("[Cleanup] WARNING: Failed to run mount command: %v", err)
+		for _, ms := range e.mounts {
+			if _, err := os.Stat(ms.target); err == nil {
+				remaining = append(remaining, ms.target)
+			}
+		}
+		return remaining
+	}
+
+	// Parse mount output to build a set of currently mounted paths
+	mountTable := make(map[string]bool)
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		// Mount output format: "source on target (fstype, options)"
+		// Example: "/bin on /tmp/test/build/SL00/bin (null)"
+		if parts := strings.Split(line, " on "); len(parts) >= 2 {
+			// Extract the target path (everything between "on" and "(")
+			targetPart := parts[1]
+			if idx := strings.Index(targetPart, " ("); idx != -1 {
+				target := targetPart[:idx]
+				mountTable[target] = true
+			}
+		}
+	}
+
+	// Check which of our tracked mounts are still in the mount table
 	for _, ms := range e.mounts {
-		// Check if mount still exists by attempting to stat the target
-		// On BSD, a mounted directory will have different inode properties
-		// For simplicity, we check if the path exists and assume it's mounted
-		// if it was in our mounts list and still exists
-		if _, err := os.Stat(ms.target); err == nil {
-			// Path exists, assume still mounted
-			// A more robust check would parse /etc/mtab or use getmntinfo(3)
+		if mountTable[ms.target] {
 			remaining = append(remaining, ms.target)
 		}
 	}

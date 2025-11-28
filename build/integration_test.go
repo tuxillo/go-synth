@@ -260,7 +260,7 @@ func TestIntegration_FirstBuildWorkflow(t *testing.T) {
 	}
 
 	db, cfg, logger, cleanup := setupTestBuild(t)
-	defer cleanup()
+	t.Cleanup(cleanup)
 
 	// Create test port
 	portDir := createTestPort(t, cfg.DPortsPath, "misc", "testport1")
@@ -281,7 +281,7 @@ func TestIntegration_FirstBuildWorkflow(t *testing.T) {
 	// Build the port
 	stats, cleanupBuild, err := DoBuild(packages, cfg, logger, db)
 	if cleanupBuild != nil {
-		defer cleanupBuild()
+		t.Cleanup(cleanupBuild)
 	}
 	if err != nil {
 		t.Fatalf("Build failed: %v", err)
@@ -313,7 +313,7 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 	}
 
 	db, cfg, logger, cleanup := setupTestBuild(t)
-	defer cleanup()
+	t.Cleanup(cleanup)
 
 	// Create test port
 	portDir := createTestPort(t, cfg.DPortsPath, "misc", "testport2")
@@ -330,7 +330,7 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 
 	_, cleanup1, err := DoBuild(packages1, cfg, logger, db)
 	if cleanup1 != nil {
-		defer cleanup1()
+		t.Cleanup(cleanup1)
 	}
 	if err != nil {
 		t.Fatalf("First build failed: %v", err)
@@ -347,7 +347,7 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 
 	stats2, cleanup2, err := DoBuild(packages2, cfg, logger, db)
 	if cleanup2 != nil {
-		defer cleanup2()
+		t.Cleanup(cleanup2)
 	}
 	if err != nil {
 		t.Fatalf("Second build failed: %v", err)
@@ -370,7 +370,7 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 	}
 
 	db, cfg, logger, cleanup := setupTestBuild(t)
-	defer cleanup()
+	t.Cleanup(cleanup)
 
 	// Create test port
 	portDir := createTestPort(t, cfg.DPortsPath, "misc", "testport3")
@@ -387,7 +387,7 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 
 	_, cleanup1, err := DoBuild(packages1, cfg, logger, db)
 	if cleanup1 != nil {
-		defer cleanup1()
+		t.Cleanup(cleanup1)
 	}
 	if err != nil {
 		t.Fatalf("First build failed: %v", err)
@@ -411,7 +411,7 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 
 	stats2, cleanup2, err := DoBuild(packages2, cfg, logger, db)
 	if cleanup2 != nil {
-		defer cleanup2()
+		t.Cleanup(cleanup2)
 	}
 	if err != nil {
 		t.Fatalf("Second build failed: %v", err)
