@@ -250,7 +250,7 @@ This ensures users can upgrade without losing build history.
 **Priority**: Critical  
 **Dependencies**: Task 1  
 **Completed**: 2025-11-28  
-**Commit**: (pending)
+**Commit**: f72be5b
 
 #### Description
 
