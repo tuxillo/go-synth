@@ -352,6 +352,9 @@ func TestBSDEnvironment_Cleanup_NoMounts(t *testing.T) {
 }
 
 // TestBSDEnvironment_ListRemainingMounts verifies mount tracking.
+// NOTE: This test verifies that listRemainingMounts() correctly parses the
+// actual mount table. Without real mount operations (which require root),
+// it will return an empty list, which is the correct behavior.
 func TestBSDEnvironment_ListRemainingMounts(t *testing.T) {
 	// Create temporary directory structure
 	tmpDir := t.TempDir()
@@ -359,10 +362,10 @@ func TestBSDEnvironment_ListRemainingMounts(t *testing.T) {
 	mount2 := filepath.Join(tmpDir, "mount2")
 	mount3 := filepath.Join(tmpDir, "mount3")
 
-	// Create mount1 and mount2 (simulating they still exist)
+	// Create directories (but don't actually mount anything)
 	os.MkdirAll(mount1, 0755)
 	os.MkdirAll(mount2, 0755)
-	// Don't create mount3 (simulating it was unmounted)
+	os.MkdirAll(mount3, 0755)
 
 	env := &BSDEnvironment{
 		baseDir: tmpDir,
@@ -375,33 +378,16 @@ func TestBSDEnvironment_ListRemainingMounts(t *testing.T) {
 
 	remaining := env.listRemainingMounts()
 
-	// Should find mount1 and mount2 (exist), but not mount3 (doesn't exist)
-	if len(remaining) != 2 {
-		t.Errorf("listRemainingMounts() = %v (len=%d), want 2 mounts",
+	// Since we're not actually mounting anything (requires root), the function
+	// should correctly report no remaining mounts by checking the real mount table.
+	// This is an improvement over the old behavior which just checked directory existence.
+	if len(remaining) != 0 {
+		t.Errorf("listRemainingMounts() = %v (len=%d), want 0 mounts (nothing actually mounted)",
 			remaining, len(remaining))
 	}
 
-	// Verify mount1 and mount2 are in the list
-	hasMount1 := false
-	hasMount2 := false
-	for _, m := range remaining {
-		if m == mount1 {
-			hasMount1 = true
-		}
-		if m == mount2 {
-			hasMount2 = true
-		}
-		if m == mount3 {
-			t.Errorf("listRemainingMounts() included %q, but it doesn't exist", mount3)
-		}
-	}
-
-	if !hasMount1 {
-		t.Errorf("listRemainingMounts() missing %q", mount1)
-	}
-	if !hasMount2 {
-		t.Errorf("listRemainingMounts() missing %q", mount2)
-	}
+	// Note: Integration tests with root privileges verify the actual mount
+	// tracking behavior in build/integration_test.go
 }
 
 // TestMountError_Error verifies MountError formatting.
