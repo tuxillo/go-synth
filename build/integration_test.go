@@ -9,6 +9,7 @@ import (
 
 	"dsynth/builddb"
 	"dsynth/config"
+	_ "dsynth/environment/bsd" // Register bsd backend
 	"dsynth/log"
 	"dsynth/pkg"
 )
@@ -36,10 +37,26 @@ func setupTestBuild(t *testing.T) (*builddb.DB, *config.Config, *log.Logger, fun
 	logDir := filepath.Join(tmpDir, "logs")
 	packagesDir := filepath.Join(tmpDir, "packages")
 
-	for _, dir := range []string{portsDir, buildBase, logDir, packagesDir} {
+	// Create all necessary directories
+	packagesAll := filepath.Join(packagesDir, "All")
+	for _, dir := range []string{portsDir, buildBase, logDir, packagesDir, packagesAll} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("Failed to create directory %s: %v", dir, err)
 		}
+	}
+
+	// Create Template directory for BSD environment
+	templateDir := filepath.Join(buildBase, "Template")
+	templateEtc := filepath.Join(templateDir, "etc")
+	if err := os.MkdirAll(templateEtc, 0755); err != nil {
+		t.Fatalf("Failed to create template directory: %v", err)
+	}
+
+	// Create minimal /etc/passwd for chroot environment
+	passwdPath := filepath.Join(templateEtc, "passwd")
+	passwd := "root:*:0:0::0:0:root:/root:/bin/sh\n"
+	if err := os.WriteFile(passwdPath, []byte(passwd), 0644); err != nil {
+		t.Fatalf("Failed to create passwd file: %v", err)
 	}
 
 	// Create minimal test config
