@@ -323,6 +323,15 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	// Generate UUID for this build attempt
 	p.BuildUUID = uuid.New().String()
 
+	// Create context logger with UUID and worker info
+	ctxLogger := ctx.logger.WithContext(log.LogContext{
+		BuildID:  p.BuildUUID,
+		PortDir:  p.PortDir,
+		WorkerID: worker.ID,
+	})
+
+	ctxLogger.Info("Starting build")
+
 	startTime := time.Now()
 
 	// Create initial build record with status "running"
@@ -362,10 +371,12 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	for _, phase := range phases {
 		ctx.registry.SetLastPhase(p, phase)
 		pkgLogger.WritePhase(phase)
+		ctxLogger.Info("Starting phase: %s", phase)
 
 		if err := executePhase(ctx.ctx, worker, p, phase, ctx.cfg, ctx.registry, pkgLogger); err != nil {
 			duration := time.Since(startTime)
 			pkgLogger.WriteFailure(duration, fmt.Sprintf("Phase %s failed: %v", phase, err))
+			ctxLogger.Failed(phase, fmt.Sprintf("%v", err))
 
 			// Update build record status to failed
 			if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "failed", time.Now()); err != nil {
@@ -378,6 +389,7 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 
 	duration := time.Since(startTime)
 	pkgLogger.WriteSuccess(duration)
+	ctxLogger.Success(fmt.Sprintf("Build completed in %v", duration))
 
 	// Update build record status to success
 	if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "success", time.Now()); err != nil {

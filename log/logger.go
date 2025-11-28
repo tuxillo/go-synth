@@ -25,6 +25,19 @@ type Logger struct {
 	mu           sync.Mutex
 }
 
+// LogContext provides metadata for contextual logging
+type LogContext struct {
+	BuildID  string // Build UUID (full or short)
+	PortDir  string // Port directory (e.g., "editors/vim")
+	WorkerID int    // Worker ID (0-based)
+}
+
+// ContextLogger wraps Logger with context metadata for enriched log entries
+type ContextLogger struct {
+	logger *Logger
+	ctx    LogContext
+}
+
 // NewLogger creates a new logger
 func NewLogger(cfg *config.Config) (*Logger, error) {
 	// Ensure logs directory exists
@@ -263,4 +276,114 @@ func (l *Logger) WriteSummary(total, success, failed, skipped, ignored int, dura
 	fmt.Fprintf(l.resultsFile, "%s\n", strings.Repeat("=", 70))
 
 	l.resultsFile.Sync()
+}
+
+// WithContext creates a ContextLogger with metadata for enriched logging.
+// The BuildID will be truncated to 8 characters for readability.
+//
+// Example:
+//
+//	ctxLogger := logger.WithContext(log.LogContext{
+//	    BuildID:  buildUUID,
+//	    PortDir:  "editors/vim",
+//	    WorkerID: 2,
+//	})
+//	ctxLogger.Info("Starting build")
+//	// Output: [15:04:05] [a1b2c3d4] [W2] editors/vim: INFO: Starting build
+func (l *Logger) WithContext(ctx LogContext) *ContextLogger {
+	return &ContextLogger{
+		logger: l,
+		ctx:    ctx,
+	}
+}
+
+// formatPrefix creates a log prefix with context metadata
+func (cl *ContextLogger) formatPrefix() string {
+	shortUUID := cl.ctx.BuildID
+	if len(shortUUID) > 8 {
+		shortUUID = shortUUID[:8]
+	}
+	return fmt.Sprintf("[%s] [W%d] %s: ",
+		shortUUID,
+		cl.ctx.WorkerID,
+		cl.ctx.PortDir)
+}
+
+// Success logs a successful build with context
+func (cl *ContextLogger) Success(msg string) {
+	prefix := cl.formatPrefix()
+	cl.logger.mu.Lock()
+	defer cl.logger.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	fullMsg := fmt.Sprintf("[%s] %sSUCCESS: %s\n", timestamp, prefix, msg)
+
+	cl.logger.resultsFile.WriteString(fullMsg)
+	cl.logger.successFile.WriteString(cl.ctx.PortDir + "\n")
+
+	cl.logger.resultsFile.Sync()
+	cl.logger.successFile.Sync()
+}
+
+// Failed logs a failed build with context
+func (cl *ContextLogger) Failed(phase, msg string) {
+	prefix := cl.formatPrefix()
+	cl.logger.mu.Lock()
+	defer cl.logger.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	fullMsg := fmt.Sprintf("[%s] %sFAILED: %s (phase: %s)\n",
+		timestamp, prefix, msg, phase)
+
+	cl.logger.resultsFile.WriteString(fullMsg)
+	cl.logger.failureFile.WriteString(fmt.Sprintf("%s (phase: %s)\n",
+		cl.ctx.PortDir, phase))
+
+	cl.logger.resultsFile.Sync()
+	cl.logger.failureFile.Sync()
+}
+
+// Info logs an informational message with context
+func (cl *ContextLogger) Info(format string, args ...interface{}) {
+	prefix := cl.formatPrefix()
+	cl.logger.mu.Lock()
+	defer cl.logger.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
+	fullMsg := fmt.Sprintf("[%s] %sINFO: %s\n", timestamp, prefix, msg)
+
+	cl.logger.resultsFile.WriteString(fullMsg)
+	cl.logger.resultsFile.Sync()
+}
+
+// Error logs an error message with context
+func (cl *ContextLogger) Error(format string, args ...interface{}) {
+	prefix := cl.formatPrefix()
+	cl.logger.mu.Lock()
+	defer cl.logger.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
+	fullMsg := fmt.Sprintf("[%s] %sERROR: %s\n", timestamp, prefix, msg)
+
+	cl.logger.resultsFile.WriteString(fullMsg)
+	cl.logger.debugFile.WriteString(fullMsg)
+
+	cl.logger.resultsFile.Sync()
+	cl.logger.debugFile.Sync()
+}
+
+// Debug logs debug information with context
+func (cl *ContextLogger) Debug(format string, args ...interface{}) {
+	prefix := cl.formatPrefix()
+	cl.logger.mu.Lock()
+	defer cl.logger.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
+	fullMsg := fmt.Sprintf("[%s] %sDEBUG: %s\n", timestamp, prefix, msg)
+
+	cl.logger.debugFile.WriteString(fullMsg)
+	cl.logger.debugFile.Sync()
 }
