@@ -299,7 +299,7 @@ func doStatus(cfg *config.Config, portList []string) {
 	fmt.Println("=== Port Build Status ===")
 	for _, portDir := range portList {
 		rec, err := db.LatestFor(portDir, "")
-		if err != nil {
+		if err != nil || rec == nil {
 			fmt.Printf("\n%s: never built\n", portDir)
 			continue
 		}

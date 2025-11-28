@@ -3,6 +3,7 @@
 package builddb
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
@@ -292,7 +293,6 @@ func (db *DB) UpdateRecordStatus(uuid, status string, endTime time.Time) error {
 //   - *BuildRecord: The latest successful build record, or nil if not found
 //   - error: Any database or unmarshaling errors
 func (db *DB) LatestFor(portDir, version string) (*BuildRecord, error) {
-	key := []byte(portDir + "@" + version)
 	var rec *BuildRecord
 
 	err := db.db.View(func(tx *bolt.Tx) error {
@@ -301,8 +301,23 @@ func (db *DB) LatestFor(portDir, version string) (*BuildRecord, error) {
 			return &DatabaseError{Op: "get bucket", Bucket: BucketPackages, Err: ErrBucketNotFound}
 		}
 
-		// Look up UUID in packages bucket
-		uuidBytes := packages.Get(key)
+		var uuidBytes []byte
+
+		// If version is specified, do exact lookup
+		if version != "" {
+			key := []byte(portDir + "@" + version)
+			uuidBytes = packages.Get(key)
+		} else {
+			// If no version specified, find any build for this port
+			// Look for keys starting with "portDir@"
+			prefix := []byte(portDir + "@")
+			c := packages.Cursor()
+			for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+				uuidBytes = v
+				break // Take the first one we find
+			}
+		}
+
 		if uuidBytes == nil {
 			// No record found - not an error, just means no builds yet
 			return nil
