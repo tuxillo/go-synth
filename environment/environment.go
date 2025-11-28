@@ -244,11 +244,18 @@ func (e *ErrUnknownBackend) Error() string {
 }
 
 // ErrSetupFailed indicates environment setup failed.
+//
+// This error type provides context for setup failures, including the
+// specific operation that failed (e.g., "mkdir", "mount-root", "template-copy").
 type ErrSetupFailed struct {
-	Err error
+	Op  string // Operation that failed: "mkdir", "mount-root", "template-copy", etc.
+	Err error  // Underlying error
 }
 
 func (e *ErrSetupFailed) Error() string {
+	if e.Op != "" {
+		return fmt.Sprintf("setup failed (%s): %v", e.Op, e.Err)
+	}
 	return fmt.Sprintf("environment setup failed: %v", e.Err)
 }
 
@@ -257,13 +264,26 @@ func (e *ErrSetupFailed) Unwrap() error {
 }
 
 // ErrExecutionFailed indicates command execution failed.
+//
 // This is different from command returning non-zero exit code.
+// This error type distinguishes between:
+//   - Execution failures (chroot not found, permission denied, timeout)
+//   - Command failures (command ran but returned non-zero exit code)
 type ErrExecutionFailed struct {
-	Command string
-	Err     error
+	Op       string // Operation: "chroot", "timeout", "cancel"
+	Command  string // Command path
+	ExitCode int    // Exit code (0 if execution failed, >0 if command failed)
+	Err      error  // Underlying error
 }
 
 func (e *ErrExecutionFailed) Error() string {
+	if e.ExitCode > 0 {
+		return fmt.Sprintf("%s failed: command %s exited with code %d: %v",
+			e.Op, e.Command, e.ExitCode, e.Err)
+	}
+	if e.Op != "" {
+		return fmt.Sprintf("%s failed: command %s: %v", e.Op, e.Command, e.Err)
+	}
 	return fmt.Sprintf("failed to execute %s: %v", e.Command, e.Err)
 }
 
@@ -272,12 +292,25 @@ func (e *ErrExecutionFailed) Unwrap() error {
 }
 
 // ErrCleanupFailed indicates catastrophic cleanup failure.
+//
 // Transient failures (e.g., busy mounts) should be logged but not returned.
+// This error type provides context for cleanup failures, including:
+//   - The specific operation that failed
+//   - List of remaining mounts that couldn't be unmounted
 type ErrCleanupFailed struct {
-	Err error
+	Op     string   // Operation that failed: "unmount", "rmdir", etc.
+	Err    error    // Underlying error
+	Mounts []string // Remaining mounts that couldn't be unmounted (empty if not applicable)
 }
 
 func (e *ErrCleanupFailed) Error() string {
+	if len(e.Mounts) > 0 {
+		return fmt.Sprintf("cleanup failed (%s): %v (remaining mounts: %v)",
+			e.Op, e.Err, e.Mounts)
+	}
+	if e.Op != "" {
+		return fmt.Sprintf("cleanup failed (%s): %v", e.Op, e.Err)
+	}
 	return fmt.Sprintf("environment cleanup failed: %v", e.Err)
 }
 

@@ -49,6 +49,7 @@ import (
 	"context"
 	"dsynth/config"
 	"dsynth/environment"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -106,6 +107,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	// Create base directory
 	if err := os.MkdirAll(e.baseDir, 0755); err != nil {
 		return &environment.ErrSetupFailed{
+			Op:  "mkdir",
 			Err: fmt.Errorf("cannot create basedir: %w", err),
 		}
 	}
@@ -258,6 +260,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	cmd := exec.Command("cp", "-Rp", templatePath+"/.", e.baseDir)
 	if err := cmd.Run(); err != nil {
 		return &environment.ErrSetupFailed{
+			Op:  "template-copy",
 			Err: fmt.Errorf("template copy failed: %w", err),
 		}
 	}
@@ -265,6 +268,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	// Return aggregate error if any mounts failed
 	if e.mountErrors > 0 {
 		return &environment.ErrSetupFailed{
+			Op:  "mount",
 			Err: fmt.Errorf("mount errors occurred: %d", e.mountErrors),
 		}
 	}
@@ -351,6 +355,7 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 	// Validate environment is setup
 	if e.baseDir == "" {
 		return nil, &environment.ErrExecutionFailed{
+			Op:      "validate",
 			Command: cmd.Command,
 			Err:     fmt.Errorf("environment not set up (Setup must be called first)"),
 		}
@@ -422,10 +427,31 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 			return result, nil
 		}
 
-		// Execution failed (chroot not found, context cancelled, permission denied, etc)
+		// Check for timeout
+		if errors.Is(err, context.DeadlineExceeded) {
+			result.ExitCode = -1
+			return result, &environment.ErrExecutionFailed{
+				Op:      "timeout",
+				Command: cmd.Command,
+				Err:     fmt.Errorf("command timed out after %v", cmd.Timeout),
+			}
+		}
+
+		// Check for cancellation
+		if errors.Is(err, context.Canceled) {
+			result.ExitCode = -1
+			return result, &environment.ErrExecutionFailed{
+				Op:      "cancel",
+				Command: cmd.Command,
+				Err:     fmt.Errorf("command cancelled: %w", err),
+			}
+		}
+
+		// Execution failed (chroot not found, permission denied, etc)
 		// This is FAILURE from Execute's perspective (err != nil)
 		result.ExitCode = -1
 		return result, &environment.ErrExecutionFailed{
+			Op:      "chroot",
 			Command: cmd.Command,
 			Err:     err,
 		}
@@ -480,6 +506,7 @@ func (e *BSDEnvironment) Cleanup() error {
 	// Validate baseDir is set
 	if e.baseDir == "" {
 		return &environment.ErrCleanupFailed{
+			Op:  "validate",
 			Err: fmt.Errorf("baseDir is empty, cannot cleanup"),
 		}
 	}
