@@ -860,8 +860,8 @@ GET /api/v1/builds
 
 ## Phase 7: Integration & Migration 🟡
 
-**Status**: 🟡 In Progress (5/9 tasks complete)  
-**Timeline**: Started 2025-11-28 | Estimated: ~3.5 hours remaining  
+**Status**: 🟡 In Progress (6/9 tasks complete)  
+**Timeline**: Started 2025-11-28 | Estimated: ~2.5 hours remaining  
 **Dependencies**: Phases 1-6 completion
 
 ### 🎯 Goals
@@ -883,13 +883,13 @@ GET /api/v1/builds
 - [x] 2. Wire CLI Build Commands (2h) - ✅ Complete (2025-11-28, commit f72be5b)
 - [x] 3. Wire Other CLI Commands (2h) - ✅ Complete (2025-11-28, commit 85d736c)
 - [x] 4. Add UUID Tracking to Logs (1.5h) - ✅ Complete (2025-11-28, commit d54e361)
-- [x] 5. Update Configuration (1h) - ✅ Complete (2025-11-28, commit pending)
-- [ ] 6. Create Initialization Command (1h)
+- [x] 5. Update Configuration (1h) - ✅ Complete (2025-11-28, commit 865fdce)
+- [x] 6. Create Initialization Command (1h) - ✅ Complete (2025-11-28, commit pending)
 - [ ] 7. End-to-End Integration Tests (2h)
 - [ ] 8. Update Documentation (1.5h)
 - [ ] 9. Update DEVELOPMENT.md (0.5h)
 
-**Completed**: 8.5 hours | **Remaining**: ~3.5 hours
+**Completed**: 9.5 hours | **Remaining**: ~2.5 hours
 
 ### ✓ Exit Criteria (0/8 complete)
 
@@ -931,6 +931,8 @@ GET /api/v1/builds
   - Task 4: Context logging with UUID, worker ID, and port directory
 - ✅ Config enhancements: `config/config.go` (+37 lines), `main.go` (+2 lines) - Task 5 complete
   - Task 5: Migration and Database config structs with INI parsing
+- ✅ Init command: `main.go` (+90/-30 lines) - Task 6 complete
+  - Task 6: Enhanced doInit with BuildDB setup, migration, user-friendly output
 - Documentation: ~500 lines - pending
 
 ### 🎉 Milestone

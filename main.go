@@ -172,34 +172,99 @@ func usage() {
 }
 
 func doInit(cfg *config.Config) {
-	fmt.Println("Initializing dsynth configuration...")
+	fmt.Println("Initializing dsynth environment...")
+	fmt.Println()
 
-	// Create required directories
-	dirs := []string{
-		cfg.BuildBase,
-		cfg.LogsPath,
-		cfg.DPortsPath,
-		cfg.RepositoryPath,
-		cfg.PackagesPath,
-		cfg.DistFilesPath,
-		cfg.OptionsPath,
+	// 1. Create required directories
+	fmt.Println("Setting up directories:")
+	dirs := map[string]string{
+		"Build base":   cfg.BuildBase,
+		"Logs":         cfg.LogsPath,
+		"Ports":        cfg.DPortsPath,
+		"Repository":   cfg.RepositoryPath,
+		"Packages":     cfg.PackagesPath,
+		"Distribution": cfg.DistFilesPath,
+		"Options":      cfg.OptionsPath,
 	}
 
-	for _, dir := range dirs {
+	for label, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating directory %s: %v\n", dir, err)
+			fmt.Fprintf(os.Stderr, "✗ Failed to create %s directory: %v\n", label, err)
 			os.Exit(1)
 		}
+		fmt.Printf("  ✓ %s: %s\n", label, dir)
 	}
 
 	// Create template directory
 	templateDir := filepath.Join(cfg.BuildBase, "Template")
 	if err := os.MkdirAll(templateDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating template directory: %v\n", err)
+		fmt.Fprintf(os.Stderr, "✗ Failed to create template directory: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Printf("  ✓ Template: %s\n", templateDir)
 
-	fmt.Println("Configuration initialized successfully")
+	// 2. Initialize BuildDB
+	fmt.Println("\nInitializing build database:")
+	dbPath := cfg.Database.Path
+	db, err := builddb.OpenDB(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ Failed to initialize database: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	fmt.Printf("  ✓ Database: %s\n", dbPath)
+
+	// 3. Check for legacy CRC migration
+	if cfg.Migration.AutoMigrate && migration.DetectMigrationNeeded(cfg) {
+		fmt.Println("\n⚠️  Legacy CRC data detected!")
+		legacyFile := filepath.Join(cfg.BuildBase, "crc_index")
+		fmt.Printf("Found: %s\n", legacyFile)
+
+		if cfg.YesAll {
+			fmt.Println("Migrating automatically (-y flag)...")
+			if err := migration.MigrateLegacyCRC(cfg, db); err != nil {
+				fmt.Fprintf(os.Stderr, "✗ Migration failed: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("  ✓ Legacy data migrated successfully")
+		} else {
+			fmt.Print("Migrate legacy data now? [Y/n]: ")
+			var response string
+			fmt.Scanln(&response)
+			if response == "" || strings.EqualFold(response, "y") || strings.EqualFold(response, "yes") {
+				if err := migration.MigrateLegacyCRC(cfg, db); err != nil {
+					fmt.Fprintf(os.Stderr, "✗ Migration failed: %v\n", err)
+					os.Exit(1)
+				}
+				fmt.Println("  ✓ Legacy data migrated successfully")
+			} else {
+				fmt.Println("  - Migration skipped (can migrate later with first build)")
+			}
+		}
+	}
+
+	// 4. Verify ports directory exists and has content
+	fmt.Println("\nVerifying environment:")
+	if _, err := os.Stat(cfg.DPortsPath); os.IsNotExist(err) {
+		fmt.Printf("  ⚠  Ports directory is empty: %s\n", cfg.DPortsPath)
+		fmt.Println("     You'll need to populate it before building")
+	} else {
+		// Quick check if it has any content
+		entries, _ := os.ReadDir(cfg.DPortsPath)
+		if len(entries) == 0 {
+			fmt.Printf("  ⚠  Ports directory is empty: %s\n", cfg.DPortsPath)
+		} else {
+			fmt.Printf("  ✓ Ports directory: %s (%d entries)\n", cfg.DPortsPath, len(entries))
+		}
+	}
+
+	// 5. Success summary
+	fmt.Println("\n✓ Initialization complete!")
+	fmt.Println("\nNext steps:")
+	fmt.Println("  1. Verify configuration file (if needed)")
+	fmt.Println("  2. Ensure ports tree is populated")
+	fmt.Println("  3. Run: dsynth build <package>")
+	fmt.Println()
 }
 
 func doStatus(cfg *config.Config, portList []string) {
