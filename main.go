@@ -14,6 +14,7 @@ import (
 	"dsynth/build"
 	"dsynth/builddb"
 	"dsynth/config"
+	_ "dsynth/environment/bsd" // Register BSD backend
 	"dsynth/log"
 	"dsynth/migration"
 	"dsynth/pkg"
@@ -622,6 +623,9 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		fmt.Fprintf(os.Stderr, "Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Get all packages (including dependencies) from registry
+	packages = pkgRegistry.AllPackages()
 
 	// Check which packages need building (CRC-based)
 	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, registry, buildDB)
