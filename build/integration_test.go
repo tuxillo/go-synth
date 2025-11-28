@@ -238,7 +238,9 @@ func assertPackageIndex(t *testing.T, db *builddb.DB, portDir, version, expected
 // TestIntegration_FirstBuildWorkflow tests the complete first build workflow.
 // Verifies that a port builds successfully and all database entries are created.
 func TestIntegration_FirstBuildWorkflow(t *testing.T) {
-	t.Skip("Integration test requires mount operations and build infrastructure")
+	if os.Getuid() != 0 {
+		t.Skip("Requires root privileges")
+	}
 
 	db, cfg, logger, cleanup := setupTestBuild(t)
 	defer cleanup()
@@ -289,7 +291,9 @@ func TestIntegration_FirstBuildWorkflow(t *testing.T) {
 
 // TestIntegration_IncrementalBuildSkip tests that unchanged ports are skipped on rebuild.
 func TestIntegration_IncrementalBuildSkip(t *testing.T) {
-	t.Skip("Integration test requires mount operations and build infrastructure")
+	if os.Getuid() != 0 {
+		t.Skip("Requires root privileges")
+	}
 
 	db, cfg, logger, cleanup := setupTestBuild(t)
 	defer cleanup()
@@ -344,7 +348,9 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 
 // TestIntegration_RebuildAfterChange tests that modified ports are rebuilt.
 func TestIntegration_RebuildAfterChange(t *testing.T) {
-	t.Skip("Integration test requires mount operations and build infrastructure")
+	if os.Getuid() != 0 {
+		t.Skip("Requires root privileges")
+	}
 
 	db, cfg, logger, cleanup := setupTestBuild(t)
 	defer cleanup()
@@ -417,7 +423,9 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 
 // TestIntegration_FailedBuildHandling tests that failed builds don't update CRC.
 func TestIntegration_FailedBuildHandling(t *testing.T) {
-	t.Skip("Integration test requires mount operations and build infrastructure")
+	if os.Getuid() != 0 {
+		t.Skip("Requires root privileges")
+	}
 
 	// This test would require creating an intentionally broken port
 	// and verifying that:
@@ -431,7 +439,9 @@ func TestIntegration_FailedBuildHandling(t *testing.T) {
 
 // TestIntegration_MultiPortDependencyChain tests multi-port builds with dependencies.
 func TestIntegration_MultiPortDependencyChain(t *testing.T) {
-	t.Skip("Integration test requires mount operations and build infrastructure")
+	if os.Getuid() != 0 {
+		t.Skip("Requires root privileges")
+	}
 
 	// This test would require:
 	// 1. Creating port B (no dependencies)
