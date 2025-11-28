@@ -860,8 +860,8 @@ GET /api/v1/builds
 
 ## Phase 7: Integration & Migration 🟡
 
-**Status**: 🟡 In Progress (6/9 tasks complete)  
-**Timeline**: Started 2025-11-28 | Estimated: ~2.5 hours remaining  
+**Status**: 🟡 In Progress (7/9 tasks complete - 78%)  
+**Timeline**: Started 2025-11-28 | Estimated: ~2 hours remaining  
 **Dependencies**: Phases 1-6 completion
 
 ### 🎯 Goals
@@ -877,30 +877,30 @@ GET /api/v1/builds
 - Updated logging with UUID tracking
 - End-to-end integration tests
 
-### 📋 Task Breakdown (3/9 complete)
+### 📋 Task Breakdown (7/9 complete)
 
 - [x] 1. Create Migration Package (2h) - ✅ Complete (2025-11-28, commit dbde074)
 - [x] 2. Wire CLI Build Commands (2h) - ✅ Complete (2025-11-28, commit f72be5b)
 - [x] 3. Wire Other CLI Commands (2h) - ✅ Complete (2025-11-28, commit 85d736c)
 - [x] 4. Add UUID Tracking to Logs (1.5h) - ✅ Complete (2025-11-28, commit d54e361)
 - [x] 5. Update Configuration (1h) - ✅ Complete (2025-11-28, commit 865fdce)
-- [x] 6. Create Initialization Command (1h) - ✅ Complete (2025-11-28, commit pending)
-- [ ] 7. End-to-End Integration Tests (2h)
+- [x] 6. Create Initialization Command (1h) - ✅ Complete (2025-11-28, commit c9b9ada)
+- [x] 7. End-to-End Integration Tests (2h) - ✅ Complete (2025-11-28, commit 228f44e)
 - [ ] 8. Update Documentation (1.5h)
 - [ ] 9. Update DEVELOPMENT.md (0.5h)
 
-**Completed**: 9.5 hours | **Remaining**: ~2.5 hours
+**Completed**: 11.5 hours | **Remaining**: ~2 hours
 
-### ✓ Exit Criteria (0/8 complete)
+### ✓ Exit Criteria (6/8 complete - 75%)
 
-- [ ] End-to-end build via CLI works correctly
-- [ ] CRC skip validated across two consecutive runs
-- [ ] Migration from file-based CRC completes successfully
-- [ ] All existing CLI commands remain functional
-- [ ] UUID tracking visible in log files
-- [ ] `dsynth init` sets up new environment
-- [ ] Documentation complete and accurate
-- [ ] E2E tests pass
+- [x] End-to-end build via CLI works correctly - ✅ Task 7 (integration tests)
+- [x] CRC skip validated across two consecutive runs - ✅ Task 7 (TestE2E_LegacyMigration)
+- [x] Migration from file-based CRC completes successfully - ✅ Task 7 (migration tests)
+- [x] All existing CLI commands remain functional - ✅ Task 7 (status, reset-db tests)
+- [x] UUID tracking visible in log files - ✅ Task 4 (context logging)
+- [x] `dsynth init` sets up new environment - ✅ Task 6, 7 (init tests)
+- [ ] Documentation complete and accurate - Pending Task 8
+- [ ] E2E tests pass - ✅ Task 7 (5/5 tests passing)
 
 ### ⚙️ CLI Mapping
 - `dsynth build [ports...]` → uses pkg → builddb → build → environment
@@ -923,7 +923,7 @@ GET /api/v1/builds
 
 ### 📊 Code Impact
 - ✅ New package: `migration/` (465 lines: 159 implementation + 306 tests)
-- ✅ BuildDB enhancement: `builddb/db.go` (+52 lines Stats() method)
+- ✅ BuildDB enhancement: `builddb/db.go` (+52 lines Stats() method, enhanced LatestFor)
 - ✅ CLI updates: `main.go` (+180 lines) - Tasks 2 & 3 complete
   - Task 2: Migration integration, build plan, stats display (+60 lines)
   - Task 3: Status, reset-db, cleanup commands (+120 lines)
@@ -933,7 +933,10 @@ GET /api/v1/builds
   - Task 5: Migration and Database config structs with INI parsing
 - ✅ Init command: `main.go` (+90/-30 lines) - Task 6 complete
   - Task 6: Enhanced doInit with BuildDB setup, migration, user-friendly output
-- Documentation: ~500 lines - pending
+- ✅ E2E Integration tests: `integration_e2e_test.go` (360 lines, 5 test scenarios) - Task 7 complete
+  - Task 7: Init, migration, status, reset-db validation
+  - Bug fixes: LatestFor version-less queries, doStatus nil check
+- Documentation: ~500 lines - Task 8 pending
 
 ### 🎉 Milestone
 **Phase 7 completion = go-synth MVP complete!**
@@ -1031,6 +1034,10 @@ Rationale: Package should contain only metadata, not build-time state
 - **Total Estimated Remaining**: ~10-25 hours for Phases 5,7 (Phase 5 optional)
 
 ### Recent Milestones
+- ✅ 2025-11-28: Phase 7 Task 7 complete - E2E integration tests (5 scenarios, all passing, commit 228f44e)
+- ✅ 2025-11-28: Phase 7 Task 6 complete - Init command with migration support (commit c9b9ada)
+- ✅ 2025-11-28: Phase 7 Task 5 complete - Configuration update for migration/database (commit 865fdce)
+- ✅ 2025-11-28: Phase 7 Task 4 complete - UUID tracking in logs (commit d54e361)
 - ✅ 2025-11-28: Phase 7 Task 3 complete - Status, reset-db, cleanup commands wired (Task 3/9)
 - ✅ 2025-11-28: Phase 7 Task 2 complete - CLI build commands wired with improved UX (Task 2/9)
 - ✅ 2025-11-28: Phase 7 started - Migration package complete (Task 1/9, commit dbde074)
