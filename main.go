@@ -4,10 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"dsynth/build"
 	"dsynth/builddb"
@@ -201,22 +203,154 @@ func doInit(cfg *config.Config) {
 }
 
 func doStatus(cfg *config.Config, portList []string) {
+	// Open database
+	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
+	db, err := builddb.OpenDB(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open database: %v\n", err)
+		fmt.Println("No build history available. Run a build first.")
+		return
+	}
+	defer db.Close()
+
 	if len(portList) == 0 {
-		fmt.Println("No ports specified")
+		// Show overall database statistics
+		stats, err := db.Stats()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get database stats: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("=== Build Database Status ===")
+		fmt.Printf("Database:      %s\n", stats.DatabasePath)
+		fmt.Printf("Size:          %s\n", formatBytes(stats.DatabaseSize))
+		fmt.Printf("Total builds:  %d\n", stats.TotalBuilds)
+		fmt.Printf("Unique ports:  %d\n", stats.TotalPorts)
+		fmt.Printf("CRC entries:   %d\n", stats.TotalCRCs)
 		return
 	}
 
-	fmt.Println("Status not yet implemented")
-	// TODO: Implement status checking
+	// Show status for specific ports
+	fmt.Println("=== Port Build Status ===")
+	for _, portDir := range portList {
+		rec, err := db.LatestFor(portDir, "")
+		if err != nil {
+			fmt.Printf("\n%s: never built\n", portDir)
+			continue
+		}
+
+		fmt.Printf("\n%s:\n", portDir)
+		fmt.Printf("  Status:      %s\n", rec.Status)
+		fmt.Printf("  UUID:        %s\n", rec.UUID[:8]) // Short UUID
+		if rec.Version != "" {
+			fmt.Printf("  Version:     %s\n", rec.Version)
+		}
+		fmt.Printf("  Started:     %s\n", rec.StartTime.Format("2006-01-02 15:04:05"))
+		if !rec.EndTime.IsZero() {
+			fmt.Printf("  Ended:       %s\n", rec.EndTime.Format("2006-01-02 15:04:05"))
+			duration := rec.EndTime.Sub(rec.StartTime)
+			fmt.Printf("  Duration:    %s\n", duration.Round(time.Second))
+		}
+
+		// Show CRC if available
+		if crc, exists, err := db.GetCRC(portDir); err == nil && exists {
+			fmt.Printf("  CRC:         %08x\n", crc)
+		}
+	}
+}
+
+// formatBytes formats bytes as human-readable string (e.g., "1.5 MiB")
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func doCleanup(cfg *config.Config) {
-	fmt.Println("Cleaning up...")
+	fmt.Println("Cleaning up stale worker environments...")
 
-	// TODO: Clean up any stale mounts
-	// TODO: Clean up old logs
+	// Look for worker directories in BuildBase
+	baseDir := cfg.BuildBase
+	workersFound := 0
+	workersCleanedUp := 0
 
-	fmt.Println("Cleanup complete")
+	// Scan for SL.* directories (worker directories)
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read build directory: %v\n", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		// Worker directories match pattern "SL.*"
+		if strings.HasPrefix(entry.Name(), "SL.") {
+			workersFound++
+			workerPath := filepath.Join(baseDir, entry.Name())
+
+			// Try to cleanup mounts for this worker
+			if err := cleanupWorkerMounts(workerPath); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to cleanup %s: %v\n", entry.Name(), err)
+				continue
+			}
+
+			workersCleanedUp++
+			fmt.Printf("  ✓ Cleaned up %s\n", entry.Name())
+		}
+	}
+
+	if workersFound == 0 {
+		fmt.Println("No worker directories found")
+	} else {
+		fmt.Printf("\nCleaned up %d/%d worker directories\n", workersCleanedUp, workersFound)
+	}
+
+	// Also cleanup old logs (optional)
+	fmt.Println("\nCleaning up old logs...")
+	logsPath := cfg.LogsPath
+	if logsPath != "" && util.FileExists(logsPath) {
+		// Remove logs older than 7 days (optional, could be configurable)
+		fmt.Println("  (Log cleanup not yet implemented)")
+	}
+
+	fmt.Println("\n✓ Cleanup complete")
+}
+
+// cleanupWorkerMounts attempts to unmount and remove a worker directory
+func cleanupWorkerMounts(workerPath string) error {
+	// This is a simplified version that just tries to unmount common mount points
+	// In a full implementation, we'd scan /proc/mounts or use mount(8) to find all mounts
+
+	commonMounts := []string{
+		"dev",
+		"proc",
+		"distfiles",
+		"packages",
+		"ccache",
+		"logs",
+		"options",
+		"construction",
+	}
+
+	// Try to unmount in reverse order
+	for i := len(commonMounts) - 1; i >= 0; i-- {
+		mountPoint := filepath.Join(workerPath, commonMounts[i])
+		// Ignore errors - mount might not exist
+		exec.Command("umount", "-f", mountPoint).Run()
+	}
+
+	// Try to remove the directory
+	return os.RemoveAll(workerPath)
 }
 
 func doConfigure(cfg *config.Config) {
@@ -258,17 +392,47 @@ func doPurgeDistfiles(cfg *config.Config) {
 }
 
 func doResetDB(cfg *config.Config) {
-	fmt.Println("Resetting CRC database...")
+	dbPath := filepath.Join(cfg.BuildBase, "builds.db")
 
-	dbPath := cfg.BuildBase + "/dsynth.db"
-	if util.FileExists(dbPath) {
-		if err := os.Remove(dbPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Error removing database: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("Database reset successfully")
-	} else {
+	// Check if database exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		fmt.Println("No database found")
+		return
+	}
+
+	// Confirm destructive operation (unless -y flag)
+	if !cfg.YesAll {
+		fmt.Printf("⚠️  WARNING: This will delete the build database\n")
+		fmt.Printf("Database: %s\n", dbPath)
+		fmt.Print("\nAre you sure? [y/N]: ")
+		var response string
+		fmt.Scanln(&response)
+		if !strings.EqualFold(response, "y") && !strings.EqualFold(response, "yes") {
+			fmt.Println("Cancelled")
+			return
+		}
+	}
+
+	// Remove database file
+	if err := os.Remove(dbPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to remove database: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("✓ Build database reset successfully")
+
+	// Also remove legacy CRC file if present (optional cleanup)
+	legacyFile := filepath.Join(cfg.BuildBase, "crc_index")
+	if _, err := os.Stat(legacyFile); err == nil {
+		os.Remove(legacyFile)
+		fmt.Println("✓ Legacy CRC file also removed")
+	}
+
+	// Also remove backup if present
+	backupFile := legacyFile + ".bak"
+	if _, err := os.Stat(backupFile); err == nil {
+		os.Remove(backupFile)
+		fmt.Println("✓ Legacy CRC backup also removed")
 	}
 }
 

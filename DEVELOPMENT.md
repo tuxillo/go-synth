@@ -860,8 +860,8 @@ GET /api/v1/builds
 
 ## Phase 7: Integration & Migration 🟡
 
-**Status**: 🟡 In Progress (2/9 tasks complete)  
-**Timeline**: Started 2025-11-28 | Estimated: ~8 hours remaining  
+**Status**: 🟡 In Progress (3/9 tasks complete)  
+**Timeline**: Started 2025-11-28 | Estimated: ~6 hours remaining  
 **Dependencies**: Phases 1-6 completion
 
 ### 🎯 Goals
@@ -877,11 +877,11 @@ GET /api/v1/builds
 - Updated logging with UUID tracking
 - End-to-end integration tests
 
-### 📋 Task Breakdown (2/9 complete)
+### 📋 Task Breakdown (3/9 complete)
 
 - [x] 1. Create Migration Package (2h) - ✅ Complete (2025-11-28, commit dbde074)
-- [x] 2. Wire CLI Build Commands (2h) - ✅ Complete (2025-11-28, commit pending)
-- [ ] 3. Wire Other CLI Commands (2h)
+- [x] 2. Wire CLI Build Commands (2h) - ✅ Complete (2025-11-28, commit f72be5b)
+- [x] 3. Wire Other CLI Commands (2h) - ✅ Complete (2025-11-28, commit pending)
 - [ ] 4. Add UUID Tracking to Logs (1.5h)
 - [ ] 5. Update Configuration (1h)
 - [ ] 6. Create Initialization Command (1h)
@@ -889,7 +889,7 @@ GET /api/v1/builds
 - [ ] 8. Update Documentation (1.5h)
 - [ ] 9. Update DEVELOPMENT.md (0.5h)
 
-**Completed**: 4 hours | **Remaining**: ~8 hours
+**Completed**: 6 hours | **Remaining**: ~6 hours
 
 ### ✓ Exit Criteria (0/8 complete)
 
@@ -923,7 +923,10 @@ GET /api/v1/builds
 
 ### 📊 Code Impact
 - ✅ New package: `migration/` (465 lines: 159 implementation + 306 tests)
-- ✅ CLI updates: `main.go` (+60 lines, -35 lines debug) - Task 2 complete
+- ✅ BuildDB enhancement: `builddb/db.go` (+52 lines Stats() method)
+- ✅ CLI updates: `main.go` (+180 lines) - Tasks 2 & 3 complete
+  - Task 2: Migration integration, build plan, stats display (+60 lines)
+  - Task 3: Status, reset-db, cleanup commands (+120 lines)
 - Log enhancements: +100 lines - pending
 - Documentation: ~500 lines - pending
 
@@ -1023,6 +1026,7 @@ Rationale: Package should contain only metadata, not build-time state
 - **Total Estimated Remaining**: ~10-25 hours for Phases 5,7 (Phase 5 optional)
 
 ### Recent Milestones
+- ✅ 2025-11-28: Phase 7 Task 3 complete - Status, reset-db, cleanup commands wired (Task 3/9)
 - ✅ 2025-11-28: Phase 7 Task 2 complete - CLI build commands wired with improved UX (Task 2/9)
 - ✅ 2025-11-28: Phase 7 started - Migration package complete (Task 1/9, commit dbde074)
 - ✅ 2025-11-28: Migration package - Legacy CRC import with 87% coverage, 7 tests (dbde074)

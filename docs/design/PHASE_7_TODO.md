@@ -437,15 +437,17 @@ Updated CLI build commands (`build`, `just-build`, `force`) to use the new pipel
 
 ---
 
-### Task 3: Wire Other CLI Commands ⚪
+### Task 3: Wire Other CLI Commands ✅ COMPLETE
 
-**Estimated Time**: 2 hours  
+**Actual Time**: 2 hours  
 **Priority**: Medium  
-**Dependencies**: Task 2
+**Dependencies**: Task 2  
+**Completed**: 2025-11-28  
+**Commit**: (pending)
 
 #### Description
 
-Update supporting commands (`status`, `reset-db`, `cleanup`) to work with new database.
+Updated supporting commands (`status`, `reset-db`, `cleanup`) to work with new BuildDB database.
 
 #### Implementation Steps
 
@@ -529,14 +531,56 @@ Update supporting commands (`status`, `reset-db`, `cleanup`) to work with new da
    }
    ```
 
+#### Implementation Completed
+
+**BuildDB Enhancement** (`builddb/db.go`):
+- Added `DBStats` struct with TotalBuilds, TotalPorts, TotalCRCs, DatabasePath, DatabaseSize
+- Added `Stats()` method to query database statistics (+52 lines)
+- Uses bbolt bucket stats for efficient counting
+- Includes file size information
+
+**Status Command** (`main.go` doStatus()):
+- No arguments: Shows database overview with Stats()
+- With ports: Shows detailed per-port build history
+- Displays: status, UUID (short 8-char), version, timestamps, duration, CRC
+- Human-readable formatting (bytes via formatBytes())
+- Graceful handling when database doesn't exist or port never built
+- Clean, informative output format
+
+**Reset-DB Command** (`main.go` doResetDB()):
+- Updated to work with new `builds.db` path (not old `dsynth.db`)
+- Warning emoji (⚠️) for destructive operation
+- Confirmation prompt (skip with -y flag respecting cfg.YesAll)
+- Also removes legacy CRC files (crc_index, crc_index.bak) if present
+- Checkmark symbols (✓) for successful operations
+- Safe handling when database doesn't exist
+
+**Cleanup Command** (`main.go` doCleanup()):
+- Scans BuildBase for SL.* worker directories
+- Attempts to unmount common mount points in reverse order
+- Uses force unmount (`umount -f`) via exec.Command
+- Removes stale worker directories with os.RemoveAll
+- Shows progress with checkmarks and counts
+- Placeholder for future log cleanup
+- Helper function: cleanupWorkerMounts() added
+
+**Utility Functions**:
+- Added `formatBytes()` for human-readable size display (B, KiB, MiB, etc.)
+- Added `time` import for duration calculations
+- Added `os/exec` import for umount operations
+
+**Binary Size**: 5.1M (compiled successfully)
+
 #### Testing Checklist
 
-- [ ] `dsynth status` shows database info
-- [ ] `dsynth status editors/vim` shows port status
-- [ ] `dsynth reset-db` removes database
-- [ ] `-y` bypasses reset-db confirmation
-- [ ] `dsynth cleanup` removes stale mounts
-- [ ] Commands work with missing database
+- [x] Binary compiles successfully with `go build .`
+- [ ] `dsynth status` shows database info (requires BSD + build history)
+- [ ] `dsynth status editors/vim` shows port status (requires BSD + build history)
+- [ ] `dsynth status nonexistent/port` shows "never built" (requires BSD)
+- [ ] `dsynth reset-db` prompts for confirmation (requires BSD)
+- [ ] `dsynth reset-db -y` skips confirmation (requires BSD)
+- [ ] `dsynth cleanup` removes stale mounts (requires BSD + stale workers)
+- [ ] Commands work gracefully with missing database (partial test passed - status cmd)
 
 ---
 

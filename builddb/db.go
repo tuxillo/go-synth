@@ -36,6 +36,15 @@ type BuildRecord struct {
 	EndTime   time.Time `json:"end_time"`
 }
 
+// DBStats contains database statistics for overview display
+type DBStats struct {
+	TotalBuilds  int    // Total build records in database
+	TotalPorts   int    // Unique ports tracked (package index entries)
+	TotalCRCs    int    // Ports with CRC data
+	DatabasePath string // Path to database file
+	DatabaseSize int64  // File size in bytes
+}
+
 // OpenDB opens or creates a bbolt database at the given path.
 // It automatically initializes the required buckets (builds, packages, crc_index)
 // if they don't exist. The database is opened with 0600 permissions.
@@ -486,6 +495,57 @@ func (db *DB) GetCRC(portDir string) (uint32, bool, error) {
 	}
 
 	return crc, found, nil
+}
+
+// Stats returns database statistics including counts of builds, ports, and CRCs.
+// This provides an overview of the database contents for status displays.
+//
+// Returns:
+//   - *DBStats: Statistics structure with counts and database info
+//   - error: Any database access errors
+//
+// Example:
+//
+//	stats, err := db.Stats()
+//	if err != nil {
+//	    return fmt.Errorf("failed to get stats: %w", err)
+//	}
+//	fmt.Printf("Total builds: %d\n", stats.TotalBuilds)
+func (db *DB) Stats() (*DBStats, error) {
+	stats := &DBStats{DatabasePath: db.path}
+
+	// Get file size
+	if fi, err := os.Stat(db.path); err == nil {
+		stats.DatabaseSize = fi.Size()
+	}
+
+	err := db.db.View(func(tx *bolt.Tx) error {
+		// Count builds
+		b := tx.Bucket([]byte(BucketBuilds))
+		if b != nil {
+			stats.TotalBuilds = b.Stats().KeyN
+		}
+
+		// Count unique ports (packages bucket)
+		p := tx.Bucket([]byte(BucketPackages))
+		if p != nil {
+			stats.TotalPorts = p.Stats().KeyN
+		}
+
+		// Count CRCs
+		c := tx.Bucket([]byte(BucketCRCIndex))
+		if c != nil {
+			stats.TotalCRCs = c.Stats().KeyN
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, &DatabaseError{Op: "get stats", Err: err}
+	}
+
+	return stats, nil
 }
 
 // ComputePortCRC calculates a CRC32 checksum of all files in a port directory.
