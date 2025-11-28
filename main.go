@@ -196,13 +196,65 @@ func doInit(cfg *config.Config) {
 		fmt.Printf("  ✓ %s: %s\n", label, dir)
 	}
 
-	// Create template directory
+	// Create template directory with essential files
 	templateDir := filepath.Join(cfg.BuildBase, "Template")
 	if err := os.MkdirAll(templateDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "✗ Failed to create template directory: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("  ✓ Template: %s\n", templateDir)
+
+	// Create necessary directory structure in template
+	templateDirs := []string{
+		"etc",
+		"var/run",
+		"var/db",
+		"tmp",
+	}
+	for _, dir := range templateDirs {
+		fullPath := filepath.Join(templateDir, dir)
+		if err := os.MkdirAll(fullPath, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ Failed to create template /%s directory: %v\n", dir, err)
+			os.Exit(1)
+		}
+	}
+
+	// Copy ld-elf.so.hints from host (needed for dynamic linker)
+	hintsSrc := "/var/run/ld-elf.so.hints"
+	hintsDst := filepath.Join(templateDir, "var/run/ld-elf.so.hints")
+	if err := exec.Command("cp", hintsSrc, hintsDst).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "⚠  Warning: Failed to copy ld-elf.so.hints: %v\n", err)
+		fmt.Fprintf(os.Stderr, "   Some ports may fail during installation phase\n")
+	}
+
+	etcDir := filepath.Join(templateDir, "etc")
+
+	// Copy essential /etc files for chroot functionality
+	etcFiles := []string{
+		"resolv.conf",   // DNS resolution
+		"passwd",        // User database (needed for mtree, chown, etc)
+		"group",         // Group database
+		"master.passwd", // Password database
+		"pwd.db",        // Password database (Berkeley DB format)
+		"spwd.db",       // Secure password database
+	}
+
+	for _, file := range etcFiles {
+		src := filepath.Join("/etc", file)
+		dst := filepath.Join(etcDir, file)
+		if err := exec.Command("cp", src, dst).Run(); err != nil {
+			// Only warn for resolv.conf, fail for critical files
+			if file == "resolv.conf" {
+				fmt.Fprintf(os.Stderr, "⚠  Warning: Failed to copy %s: %v\n", file, err)
+				fmt.Fprintf(os.Stderr, "   DNS resolution may not work in chroot environments\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "✗ Failed to copy /etc/%s: %v\n", file, err)
+				fmt.Fprintf(os.Stderr, "   This file is required for build operations\n")
+				os.Exit(1)
+			}
+		}
+	}
+
+	fmt.Printf("  ✓ Template: %s (with /etc files)\n", templateDir)
 
 	// 2. Initialize BuildDB
 	fmt.Println("\nInitializing build database:")
