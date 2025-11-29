@@ -186,7 +186,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		}
 
 		// Setup environment (mounts, directories, etc.)
-		if err := env.Setup(i, cfg); err != nil {
+		if err := env.Setup(i, cfg, logger); err != nil {
 			logger.Error(fmt.Sprintf("Worker %d: environment setup failed: %v", i, err))
 			cleanup()
 			return nil, cleanup, fmt.Errorf("worker %d environment setup failed: %w", i, err)

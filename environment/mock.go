@@ -3,6 +3,7 @@ package environment
 import (
 	"context"
 	"dsynth/config"
+	"dsynth/log"
 	"sync"
 	"time"
 )
@@ -66,7 +67,7 @@ func init() {
 }
 
 // Setup records the Setup call and returns the configured error.
-func (m *MockEnvironment) Setup(workerID int, cfg *config.Config) error {
+func (m *MockEnvironment) Setup(workerID int, cfg *config.Config, logger log.LibraryLogger) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

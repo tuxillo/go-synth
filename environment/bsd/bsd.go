@@ -49,9 +49,10 @@ import (
 	"context"
 	"dsynth/config"
 	"dsynth/environment"
+	"dsynth/log"
 	"errors"
 	"fmt"
-	"log"
+	stdlog "log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,7 +100,7 @@ func init() {
 //	    return err
 //	}
 //	defer env.Cleanup()
-func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
+func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config, logger log.LibraryLogger) error {
 	e.cfg = cfg
 	e.workerID = workerID
 	e.baseDir = filepath.Join(cfg.BuildBase, fmt.Sprintf("SL%02d", workerID))
@@ -116,7 +117,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	// Mount root tmpfs overlay (provides ephemeral root filesystem)
 	if err := e.doMount(TmpfsRW, "dummy", ""); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: root tmpfs mount failed: %v\n", err)
+		logger.Warn("root tmpfs mount failed: %v", err)
 	}
 
 	// Create all mount point directories upfront
@@ -154,7 +155,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	for _, mp := range mountPoints {
 		dir := filepath.Join(e.baseDir, mp)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "mkdir %s failed: %v\n", dir, err)
+			logger.Warn("mkdir %s failed: %v", dir, err)
 			e.mountErrors++
 		}
 	}
@@ -163,15 +164,15 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	// These provide device access, process info, and boot files
 	if err := e.doMount(TmpfsRW, "dummy", "/boot"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /boot mount failed: %v\n", err)
+		logger.Warn("/boot mount failed: %v", err)
 	}
 	if err := e.doMount(DevfsRW, "dummy", "/dev"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /dev mount failed: %v\n", err)
+		logger.Warn("/dev mount failed: %v", err)
 	}
 	if err := e.doMount(ProcfsRO, "dummy", "/proc"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /proc mount failed: %v\n", err)
+		logger.Warn("/proc mount failed: %v", err)
 	}
 
 	// Read-only nullfs mounts from system
@@ -198,7 +199,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	for _, m := range systemMounts {
 		if err := e.doMount(NullfsRO, m.src, m.dst); err != nil {
 			e.mountErrors++
-			fmt.Fprintf(os.Stderr, "WARNING: mount %s failed: %v\n", m.dst, err)
+			logger.Warn("mount %s failed: %v", m.dst, err)
 		}
 	}
 
@@ -207,7 +208,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	if cfg.UseUsrSrc {
 		if err := e.doMount(NullfsRO, "$/usr/src", "/usr/src"); err != nil {
 			e.mountErrors++
-			fmt.Fprintf(os.Stderr, "WARNING: /usr/src mount failed: %v\n", err)
+			logger.Warn("/usr/src mount failed: %v", err)
 		}
 	}
 
@@ -215,22 +216,22 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	// Provides port specifications and Makefiles
 	if err := e.doMount(NullfsRO, cfg.DPortsPath, "/xports"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /xports mount failed: %v\n", err)
+		logger.Warn("/xports mount failed: %v", err)
 	}
 
 	// Build-related directories (read-write)
 	// These are shared across workers for coordination
 	if err := e.doMount(NullfsRW, cfg.OptionsPath, "/options"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /options mount failed: %v\n", err)
+		logger.Warn("/options mount failed: %v", err)
 	}
 	if err := e.doMount(NullfsRW, cfg.PackagesPath, "/packages"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /packages mount failed: %v\n", err)
+		logger.Warn("/packages mount failed: %v", err)
 	}
 	if err := e.doMount(NullfsRW, cfg.DistFilesPath, "/distfiles"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /distfiles mount failed: %v\n", err)
+		logger.Warn("/distfiles mount failed: %v", err)
 	}
 
 	// Work areas (large tmpfs)
@@ -238,11 +239,11 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	// /usr/local: Installed files during build (16GB)
 	if err := e.doMount(TmpfsRWBig, "dummy", "/construction"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /construction mount failed: %v\n", err)
+		logger.Warn("/construction mount failed: %v", err)
 	}
 	if err := e.doMount(TmpfsRWMed, "dummy", "/usr/local"); err != nil {
 		e.mountErrors++
-		fmt.Fprintf(os.Stderr, "WARNING: /usr/local mount failed: %v\n", err)
+		logger.Warn("/usr/local mount failed: %v", err)
 	}
 
 	// Optional: ccache (compiler cache)
@@ -250,7 +251,7 @@ func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config) error {
 	if cfg.UseCCache {
 		if err := e.doMount(NullfsRW, cfg.CCachePath, "/ccache"); err != nil {
 			e.mountErrors++
-			fmt.Fprintf(os.Stderr, "WARNING: /ccache mount failed: %v\n", err)
+			logger.Warn("/ccache mount failed: %v", err)
 		}
 	}
 
@@ -514,7 +515,7 @@ func (e *BSDEnvironment) Cleanup() error {
 		}
 	}
 
-	log.Printf("[Cleanup] Starting cleanup for environment: %s", e.baseDir)
+	stdlog.Printf("[Cleanup] Starting cleanup for environment: %s", e.baseDir)
 
 	// Track unmount failures for logging
 	var unmountFailures []string
@@ -529,11 +530,11 @@ func (e *BSDEnvironment) Cleanup() error {
 		// Convert absolute path to relative by removing baseDir prefix
 		relPath, err := filepath.Rel(e.baseDir, target)
 		if err != nil {
-			log.Printf("[Cleanup] WARNING: Failed to convert %s to relative path: %v", target, err)
+			stdlog.Printf("[Cleanup] WARNING: Failed to convert %s to relative path: %v", target, err)
 			relPath = target // Fallback to absolute path
 		}
 
-		log.Printf("[Cleanup] Unmounting %s (attempt 1/%d)", target, maxRetries)
+		stdlog.Printf("[Cleanup] Unmounting %s (attempt 1/%d)", target, maxRetries)
 
 		// Retry loop for busy mounts
 		var lastErr error
@@ -542,7 +543,7 @@ func (e *BSDEnvironment) Cleanup() error {
 		for attempt := 1; attempt <= maxRetries; attempt++ {
 			err := e.doUnmount(relPath)
 			if err == nil {
-				log.Printf("[Cleanup] Successfully unmounted %s", target)
+				stdlog.Printf("[Cleanup] Successfully unmounted %s", target)
 				unmounted = true
 				break
 			}
@@ -551,7 +552,7 @@ func (e *BSDEnvironment) Cleanup() error {
 
 			// Check if EBUSY (device busy)
 			if attempt < maxRetries {
-				log.Printf("[Cleanup] Unmount failed (attempt %d/%d): %v, retrying in %ds...",
+				stdlog.Printf("[Cleanup] Unmount failed (attempt %d/%d): %v, retrying in %ds...",
 					attempt, maxRetries, err, retryDelaySec)
 				time.Sleep(retryDelaySec * time.Second)
 			}
@@ -561,7 +562,7 @@ func (e *BSDEnvironment) Cleanup() error {
 			// After all retries failed, log warning and continue
 			msg := fmt.Sprintf("%s: %v (after %d retries)", target, lastErr, maxRetries)
 			unmountFailures = append(unmountFailures, msg)
-			log.Printf("[Cleanup] WARNING: Failed to unmount %s after %d retries: %v",
+			stdlog.Printf("[Cleanup] WARNING: Failed to unmount %s after %d retries: %v",
 				target, maxRetries, lastErr)
 		}
 	}
@@ -569,25 +570,25 @@ func (e *BSDEnvironment) Cleanup() error {
 	// Check if any mounts remain
 	remaining := e.listRemainingMounts()
 	if len(remaining) > 0 {
-		log.Printf("[Cleanup] WARNING: %d mount(s) still present after cleanup: %v",
+		stdlog.Printf("[Cleanup] WARNING: %d mount(s) still present after cleanup: %v",
 			len(remaining), remaining)
 	}
 
 	// Remove base directory (only if all unmounts succeeded)
 	if len(unmountFailures) == 0 {
-		log.Printf("[Cleanup] Removing base directory: %s", e.baseDir)
+		stdlog.Printf("[Cleanup] Removing base directory: %s", e.baseDir)
 		if err := os.RemoveAll(e.baseDir); err != nil {
-			log.Printf("[Cleanup] WARNING: Failed to remove base directory %s: %v",
+			stdlog.Printf("[Cleanup] WARNING: Failed to remove base directory %s: %v",
 				e.baseDir, err)
 		} else {
-			log.Printf("[Cleanup] Successfully removed base directory: %s", e.baseDir)
+			stdlog.Printf("[Cleanup] Successfully removed base directory: %s", e.baseDir)
 		}
 	} else {
-		log.Printf("[Cleanup] Skipping base directory removal due to %d unmount failure(s)",
+		stdlog.Printf("[Cleanup] Skipping base directory removal due to %d unmount failure(s)",
 			len(unmountFailures))
 	}
 
-	log.Printf("[Cleanup] Cleanup complete for environment: %s", e.baseDir)
+	stdlog.Printf("[Cleanup] Cleanup complete for environment: %s", e.baseDir)
 	return nil
 }
 
@@ -613,7 +614,7 @@ func (e *BSDEnvironment) listRemainingMounts() []string {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// If we can't run mount, fall back to checking directory existence
-		log.Printf("[Cleanup] WARNING: Failed to run mount command: %v", err)
+		stdlog.Printf("[Cleanup] WARNING: Failed to run mount command: %v", err)
 		for _, ms := range e.mounts {
 			if _, err := os.Stat(ms.target); err == nil {
 				remaining = append(remaining, ms.target)

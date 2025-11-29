@@ -7,6 +7,7 @@ import (
 	"context"
 	"dsynth/config"
 	"dsynth/environment"
+	"dsynth/log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func TestIntegration_FullLifecycle(t *testing.T) {
 
 	// Step 1: Setup
 	t.Log("Running Setup...")
-	err := env.Setup(1, cfg)
+	err := env.Setup(1, cfg, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
@@ -169,7 +170,7 @@ func TestIntegration_MultipleCommands(t *testing.T) {
 	}()
 
 	// Setup
-	err := env.Setup(1, cfg)
+	err := env.Setup(1, cfg, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
@@ -273,7 +274,7 @@ func TestIntegration_MountVerification(t *testing.T) {
 	}()
 
 	// Setup
-	err := env.Setup(1, cfg)
+	err := env.Setup(1, cfg, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
@@ -360,7 +361,7 @@ func TestIntegration_ConcurrentEnvironments(t *testing.T) {
 			}()
 
 			// Setup
-			err := env.Setup(workerID, cfg)
+			err := env.Setup(workerID, cfg, log.NoOpLogger{})
 			if err != nil {
 				errors <- err
 				return
@@ -428,7 +429,7 @@ func TestIntegration_ContextCancellation(t *testing.T) {
 	// Setup with valid context
 	t.Log("Testing context cancellation during Execute...")
 
-	err := env.Setup(1, cfg)
+	err := env.Setup(1, cfg, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
@@ -472,7 +473,7 @@ func TestIntegration_ExecuteTimeout(t *testing.T) {
 	}()
 
 	// Setup
-	err := env.Setup(1, cfg)
+	err := env.Setup(1, cfg, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}
@@ -518,7 +519,7 @@ func TestIntegration_PartialSetupCleanup(t *testing.T) {
 	env := NewBSDEnvironment()
 
 	// Setup with a configuration that might fail partway
-	err := env.Setup(1, cfg)
+	err := env.Setup(1, cfg, log.NoOpLogger{})
 
 	// Regardless of whether Setup succeeded or failed, Cleanup should work
 	cleanupErr := env.Cleanup()
@@ -557,7 +558,7 @@ func TestIntegration_OutputCapture(t *testing.T) {
 	}()
 
 	// Setup
-	err := env.Setup(1, cfg)
+	err := env.Setup(1, cfg, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Setup() failed: %v", err)
 	}

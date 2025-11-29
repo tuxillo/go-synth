@@ -3,6 +3,7 @@ package environment
 import (
 	"context"
 	"dsynth/config"
+	"dsynth/log"
 	"errors"
 	"sync"
 	"testing"
@@ -41,7 +42,7 @@ func TestMockEnvironment_Setup(t *testing.T) {
 	cfg := &config.Config{BuildBase: "/test"}
 
 	// Test successful setup
-	err := mock.Setup(42, cfg)
+	err := mock.Setup(42, cfg, log.NoOpLogger{})
 	if err != nil {
 		t.Errorf("Setup() error = %v, want nil", err)
 	}
@@ -63,7 +64,7 @@ func TestMockEnvironment_Setup(t *testing.T) {
 	expectedErr := errors.New("setup failed")
 	mock.SetupError = expectedErr
 
-	err = mock.Setup(1, cfg)
+	err = mock.Setup(1, cfg, log.NoOpLogger{})
 	if err != expectedErr {
 		t.Errorf("Setup() error = %v, want %v", err, expectedErr)
 	}
@@ -234,7 +235,7 @@ func TestMockEnvironment_Reset(t *testing.T) {
 	cfg := &config.Config{}
 
 	// Make some calls
-	mock.Setup(1, cfg)
+	mock.Setup(1, cfg, log.NoOpLogger{})
 	mock.Execute(ctx, &ExecCommand{Command: "/bin/test"})
 	mock.Cleanup()
 

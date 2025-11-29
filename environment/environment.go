@@ -47,6 +47,7 @@ package environment
 import (
 	"context"
 	"dsynth/config"
+	"dsynth/log"
 	"fmt"
 	"io"
 	"time"
@@ -81,9 +82,12 @@ type Environment interface {
 	//   - Creates temporary directory structure
 	//   - No actual isolation
 	//
+	// The logger is used to report warnings about non-fatal setup issues
+	// (e.g., mount failures that don't prevent the build from proceeding).
+	//
 	// Returns error if setup fails. If Setup() returns error, caller
 	// must still call Cleanup() to release any partial resources.
-	Setup(workerID int, cfg *config.Config) error
+	Setup(workerID int, cfg *config.Config, logger log.LibraryLogger) error
 
 	// Execute runs a command in the isolated environment.
 	//

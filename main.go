@@ -132,6 +132,26 @@ func main() {
 	}
 }
 
+// askYN prompts the user for yes/no confirmation.
+// This is a CLI-specific function and should not be moved to a library package.
+func askYN(prompt string, defaultYes bool) bool {
+	if defaultYes {
+		fmt.Printf("%s [Y/n]: ", prompt)
+	} else {
+		fmt.Printf("%s [y/N]: ", prompt)
+	}
+
+	var response string
+	fmt.Scanln(&response)
+	response = strings.ToLower(strings.TrimSpace(response))
+
+	if response == "" {
+		return defaultYes
+	}
+
+	return response == "y" || response == "yes"
+}
+
 func usage() {
 	fmt.Printf("dsynth version %s - DragonFly BSD ports build system\n\n", Version)
 	fmt.Println("Usage: dsynth [options] command [args]")
@@ -722,7 +742,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 
 	// Confirm build
 	if !cfg.YesAll {
-		if !util.AskYN(fmt.Sprintf("Build %d packages?", needBuild), true) {
+		if !askYN(fmt.Sprintf("Build %d packages?", needBuild), true) {
 			fmt.Println("Build cancelled")
 			return
 		}

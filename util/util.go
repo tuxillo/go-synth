@@ -9,23 +9,13 @@ import (
 	"syscall"
 )
 
-// AskYN prompts the user for yes/no confirmation
+// AskYN prompts the user for yes/no confirmation.
+//
+// Deprecated: This function has been removed from the util package as it's
+// CLI-specific and not suitable for a library. If you need this functionality,
+// implement it directly in your CLI code (see main.go:askYN for reference).
 func AskYN(prompt string, defaultYes bool) bool {
-	if defaultYes {
-		fmt.Printf("%s [Y/n]: ", prompt)
-	} else {
-		fmt.Printf("%s [y/N]: ", prompt)
-	}
-
-	var response string
-	fmt.Scanln(&response)
-	response = strings.ToLower(strings.TrimSpace(response))
-
-	if response == "" {
-		return defaultYes
-	}
-
-	return response == "y" || response == "yes"
+	panic("util.AskYN has been removed - use CLI-specific implementation instead")
 }
 
 // FileExists checks if a file exists
