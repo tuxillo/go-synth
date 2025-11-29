@@ -428,3 +428,102 @@ func TestNewLogger_CreateDirError(t *testing.T) {
 		t.Error("Expected error when creating logger in invalid directory")
 	}
 }
+
+func TestLogger_ImplementsLibraryLogger(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		LogsPath: filepath.Join(tempDir, "logs"),
+	}
+
+	logger, err := NewLogger(cfg)
+	if err != nil {
+		t.Fatalf("NewLogger failed: %v", err)
+	}
+	defer logger.Close()
+
+	// Compile-time check: verify Logger implements LibraryLogger
+	var _ LibraryLogger = logger
+
+	// Test Info with formatting
+	logger.Info("Build %s started for worker %d", "test-build", 5)
+	resultsPath := filepath.Join(cfg.LogsPath, "00_last_results.log")
+	content, err := os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatalf("Failed to read results log: %v", err)
+	}
+	if !strings.Contains(string(content), "Build test-build started for worker 5") {
+		t.Error("Info with formatting did not work correctly")
+	}
+
+	// Test Debug with formatting
+	logger.Debug("Processing port %d of %d", 10, 100)
+	debugPath := filepath.Join(cfg.LogsPath, "07_debug.log")
+	content, err = os.ReadFile(debugPath)
+	if err != nil {
+		t.Fatalf("Failed to read debug log: %v", err)
+	}
+	if !strings.Contains(string(content), "Processing port 10 of 100") {
+		t.Error("Debug with formatting did not work correctly")
+	}
+
+	// Test Error with formatting
+	logger.Error("Failed to process %s: %s", "editors/vim", "timeout")
+	content, err = os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatalf("Failed to read results log: %v", err)
+	}
+	if !strings.Contains(string(content), "Failed to process editors/vim: timeout") {
+		t.Error("Error with formatting did not work correctly")
+	}
+}
+
+func TestLogger_Warn(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		LogsPath: filepath.Join(tempDir, "logs"),
+	}
+
+	logger, err := NewLogger(cfg)
+	if err != nil {
+		t.Fatalf("NewLogger failed: %v", err)
+	}
+	defer logger.Close()
+
+	// Test basic warning
+	msg := "Package dependency not found"
+	logger.Warn(msg)
+
+	// Should appear in both results and debug logs
+	resultsPath := filepath.Join(cfg.LogsPath, "00_last_results.log")
+	content, err := os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatalf("Failed to read results log: %v", err)
+	}
+
+	if !strings.Contains(string(content), "WARN") {
+		t.Error("Results log does not contain WARN")
+	}
+	if !strings.Contains(string(content), msg) {
+		t.Errorf("Results log does not contain message: %s", msg)
+	}
+
+	debugPath := filepath.Join(cfg.LogsPath, "07_debug.log")
+	content, err = os.ReadFile(debugPath)
+	if err != nil {
+		t.Fatalf("Failed to read debug log: %v", err)
+	}
+
+	if !strings.Contains(string(content), msg) {
+		t.Errorf("Debug log does not contain message: %s", msg)
+	}
+
+	// Test warning with formatting
+	logger.Warn("Port %s has %d missing dependencies", "devel/git", 3)
+	content, err = os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatalf("Failed to read results log: %v", err)
+	}
+	if !strings.Contains(string(content), "Port devel/git has 3 missing dependencies") {
+		t.Error("Warn with formatting did not work correctly")
+	}
+}

@@ -11,6 +11,9 @@ import (
 	"dsynth/config"
 )
 
+// Compile-time interface checks
+var _ LibraryLogger = (*Logger)(nil)
+
 // Logger manages multiple log files for dsynth
 type Logger struct {
 	cfg          *config.Config
@@ -225,21 +228,23 @@ func (l *Logger) Obsolete(pkgFile string) {
 }
 
 // Debug logs debug information
-func (l *Logger) Debug(msg string) {
+func (l *Logger) Debug(format string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
 	l.debugFile.WriteString(fmt.Sprintf("[%s] %s\n", timestamp, msg))
 	l.debugFile.Sync()
 }
 
 // Error logs an error message
-func (l *Logger) Error(msg string) {
+func (l *Logger) Error(format string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
 	errMsg := fmt.Sprintf("[%s] ERROR: %s\n", timestamp, msg)
 
 	l.resultsFile.WriteString(errMsg)
@@ -249,12 +254,29 @@ func (l *Logger) Error(msg string) {
 	l.debugFile.Sync()
 }
 
-// Info logs an informational message
-func (l *Logger) Info(msg string) {
+// Warn logs a warning message (non-fatal issues)
+func (l *Logger) Warn(format string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
+	warnMsg := fmt.Sprintf("[%s] WARN: %s\n", timestamp, msg)
+
+	l.resultsFile.WriteString(warnMsg)
+	l.debugFile.WriteString(warnMsg)
+
+	l.resultsFile.Sync()
+	l.debugFile.Sync()
+}
+
+// Info logs an informational message
+func (l *Logger) Info(format string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
 	l.resultsFile.WriteString(fmt.Sprintf("[%s] INFO: %s\n", timestamp, msg))
 	l.resultsFile.Sync()
 }
