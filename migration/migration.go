@@ -44,7 +44,13 @@ type CRCRecord struct {
 //
 // Returns nil if no legacy file exists (no migration needed).
 // Returns error only for critical failures (file read errors, etc).
-func MigrateLegacyCRC(cfg *config.Config, db *builddb.DB) error {
+//
+// The logger parameter is required for progress reporting. Use log.NoOpLogger{}
+// for silent operation, or pass a real Logger instance for CLI output.
+func MigrateLegacyCRC(cfg *config.Config, db *builddb.DB, logger interface {
+	Info(format string, args ...any)
+	Warn(format string, args ...any)
+}) error {
 	legacyFile := filepath.Join(cfg.BuildBase, "crc_index")
 
 	// Check if legacy file exists
@@ -53,35 +59,34 @@ func MigrateLegacyCRC(cfg *config.Config, db *builddb.DB) error {
 		return nil
 	}
 
-	fmt.Printf("Found legacy CRC file: %s\n", legacyFile)
+	logger.Info("Found legacy CRC file: %s", legacyFile)
 
 	// Read legacy file
-	records, err := readLegacyCRCFile(legacyFile)
+	records, err := readLegacyCRCFile(legacyFile, logger)
 	if err != nil {
 		return fmt.Errorf("failed to read legacy CRC file: %w", err)
 	}
 
-	fmt.Printf("Migrating %d CRC records...\n", len(records))
+	logger.Info("Migrating %d CRC records...", len(records))
 
 	// Import into BuildDB
 	migrated := 0
 	for _, rec := range records {
 		if err := db.UpdateCRC(rec.PortDir, rec.CRC); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to migrate %s: %v\n",
-				rec.PortDir, err)
+			logger.Warn("Failed to migrate %s: %v", rec.PortDir, err)
 			continue
 		}
 		migrated++
 	}
 
-	fmt.Printf("Successfully migrated %d/%d records\n", migrated, len(records))
+	logger.Info("Successfully migrated %d/%d records", migrated, len(records))
 
 	// Backup legacy file
 	backupFile := legacyFile + ".bak"
 	if err := os.Rename(legacyFile, backupFile); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to backup legacy file: %v\n", err)
+		logger.Warn("Failed to backup legacy file: %v", err)
 	} else {
-		fmt.Printf("Legacy file backed up to: %s\n", backupFile)
+		logger.Info("Legacy file backed up to: %s", backupFile)
 	}
 
 	return nil
@@ -102,7 +107,9 @@ func MigrateLegacyCRC(cfg *config.Config, db *builddb.DB) error {
 //
 // Returns a slice of CRCRecord entries.
 // Invalid lines are logged as warnings but do not cause an error.
-func readLegacyCRCFile(path string) ([]CRCRecord, error) {
+func readLegacyCRCFile(path string, logger interface {
+	Warn(format string, args ...any)
+}) ([]CRCRecord, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -121,15 +128,14 @@ func readLegacyCRCFile(path string) ([]CRCRecord, error) {
 		// Expected format: "portdir:crc32_hex"
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
-			fmt.Fprintf(os.Stderr, "Warning: skipping invalid line (no colon): %s\n", line)
+			logger.Warn("Skipping invalid line (no colon): %s", line)
 			continue
 		}
 
 		portDir := parts[0]
 		var crc uint32
 		if _, err := fmt.Sscanf(parts[1], "%x", &crc); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: invalid CRC for %s: %v\n",
-				portDir, err)
+			logger.Warn("Invalid CRC for %s: %v", portDir, err)
 			continue
 		}
 

@@ -275,7 +275,7 @@ func doInit(cfg *config.Config) {
 
 		if cfg.YesAll {
 			fmt.Println("Migrating automatically (-y flag)...")
-			if err := migration.MigrateLegacyCRC(cfg, db); err != nil {
+			if err := migration.MigrateLegacyCRC(cfg, db, log.StdoutLogger{}); err != nil {
 				fmt.Fprintf(os.Stderr, "✗ Migration failed: %v\n", err)
 				os.Exit(1)
 			}
@@ -285,7 +285,7 @@ func doInit(cfg *config.Config) {
 			var response string
 			fmt.Scanln(&response)
 			if response == "" || strings.EqualFold(response, "y") || strings.EqualFold(response, "yes") {
-				if err := migration.MigrateLegacyCRC(cfg, db); err != nil {
+				if err := migration.MigrateLegacyCRC(cfg, db, log.StdoutLogger{}); err != nil {
 					fmt.Fprintf(os.Stderr, "✗ Migration failed: %v\n", err)
 					os.Exit(1)
 				}
@@ -617,7 +617,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 			if strings.EqualFold(response, "n") || strings.EqualFold(response, "no") {
 				fmt.Println("Skipping migration. Note: CRC skip functionality requires migration.")
 			} else {
-				if err := migration.MigrateLegacyCRC(cfg, buildDB); err != nil {
+				if err := migration.MigrateLegacyCRC(cfg, buildDB, logger); err != nil {
 					fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
 					os.Exit(1)
 				}
@@ -625,7 +625,7 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		} else {
 			// Auto-migrate with -y flag
 			fmt.Println("Auto-migrating legacy CRC data (-y flag)...")
-			if err := migration.MigrateLegacyCRC(cfg, buildDB); err != nil {
+			if err := migration.MigrateLegacyCRC(cfg, buildDB, logger); err != nil {
 				fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
 				os.Exit(1)
 			}

@@ -1233,12 +1233,12 @@ Rationale: Package should contain only metadata, not build-time state
 ### ⚠️ Known Issues
 
 **Architectural/Design** (Critical for Library Reuse):
-- **stdout/stderr in library packages** (pkg, build, environment, migration, mount, util)
+- **stdout/stderr in library packages** (pkg, build, environment, ~~migration~~, mount, util)
   - Context: Libraries print directly to terminal instead of using logger
   - Impact: Blocks REST API, GUI, non-CLI usage (**Phase 5 blocker**)
   - Status: 🔄 **Active Refactoring** - See [REFACTOR_ISSUE_FIXES.md](docs/refactoring/REFACTOR_ISSUE_FIXES.md)
-  - Progress: Stage 1/7 ✅ **COMPLETE** (Foundation ready) - Stage 2 starting next
-  - Reference: INCONSISTENCIES.md Pattern 1 (6 packages affected)
+  - Progress: Stage 2/7 ✅ **COMPLETE** (migration package clean, 8/71 prints removed) - Stage 3 next
+  - Reference: INCONSISTENCIES.md Pattern 1 (5 packages remaining)
 - **Split CRC responsibility** between pkg and build
   - Context: "Needs build" logic duplicated in pkg.MarkPackagesNeedingBuild and build.DoBuild
   - Impact: Harder to maintain, risk of drift, wasted CRC computation

@@ -7,8 +7,22 @@ import (
 
 	"dsynth/builddb"
 	"dsynth/config"
+	"dsynth/log"
 	"dsynth/migration"
 )
+
+// testLogger wraps testing.T to provide a simple logger for tests
+type testLogger struct {
+	t *testing.T
+}
+
+func (tl testLogger) Info(format string, args ...any) {
+	tl.t.Logf("[INFO] "+format, args...)
+}
+
+func (tl testLogger) Warn(format string, args ...any) {
+	tl.t.Logf("[WARN] "+format, args...)
+}
 
 // TestMigrateLegacyCRC tests the main migration workflow with 3 CRC records.
 func TestMigrateLegacyCRC(t *testing.T) {
@@ -35,8 +49,8 @@ www/nginx:12345678
 	}
 	defer db.Close()
 
-	// Run migration
-	err = migration.MigrateLegacyCRC(cfg, db)
+	// Run migration with NoOpLogger (silent)
+	err = migration.MigrateLegacyCRC(cfg, db, testLogger{t})
 	if err != nil {
 		t.Fatalf("MigrateLegacyCRC() failed: %v", err)
 	}
@@ -90,8 +104,8 @@ func TestMigrateLegacyCRC_NoLegacyFile(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Run migration
-	err = migration.MigrateLegacyCRC(cfg, db)
+	// Run migration with NoOpLogger (no file, should be silent)
+	err = migration.MigrateLegacyCRC(cfg, db, log.NoOpLogger{})
 	if err != nil {
 		t.Errorf("Expected no error for missing file, got: %v", err)
 	}
@@ -125,8 +139,8 @@ extra:fields:here:ignored
 	}
 	defer db.Close()
 
-	// Run migration (should not fail)
-	err = migration.MigrateLegacyCRC(cfg, db)
+	// Run migration (should not fail) with testLogger to capture warnings
+	err = migration.MigrateLegacyCRC(cfg, db, testLogger{t})
 	if err != nil {
 		t.Fatalf("MigrateLegacyCRC() failed: %v", err)
 	}
@@ -174,8 +188,8 @@ func TestMigrateLegacyCRC_EmptyFile(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Run migration (should not fail)
-	err = migration.MigrateLegacyCRC(cfg, db)
+	// Run migration (should not fail) with NoOpLogger
+	err = migration.MigrateLegacyCRC(cfg, db, log.NoOpLogger{})
 	if err != nil {
 		t.Errorf("Expected no error for empty file, got: %v", err)
 	}
@@ -220,7 +234,7 @@ www/nginx:12345678
 	}
 	defer db.Close()
 
-	err = migration.MigrateLegacyCRC(cfg, db)
+	err = migration.MigrateLegacyCRC(cfg, db, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("MigrateLegacyCRC() failed: %v", err)
 	}
@@ -257,6 +271,82 @@ func TestDetectMigrationNeeded(t *testing.T) {
 	}
 }
 
+// TestMigrateLegacyCRC_LogCapture tests log message capture with MemoryLogger.
+func TestMigrateLegacyCRC_LogCapture(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create legacy CRC file with a mix of valid/invalid entries
+	legacyFile := filepath.Join(tmpDir, "crc_index")
+	legacyData := `editors/vim:deadbeef
+invalid-no-colon
+devel/git:INVALID_HEX
+www/nginx:12345678
+`
+	if err := os.WriteFile(legacyFile, []byte(legacyData), 0644); err != nil {
+		t.Fatalf("Failed to create legacy file: %v", err)
+	}
+
+	// Setup config
+	cfg := &config.Config{BuildBase: tmpDir}
+
+	// Open BuildDB
+	db, err := builddb.OpenDB(filepath.Join(tmpDir, "builds.db"))
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Create MemoryLogger to capture output
+	memLogger := log.NewMemoryLogger()
+
+	// Run migration with MemoryLogger
+	err = migration.MigrateLegacyCRC(cfg, db, memLogger)
+	if err != nil {
+		t.Fatalf("MigrateLegacyCRC() failed: %v", err)
+	}
+
+	// Verify INFO messages
+	if !memLogger.HasMessageWithLevel("INFO", "Found legacy CRC file") {
+		t.Error("Expected INFO message about legacy file")
+	}
+	if !memLogger.HasMessageWithLevel("INFO", "Migrating") {
+		t.Error("Expected INFO message about migration count")
+	}
+	if !memLogger.HasMessageWithLevel("INFO", "Successfully migrated") {
+		t.Error("Expected INFO message about success count")
+	}
+	if !memLogger.HasMessageWithLevel("INFO", "backed up") {
+		t.Error("Expected INFO message about backup")
+	}
+
+	// Verify WARN messages for invalid entries
+	if !memLogger.HasMessageWithLevel("WARN", "invalid-no-colon") {
+		t.Error("Expected WARN message about line with no colon")
+	}
+	if !memLogger.HasMessageWithLevel("WARN", "devel/git") {
+		t.Error("Expected WARN message about invalid CRC for devel/git")
+	}
+
+	// Verify message counts
+	infoCount := memLogger.CountByLevel("INFO")
+	if infoCount != 4 {
+		t.Errorf("Expected 4 INFO messages, got %d", infoCount)
+	}
+
+	warnCount := memLogger.CountByLevel("WARN")
+	if warnCount != 2 {
+		t.Errorf("Expected 2 WARN messages, got %d", warnCount)
+	}
+
+	// No ERROR or DEBUG messages should be logged
+	if memLogger.CountByLevel("ERROR") != 0 {
+		t.Errorf("Expected 0 ERROR messages, got %d", memLogger.CountByLevel("ERROR"))
+	}
+	if memLogger.CountByLevel("DEBUG") != 0 {
+		t.Errorf("Expected 0 DEBUG messages, got %d", memLogger.CountByLevel("DEBUG"))
+	}
+}
+
 // TestMigrateLegacyCRC_Idempotent tests that migration is safe to run twice.
 func TestMigrateLegacyCRC_Idempotent(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -280,8 +370,8 @@ devel/git:cafebabe
 	}
 	defer db.Close()
 
-	// Run migration first time
-	err = migration.MigrateLegacyCRC(cfg, db)
+	// Run migration first time with NoOpLogger
+	err = migration.MigrateLegacyCRC(cfg, db, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("MigrateLegacyCRC() first run failed: %v", err)
 	}
@@ -293,7 +383,7 @@ devel/git:cafebabe
 	}
 
 	// Run migration second time (should be no-op, no legacy file exists)
-	err = migration.MigrateLegacyCRC(cfg, db)
+	err = migration.MigrateLegacyCRC(cfg, db, log.NoOpLogger{})
 	if err != nil {
 		t.Errorf("MigrateLegacyCRC() second run failed: %v", err)
 	}
