@@ -2,6 +2,49 @@
 
 This document tracks inconsistencies, design problems, and notable issues discovered during code review. It is organized by top-level directory so we can incrementally expand coverage.
 
+**Total Items**: 50 (7 bugs, 38 issues, 5 features)
+
+## Quick Navigation
+
+- **Active Tracking**: See [DEVELOPMENT.md - Active Development Tracking](DEVELOPMENT.md#-active-development-tracking)
+- **Bugs**: See [DEVELOPMENT.md - Active Bugs](DEVELOPMENT.md#-active-bugs)
+- **Issues**: See [DEVELOPMENT.md - Known Issues](DEVELOPMENT.md#%EF%B8%8F-known-issues)
+- **Features**: See [DEVELOPMENT.md - Planned Features](DEVELOPMENT.md#-planned-features)
+
+## Critical Patterns (Cross-Package)
+
+These patterns affect multiple packages and represent the highest-priority architectural concerns:
+
+### Pattern 1: Library Functions Write to stdout/stderr 🔴 HIGH
+
+**Affects**: pkg/, build/, environment/, migration/, mount/, util/  
+**Priority**: HIGH - **Blocks Phase 5 REST API**  
+**Items**: pkg/#2, build/#5, environment/#3, migration/#1, mount/#2, util/#2  
+**Impact**: Makes libraries unusable in non-CLI contexts (API, GUI, services)  
+**Solution**: Add logger parameter to all library functions (~8h effort)
+
+### Pattern 2: Split Responsibilities 🟠 MEDIUM-HIGH
+
+**Affects**: pkg/, build/, mount/, main.go, cmd/  
+**Priority**: MEDIUM-HIGH - Maintenance burden, risk of drift  
+**Items**: 
+- CRC logic split: pkg/#1, build/#1, build/#2
+- Mount logic duplicated: mount/ vs environment/bsd
+- Build flow duplicated: main.go vs cmd/
+
+**Impact**: Code duplication, unclear source of truth, harder to maintain  
+**Solution**: Consolidate to canonical locations (~12h effort)
+
+### Pattern 3: Global Mutable State 🟡 MEDIUM
+
+**Affects**: pkg/, config/, environment/  
+**Priority**: MEDIUM - Complicates testing and concurrent usage  
+**Items**: pkg/#5 (portsQuerier), config/#1 (globalConfig), environment/#4 (backend registry)  
+**Impact**: Hard to test, race conditions, implicit dependencies  
+**Solution**: Explicit dependency injection (~6h effort)
+
+---
+
 ## pkg/
 
 Library: package metadata, dependency resolution, and build-state helpers.
@@ -323,3 +366,142 @@ CLI: experimental Cobra-based `build` command (not yet wired as root).
 
 - The command implements its own confirmation prompt using `fmt.Printf` and `fmt.Scanln`, rather than reusing `util.AskYN` or another centralized interaction helper.
 - This contributes to slight inconsistencies in prompt style and behavior compared to other interactive points in the tool.
+
+---
+
+## Quick Wins (Low Effort, High Value)
+
+These issues can be fixed quickly and provide immediate value:
+
+### 1. builddb/#1 - Use bucket constants consistently
+- **Effort**: 5 minutes
+- **Files**: `builddb/db.go` (4 locations)
+- **Change**: Replace `"builds"` with `BucketBuilds`, `"packages"` with `BucketPackages`, etc.
+- **Benefit**: Compile-time safety, easier refactoring
+
+### 2. config/#2 - Respect AutoVacuum INI setting
+- **Effort**: 15 minutes
+- **Files**: `config/config.go`
+- **Change**: Don't force `AutoVacuum=true` at end of `LoadConfig`, respect user's INI value
+- **Benefit**: User configuration actually works
+
+### 3. pkg/#7 - Fix comment vs implementation mismatch
+- **Effort**: 5 minutes
+- **Files**: `pkg/deps.go` (parseDependencyString)
+- **Change**: Update comment to say "/nonexistent:" prefix instead of "${NONEXISTENT}"
+- **Benefit**: Documentation matches implementation
+
+### 4. config/#3 - Simplify boolean parsing logic
+- **Effort**: 10 minutes
+- **Files**: `config/config.go` (parseBool function)
+- **Change**: Remove no-op `s = s` assignment, clarify fallback logic
+- **Benefit**: Cleaner code, less confusion
+
+### 5. mount/#4 - Remove unused parameters (or skip if removing mount/)
+- **Effort**: 15 minutes (or 0 if removing package)
+- **Files**: `mount/mount.go`
+- **Change**: Remove `discreteFmt` parameter, `AccumError` and `Status` fields
+- **Benefit**: Cleaner API
+
+**Total Quick Wins Time**: ~50 minutes for 5 fixes
+
+---
+
+## Critical Path for Phase 5 (REST API)
+
+Before implementing Phase 5 REST API, these items **must** be addressed:
+
+### Blockers (Required)
+
+1. **Pattern 1: Remove stdout/stderr from library packages** (~8 hours)
+   - Affects: pkg/#2, build/#5, environment/#3, migration/#1
+   - Why: API cannot have libraries printing to terminal
+   - Solution: Add logger parameter or return structured results
+
+2. **main.go/#1: Extract service layer** (~4 hours)
+   - Why: API needs reusable functions to call (not main.go CLI logic)
+   - Solution: Create `service/` package with BuildService, StatusService, etc.
+
+**Total Blocker Effort**: ~12 hours
+
+### Strongly Recommended (Not Strict Blockers)
+
+3. **Pattern 2: Consolidate split responsibilities** (~12 hours)
+   - Why: Cleaner architecture before adding another layer
+   - Items: CRC logic, mount logic, build flow
+   - Solution: Pick canonical location, refactor others to use it
+
+4. **log/#1: Configurable logging backends** (~4 hours)
+   - Why: API needs different log format than file-based CLI logs
+   - Solution: Logger interface with multiple implementations
+
+**Total Recommended Effort**: ~16 hours
+
+### Optional (Nice-to-Have)
+
+5. **Pattern 3: Remove global mutable state** (~6 hours)
+   - Why: API may need multiple concurrent configurations
+   - Solution: Dependency injection
+
+**Total Critical Path**: 12h (blockers) + 16h (recommended) = **28 hours**
+
+---
+
+## Statistics
+
+### By Category
+- 🐛 **Bugs**: 7 (14%)
+  - High: 3 (contract violations)
+  - Medium: 2 (error handling)
+  - Low: 2 (race conditions)
+
+- ⚠️ **Issues**: 38 (76%)
+  - Architectural (Critical): 13
+  - Architectural (Patterns): 6
+  - Testing: 5
+  - Code Quality: 8
+  - Deprecated: 2
+  - Performance: 2
+  - Missing Functionality: 2
+
+- ✨ **Features**: 5 (10%)
+  - High: 1 (stdout/stderr removal)
+  - Medium: 3 (context support, logging, swap usage)
+  - Low: 1 (event-driven deps)
+
+### By Package
+- **pkg/**: 8 issues
+- **build/**: 7 issues
+- **builddb/**: 4 issues
+- **environment/**: 4 issues
+- **log/**: 4 issues
+- **migration/**: 3 issues
+- **mount/**: 4 issues (deprecated)
+- **util/**: 4 issues
+- **config/**: 4 issues
+- **main.go**: 4 issues
+- **cmd/**: 4 issues (mostly unused)
+
+### Priority Distribution
+- 🔴 **High**: 4 items (3 bugs + 1 feature)
+- 🟠 **Medium-High**: 15 items (architecture)
+- 🟡 **Medium**: 18 items (quality, testing)
+- 🔵 **Low**: 13 items (polish, deprecated code)
+
+---
+
+## Migration to GitHub Issues
+
+When ready to migrate to GitHub Issues (post-MVP, when project goes public):
+
+1. Create labels: `bug`, `issue`, `feature`, `priority-high`, `priority-medium`, `priority-low`, `pattern-1`, `pattern-2`, `pattern-3`, `phase-5-blocker`
+2. Create issues from high-priority items first
+3. Reference this document in issue descriptions
+4. Update DEVELOPMENT.md to link to GitHub Issues instead
+5. Keep this document as historical reference
+
+---
+
+**Last Updated**: 2025-11-29  
+**Review Completed By**: Code review during Phase 7  
+**Status**: All 50 items catalogued and prioritized

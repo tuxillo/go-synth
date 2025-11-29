@@ -1204,49 +1204,165 @@ Rationale: Package should contain only metadata, not build-time state
 - None! 🎉
 
 **High** (🟠 Significant impact):
-- None currently
+- **[environment]** Cleanup not idempotent - violates interface contract (discovered: 2025-11-29)
+  - Impact: Cannot safely `defer env.Cleanup()` after failed Setup
+  - Workaround: Check baseDir before calling Cleanup
+  - Fix: Return nil on empty baseDir, or update interface docs
+- **[environment]** WorkDir not honored by BSD backend (discovered: 2025-11-29)
+  - Impact: ExecCommand.WorkDir silently ignored, must use `-C` flags
+  - Fix: Implement WorkDir support or update interface docs
+- **[config]** AutoVacuum forced to true, ignoring INI setting (discovered: 2025-11-29)
+  - Impact: User config override silently ignored
+  - Fix: Respect INI value instead of forcing at end of LoadConfig
 
 **Medium** (🟡 Quality/usability):
-- None currently
+- **[builddb]** Double-wrapping PackageIndexError obscures root cause (discovered: 2025-11-29)
+  - Impact: Harder to inspect error chains
+  - Fix: Avoid re-wrapping already-wrapped errors
+- **[pkg]** PortNotFoundError flags discarded in BulkQueue.worker (discovered: 2025-11-29)
+  - Impact: Callers cannot see which ports were not found
+  - Fix: Preserve flags even on error paths
 
 **Low** (🔵 Polish/minor):
+- **[environment]** Global backend registry without synchronization (discovered: 2025-11-29)
+- **[pkg]** Global portsQuerier without synchronization (discovered: 2025-11-29)
 - Race condition in BuildStateRegistry (pre-existing, low frequency)
 
 ---
 
 ### ⚠️ Known Issues
 
-**Architectural/Design**:
+**Architectural/Design** (Critical for Library Reuse):
+- **stdout/stderr in library packages** (pkg, build, environment, migration, mount, util)
+  - Context: Libraries print directly to terminal instead of using logger
+  - Impact: Blocks REST API, GUI, non-CLI usage (**Phase 5 blocker**)
+  - Plan: Add logger parameter to library functions (~8h effort)
+  - Reference: INCONSISTENCIES.md Pattern 1 (6 packages affected)
+- **Split CRC responsibility** between pkg and build
+  - Context: "Needs build" logic duplicated in pkg.MarkPackagesNeedingBuild and build.DoBuild
+  - Impact: Harder to maintain, risk of drift, wasted CRC computation
+  - Plan: Consolidate into single source of truth (~4h effort)
+  - Reference: INCONSISTENCIES.md pkg/#1, build/#1, build/#2
+- **Duplicate mount logic** in mount/ and environment/bsd
+  - Context: Old mount/ deprecated but still present
+  - Impact: Risk of drift if someone modifies wrong code
+  - Plan: Remove mount/ package after validation (~2h effort)
+  - Reference: INCONSISTENCIES.md mount/ (entire package deprecated)
+- **Global mutable state** in pkg, config, environment
+  - Context: portsQuerier, globalConfig, backend registry are package-level globals
+  - Impact: Complicates testing and concurrent usage
+  - Plan: Explicit dependency injection (~6h effort)
+  - Reference: INCONSISTENCIES.md Pattern 3
+
+**Architectural/Design** (Design Patterns):
 - No context.Context support in pkg APIs (by design for now)
 - BulkQueue implementation detail exposed (Phase 2 - refactor later)
+- **[log]** Tightly coupled to on-disk file layout
+  - Context: Logger always creates 8 specific files
+  - Plan: Configurable backends for tests/API (~4h effort)
+- **[util]** Direct user interaction in generic util (AskYN)
+  - Context: User prompts buried in low-level package
+  - Plan: Move to CLI layer
+- **[main.go]** Mixed responsibilities, limited reuse
+  - Context: CLI logic mixed with core functionality
+  - Plan: Extract service layer (~4h effort, **Phase 5 blocker**)
 
 **Testing**:
 - Integration tests missing for some edge cases
 - Error path test coverage ~70% (target: 85%+)
 - No benchmark tests (Phase 2 Task 12 - deferred)
+- **[pkg]** Error types not surfaced consistently (ErrEmptySpec, ErrInvalidSpec defined but not used)
+- **[migration]** No dry-run or explicit idempotency controls
+- **[build]** Phase execution has unused helpers, narrow coverage
+
+**Code Quality**:
+- **[builddb]** Partial use of bucket name constants (uses strings in some places)
+- **[pkg]** Comment vs implementation mismatch in parseDependencyString
+- **[pkg]** resolveDependencies mutates input slice unnecessarily
+- **[util]** Shelling out for basic file operations (cp, rm instead of Go stdlib)
+- **[config]** Boolean parsing has quirky casing behavior
+
+**Performance**:
+- **[build]** Busy-wait dependency tracking (100ms polling loop)
+  - Plan: Event-driven with channels (~4h effort)
+- **[log]** Aggressive Sync() on every write
+  - Context: Trades performance for crash safety
+  - Plan: Configurable sync policy
+
+**Deprecated Code** (Do not extend):
+- **[mount]** Entire package deprecated, use environment/bsd instead
+- **[cmd]** Unused Cobra command, should be removed or wired
 
 **Documentation**:
 - Phase 7 Tasks 8-9 incomplete (optional post-MVP)
 - Phase 2 Task 12 benchmarks deferred
 - Phase 6 Task 6 CI/CD setup deferred
 
-**Reference**: See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed Phase 1 issues.
+**Reference**: See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed Phase 1 issues.  
+**Detailed Analysis**: See [INCONSISTENCIES.md](INCONSISTENCIES.md) for comprehensive codebase review (50 items).
 
 ---
 
 ### ✨ Planned Features
 
+**High Priority** (Blockers for Phase 5):
+- [ ] **[all]** Remove stdout/stderr from library packages
+  - Benefit: Enables Phase 5 REST API, GUI frontends
+  - Effort: ~8 hours (6 packages affected)
+  - **Blocker for**: Phase 5 REST API
+  - Reference: INCONSISTENCIES.md Pattern 1
+- [ ] **[main.go]** Extract service layer from main.go
+  - Benefit: Reusable functions for API/other frontends
+  - Effort: ~4 hours
+  - **Blocker for**: Phase 5 REST API
+  - Reference: INCONSISTENCIES.md main.go/#1
+
 **High Priority** (Next sprint):
 - [ ] Test with complex ports (editors/vim, www/nginx, lang/python)
 - [ ] Parallel build validation (multiple workers under load)
 - [ ] Performance profiling and optimization
+- [ ] Fix high-priority bugs (environment cleanup, WorkDir, config)
+
+**Medium Priority** (Architecture cleanup):
+- [ ] **[pkg+build]** Consolidate split CRC responsibility
+  - Benefit: Single source of truth, less duplication
+  - Effort: ~4 hours
+  - Reference: INCONSISTENCIES.md Pattern 2
+- [ ] **[all]** Remove global mutable state (querier, config, registry)
+  - Benefit: Better testing, concurrent usage
+  - Effort: ~6 hours
+  - Reference: INCONSISTENCIES.md Pattern 3
+- [ ] **[log]** Configurable logging backends
+  - Benefit: In-memory logs, structured logging, tests
+  - Effort: ~4 hours
+  - Reference: INCONSISTENCIES.md log/#1
+- [ ] **[builddb]** Context-aware CRC computation
+  - Benefit: Cancellable long operations
+  - Effort: ~2 hours
+  - Reference: INCONSISTENCIES.md builddb/#4
 
 **Medium Priority** (Post-MVP enhancements):
-- [ ] Phase 5: REST API for remote monitoring (~15 hours)
+- [ ] Phase 5: REST API for remote monitoring (~15 hours, **requires blockers above**)
 - [ ] Ncurses UI (like original dsynth)
 - [ ] Build queue management
 - [ ] Notification system (email, webhooks)
 - [ ] Profile switching (multiple build configurations)
+
+**Low Priority** (Polish):
+- [ ] **[build]** Event-driven dependency tracking
+  - Benefit: Lower latency, less CPU wakeups
+  - Effort: ~4 hours
+  - Reference: INCONSISTENCIES.md build/#6
+- [ ] **[util]** Platform-specific implementations (GetSwapUsage)
+  - Benefit: Real metrics on supported platforms
+  - Effort: ~2 hours
+  - Reference: INCONSISTENCIES.md util/#3
+- [ ] **Quick wins** (~1 hour total for 5 fixes)
+  - builddb: Use bucket constants consistently (5 min)
+  - config: Fix boolean parsing logic (10 min)
+  - pkg: Fix comment mismatch (5 min)
+  - config: Respect AutoVacuum INI (15 min)
+  - mount: Remove unused params (15 min, or skip if removing)
 
 **Low Priority** (Future exploration):
 - [ ] Distributed builds across multiple machines
@@ -1259,7 +1375,8 @@ Rationale: Package should contain only metadata, not build-time state
 - [ ] Remote builder support
 - [ ] Package signing
 
-**Reference**: See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for detailed future plans.
+**Reference**: See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for detailed future plans.  
+**Detailed Issues**: See [INCONSISTENCIES.md](INCONSISTENCIES.md) for 50 tracked items.
 
 ---
 
