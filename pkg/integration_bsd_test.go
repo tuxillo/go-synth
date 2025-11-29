@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"dsynth/config"
+	"dsynth/log"
 )
 
 // TestIntegrationBSD_RealPort tests against a real port in the ports tree
@@ -38,7 +39,7 @@ func TestIntegrationBSD_RealPort(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse the port
-	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
@@ -64,7 +65,7 @@ func TestIntegrationBSD_RealPort(t *testing.T) {
 		gmake.PortDir, gmake.Version, gmake.PkgFile)
 
 	// Resolve dependencies
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestIntegrationBSD_RealPort(t *testing.T) {
 	t.Logf("Resolved %d total packages", len(allPackages))
 
 	// Get build order
-	buildOrder := GetBuildOrder(allPackages)
+	buildOrder := GetBuildOrder(allPackages, log.NoOpLogger{})
 	if len(buildOrder) < 1 {
 		t.Error("Expected at least 1 package in build order")
 	}
@@ -139,12 +140,12 @@ func TestIntegrationBSD_ComplexPort(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse and resolve
-	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
 
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestIntegrationBSD_ComplexPort(t *testing.T) {
 	}
 
 	// Get build order
-	buildOrder := GetBuildOrder(allPackages)
+	buildOrder := GetBuildOrder(allPackages, log.NoOpLogger{})
 
 	// Verify topological order
 	pkgPositions := make(map[string]int)
@@ -219,7 +220,7 @@ func TestIntegrationBSD_FlavoredPort(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse the flavored port
-	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
@@ -237,7 +238,7 @@ func TestIntegrationBSD_FlavoredPort(t *testing.T) {
 	t.Logf("Successfully parsed flavored port: %s (flavor=%s)", python.PortDir, python.Flavor)
 
 	// Resolve dependencies
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
@@ -246,7 +247,7 @@ func TestIntegrationBSD_FlavoredPort(t *testing.T) {
 	t.Logf("Resolved %d total packages for flavored port", len(allPackages))
 
 	// Get build order
-	buildOrder := GetBuildOrder(allPackages)
+	buildOrder := GetBuildOrder(allPackages, log.NoOpLogger{})
 	if len(buildOrder) < 1 {
 		t.Error("Expected at least 1 package in build order")
 	}

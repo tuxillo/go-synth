@@ -182,29 +182,54 @@ Add test using MemoryLogger to verify log messages.
 
 ---
 
-### Stage 3: pkg Package (3 hours) ⏸️ PENDING
+### Stage 3: pkg Package (3 hours) ✅ COMPLETE
 
-**Why next**: Most print statements (38), core dependency
+**Why next**: Most print statements (38), core dependency  
+**Completed**: 2025-11-29
 
-#### Task 3.1: Update resolveDependencies
+#### Task 3.1: Update resolveDependencies ✅ COMPLETE
 **Time**: 45 minutes  
-**Status**: ⏸️ Pending
+**Status**: ✅ Complete
 
-#### Task 3.2: Update buildDependencyGraph
+- Added logger parameter to `resolveDependencies()`
+- Replaced 4 print statements with logger.Info/Warn
+- Updated internal calls to `buildDependencyGraph()`
+
+#### Task 3.2: Update buildDependencyGraph ✅ COMPLETE
 **Time**: 30 minutes  
-**Status**: ⏸️ Pending
+**Status**: ✅ Complete
 
-#### Task 3.3: Update GetBuildOrder
+- Added logger parameter to `buildDependencyGraph()`
+- Replaced 4 print statements with logger.Info/Warn
+- Updated internal call to `linkPackageDependencies()`
+
+#### Task 3.3: Update GetBuildOrder ✅ COMPLETE
 **Time**: 30 minutes  
-**Status**: ⏸️ Pending
+**Status**: ✅ Complete
 
-#### Task 3.4: Update MarkPackagesNeedingBuild
+- Added logger parameter to `GetBuildOrder()`
+- Replaced 15 DEBUG print statements with logger.Debug()
+- Updated `TopoOrderStrict()` to accept and pass logger
+
+#### Task 3.4: Update MarkPackagesNeedingBuild ✅ COMPLETE
 **Time**: 45 minutes  
-**Status**: ⏸️ Pending
+**Status**: ✅ Complete
 
-#### Task 3.5: Update Public API Functions
+- Added logger parameter to `MarkPackagesNeedingBuild()`
+- Replaced 10 print statements with logger.Info/Warn
+- Updated caller in main.go
+
+#### Task 3.5: Update Public API Functions ✅ COMPLETE
 **Time**: 30 minutes  
-**Status**: ⏸️ Pending
+**Status**: ✅ Complete
+
+- Updated all public APIs: `ParsePortList()`, `Parse()`, `Resolve()`, `TopoOrder()`, `ResolveDependencies()`
+- Replaced 2 print statements in `ParsePortList()`
+- Updated all callers: main.go, build/build.go, cmd/build.go, examples, tests
+- Fixed 5 example files to pass logger
+- Fixed 6 test files to use log.NoOpLogger{}
+
+**Print Statements Removed**: ~38 (all in pkg package)
 
 ---
 
@@ -272,22 +297,31 @@ Replace global log package usage in environment/bsd.
 
 ## Progress Summary
 
-**Overall**: 0/7 stages complete (0%)  
-**Current Stage**: Stage 1 (Foundation)  
-**Current Task**: Task 1.1 (Define Logger Interface)
+**Overall**: 3/7 stages complete (43%)  
+**Current Stage**: Stage 4 (build Package)  
+**Next Task**: Task 4.1 (Update DoBuild)
 
-**Completed Tasks**: 0/19  
-**Time Spent**: 0 hours  
-**Time Remaining**: ~8 hours
+**Completed Stages**:
+- ✅ Stage 1: Foundation (log interface)
+- ✅ Stage 2: migration Package (8 prints removed)
+- ✅ Stage 3: pkg Package (38 prints removed)
+
+**Completed Tasks**: 11/19  
+**Time Spent**: ~4.5 hours  
+**Time Remaining**: ~3.5 hours
+
+**Print Statements Removed**: 46/71 (65%)
 
 ---
 
 ## Acceptance Criteria
 
 ### Must Have ✅
-- [ ] Zero `fmt.Print*` calls in pkg/, build/, migration/ packages
-- [ ] All affected functions take `log.LibraryLogger` parameter
-- [ ] Existing tests pass with logger parameter
+- [x] Zero `fmt.Print*` calls in pkg/ package (38 removed)
+- [x] Zero `fmt.Print*` calls in migration/ package (8 removed)
+- [ ] Zero `fmt.Print*` calls in build/ package
+- [x] All affected functions take `log.LibraryLogger` parameter
+- [x] Existing tests pass with logger parameter (all 44+ tests pass)
 - [ ] Manual build test (print/indexinfo) works silently
 
 ### Should Have 📋

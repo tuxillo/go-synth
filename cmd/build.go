@@ -80,7 +80,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	pkgRegistry := pkg.NewPackageRegistry()
 
 	// Parse port list
-	head, err := pkg.ParsePortList(args, cfg, registry, pkgRegistry)
+	head, err := pkg.ParsePortList(args, cfg, registry, pkgRegistry, logger)
 	if err != nil {
 		fmt.Printf("Error parsing port list: %v\n", err)
 		os.Exit(1)
@@ -88,13 +88,13 @@ func runBuild(cmd *cobra.Command, args []string) {
 
 	// Resolve dependencies
 	fmt.Println("Resolving dependencies...")
-	if err := pkg.ResolveDependencies(head, cfg, registry, pkgRegistry); err != nil {
+	if err := pkg.ResolveDependencies(head, cfg, registry, pkgRegistry, logger); err != nil {
 		fmt.Printf("Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Mark packages needing build
-	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg, registry, buildDB)
+	needBuild, err := pkg.MarkPackagesNeedingBuild(head, cfg, registry, buildDB, logger)
 	if err != nil {
 		fmt.Printf("Error checking packages: %v\n", err)
 		os.Exit(1)

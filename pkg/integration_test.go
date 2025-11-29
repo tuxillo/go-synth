@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"dsynth/config"
+	"dsynth/log"
 )
 
 // TestIntegration_SimpleWorkflow tests the complete Parse→Resolve→TopoOrder pipeline
@@ -31,7 +32,7 @@ func TestIntegration_SimpleWorkflow(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Step 1: Parse
-	packages, err := ParsePortList([]string{"editors/vim"}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{"editors/vim"}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
@@ -50,7 +51,7 @@ func TestIntegration_SimpleWorkflow(t *testing.T) {
 	}
 
 	// Step 2: Resolve dependencies
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
@@ -77,7 +78,7 @@ func TestIntegration_SimpleWorkflow(t *testing.T) {
 
 	// Step 3: Get build order (get all packages from registry)
 	allPackages := pkgRegistry.AllPackages()
-	buildOrder := GetBuildOrder(allPackages)
+	buildOrder := GetBuildOrder(allPackages, log.NoOpLogger{})
 
 	if len(buildOrder) < 2 {
 		t.Fatalf("Expected at least 2 packages in build order (vim + deps), got %d", len(buildOrder))
@@ -147,7 +148,7 @@ func TestIntegration_SharedDependencies(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse both vim and git
-	packages, err := ParsePortList([]string{"editors/vim", "devel/git"}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{"editors/vim", "devel/git"}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
@@ -157,14 +158,14 @@ func TestIntegration_SharedDependencies(t *testing.T) {
 	}
 
 	// Resolve dependencies
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
 
 	// Get build order (get all packages from registry)
 	allPackages := pkgRegistry.AllPackages()
-	buildOrder := GetBuildOrder(allPackages)
+	buildOrder := GetBuildOrder(allPackages, log.NoOpLogger{})
 
 	// Count occurrences of shared dependencies
 	gettextRuntimeCount := 0
@@ -238,7 +239,7 @@ func TestIntegration_FlavoredPackage(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse flavored port
-	packages, err := ParsePortList([]string{"editors/vim@python39"}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{"editors/vim@python39"}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
@@ -264,7 +265,7 @@ func TestIntegration_FlavoredPackage(t *testing.T) {
 	}
 
 	// Resolve dependencies
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
@@ -294,7 +295,7 @@ func TestIntegration_ErrorPortNotFound(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Try to parse non-existent port
-	packages, err := ParsePortList([]string{"nonexistent/port"}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{"nonexistent/port"}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 
 	// Should return empty list with no error (port not found is logged as warning)
 	if err != nil {
@@ -324,7 +325,7 @@ func TestIntegration_MetaPort(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse meta port
-	packages, err := ParsePortList([]string{"x11/meta-gnome"}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{"x11/meta-gnome"}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
@@ -399,13 +400,13 @@ func TestIntegration_DeepDependencies(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse the complex port
-	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList([]string{testPort}, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
 
 	// Resolve dependencies
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
@@ -419,7 +420,7 @@ func TestIntegration_DeepDependencies(t *testing.T) {
 	}
 
 	// Get build order
-	buildOrder := GetBuildOrder(allPackages)
+	buildOrder := GetBuildOrder(allPackages, log.NoOpLogger{})
 
 	// Verify topological order is correct
 	pkgPositions := make(map[string]int)
@@ -516,7 +517,7 @@ func TestIntegration_LargeGraph(t *testing.T) {
 	bsRegistry := NewBuildStateRegistry()
 
 	// Parse multiple ports at once
-	packages, err := ParsePortList(testPorts, cfg, bsRegistry, pkgRegistry)
+	packages, err := ParsePortList(testPorts, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ParsePortList failed: %v", err)
 	}
@@ -524,7 +525,7 @@ func TestIntegration_LargeGraph(t *testing.T) {
 	t.Logf("Parsed %d root packages: %v", len(packages), testPorts)
 
 	// Resolve dependencies
-	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("ResolveDependencies failed: %v", err)
 	}
@@ -533,7 +534,7 @@ func TestIntegration_LargeGraph(t *testing.T) {
 	t.Logf("Resolved %d total packages from %d roots", len(allPackages), len(testPorts))
 
 	// Get build order
-	buildOrder := GetBuildOrder(allPackages)
+	buildOrder := GetBuildOrder(allPackages, log.NoOpLogger{})
 
 	// Verify each package appears exactly once
 	seenPackages := make(map[string]int)

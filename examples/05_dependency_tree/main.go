@@ -20,6 +20,7 @@ import (
 
 	"dsynth/config"
 	"dsynth/pkg"
+	dslog "dsynth/log"
 )
 
 func main() {
@@ -49,13 +50,13 @@ func main() {
 	bsRegistry := pkg.NewBuildStateRegistry()
 
 	// 3. Parse port
-	packages, err := pkg.ParsePortList([]string{portSpec}, cfg, bsRegistry, pkgRegistry)
+	packages, err := pkg.ParsePortList([]string{portSpec}, cfg, bsRegistry, pkgRegistry, dslog.StdoutLogger{})
 	if err != nil {
 		log.Fatalf("Failed to parse port: %v", err)
 	}
 
 	// 4. Resolve dependencies
-	err = pkg.ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = pkg.ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, dslog.StdoutLogger{})
 	if err != nil {
 		log.Fatalf("Failed to resolve dependencies: %v", err)
 	}

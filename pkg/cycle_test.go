@@ -3,6 +3,7 @@ package pkg
 import (
 	"errors"
 	"testing"
+	"dsynth/log"
 )
 
 // createCycle builds A->B->C and introduces C depends on A forming a cycle
@@ -24,7 +25,7 @@ func createCycle() []*Package {
 
 func TestTopoOrderStrictCycle(t *testing.T) {
 	packages := createCycle()
-	order, err := TopoOrderStrict(packages)
+	order, err := TopoOrderStrict(packages, log.NoOpLogger{})
 	if err == nil {
 		t.Fatalf("expected cycle detection error, got none (order len=%d)", len(order))
 	}

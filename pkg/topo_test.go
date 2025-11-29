@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"dsynth/log"
 	"errors"
 	"fmt"
 	"testing"
@@ -27,7 +28,7 @@ func createSimpleChain() []*Package {
 
 func TestTopoOrderSimple(t *testing.T) {
 	packages := createSimpleChain()
-	order := TopoOrder(packages)
+	order := TopoOrder(packages, log.NoOpLogger{})
 	if len(order) != 3 {
 		t.Fatalf("expected 3 packages, got %d", len(order))
 	}
@@ -126,7 +127,7 @@ func createPriorityTestGraph() []*Package {
 
 func TestGetBuildOrderPriority(t *testing.T) {
 	packages := createPriorityTestGraph()
-	order := GetBuildOrder(packages)
+	order := GetBuildOrder(packages, log.NoOpLogger{})
 
 	if len(order) != 10 {
 		t.Fatalf("expected 10 packages, got %d", len(order))
@@ -235,7 +236,7 @@ func createDepiDepthVsFanoutGraph() []*Package {
 
 func TestPriorityFanoutOverDepth(t *testing.T) {
 	packages := createDepiDepthVsFanoutGraph()
-	order := GetBuildOrder(packages)
+	order := GetBuildOrder(packages, log.NoOpLogger{})
 
 	// Find positions of base1 and base2
 	base1Pos := -1
@@ -265,7 +266,7 @@ func TestParseAliasNoPorts(t *testing.T) {
 	cfg := &config.Config{DPortsPath: "/nonexistent"}
 	registry := NewBuildStateRegistry()
 	pkgRegistry := NewPackageRegistry()
-	_, err := Parse([]string{}, cfg, registry, pkgRegistry)
+	_, err := Parse([]string{}, cfg, registry, pkgRegistry, log.NoOpLogger{})
 
 	if err == nil {
 		// ParsePortList returns error on no valid ports; ensure we handle it

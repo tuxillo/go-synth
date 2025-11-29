@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"dsynth/config"
+	"dsynth/log"
 )
 
 // TestCFidelity_DependencyResolutionTwoPass verifies the two-pass dependency
@@ -51,7 +52,7 @@ func TestCFidelity_TopologicalSort(t *testing.T) {
 	packages := []*Package{a, b, c, d}
 
 	// Get build order
-	order := GetBuildOrder(packages)
+	order := GetBuildOrder(packages, log.NoOpLogger{})
 
 	if len(order) != 4 {
 		t.Fatalf("expected 4 packages, got %d", len(order))
@@ -252,7 +253,7 @@ func TestCFidelity_CircularDependencyDetection(t *testing.T) {
 	packages := []*Package{a, b, c}
 
 	// GetBuildOrder should detect the cycle
-	order, err := TopoOrderStrict(packages)
+	order, err := TopoOrderStrict(packages, log.NoOpLogger{})
 
 	if err == nil {
 		t.Fatal("Expected cycle detection error")
@@ -303,7 +304,7 @@ func TestCFidelity_DiamondDependency(t *testing.T) {
 	// Package slice
 	packages := []*Package{a, b, c, d}
 
-	order := GetBuildOrder(packages)
+	order := GetBuildOrder(packages, log.NoOpLogger{})
 
 	if len(order) != 4 {
 		t.Fatalf("expected 4 packages, got %d", len(order))

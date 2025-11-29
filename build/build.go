@@ -130,7 +130,7 @@ type BuildContext struct {
 //  5. Update CRC and package index (on success only)
 func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
-	buildOrder := pkg.GetBuildOrder(packages)
+	buildOrder := pkg.GetBuildOrder(packages, logger)
 
 	ctx := &BuildContext{
 		ctx:       context.Background(),

@@ -445,7 +445,9 @@ func (r *PackageRegistry) Find(portDir string) *Package {
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) ([]*Package, error) {
+func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry, logger interface {
+	Warn(format string, args ...any)
+}) ([]*Package, error) {
 	packages := make([]*Package, 0)
 
 	bq := newBulkQueue(cfg, cfg.MaxWorkers)
@@ -455,7 +457,7 @@ func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRe
 	for _, portSpec := range portList {
 		category, name, flavor := parsePortSpec(portSpec, cfg)
 		if category == "" || name == "" {
-			fmt.Printf("Warning: invalid port specification: %s\n", portSpec)
+			logger.Warn("Invalid port specification: %s", portSpec)
 			continue
 		}
 		bq.Queue(category, name, flavor, "") // Empty flags means manually selected
@@ -465,7 +467,7 @@ func ParsePortList(portList []string, cfg *config.Config, registry *BuildStateRe
 	for bq.Pending() > 0 {
 		pkg, initialFlags, parseFlags, ignoreReason, err := bq.GetResult()
 		if err != nil {
-			fmt.Printf("Warning: failed to get package info: %v\n", err)
+			logger.Warn("Failed to get package info: %v", err)
 			continue
 		}
 
@@ -614,8 +616,11 @@ func queryMakefile(pkg *Package, portPath string, cfg *config.Config) (PackageFl
 //	// Get all resolved packages for build ordering
 //	allPackages := pkgRegistry.AllPackages()
 //	buildOrder := pkg.GetBuildOrder(allPackages)
-func ResolveDependencies(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
-	return resolveDependencies(packages, cfg, registry, pkgRegistry)
+func ResolveDependencies(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry, logger interface {
+	Info(format string, args ...any)
+	Warn(format string, args ...any)
+}) error {
+	return resolveDependencies(packages, cfg, registry, pkgRegistry, logger)
 }
 
 // MarkPackagesNeedingBuild analyzes which packages need rebuilding based on
@@ -656,9 +661,12 @@ func ResolveDependencies(packages []*Package, cfg *config.Config, registry *Buil
 //	    log.Fatal(err)
 //	}
 //	fmt.Printf("%d packages need rebuilding\n", needBuild)
-func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, buildDB *builddb.DB) (int, error) {
+func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, buildDB *builddb.DB, logger interface {
+	Info(format string, args ...any)
+	Warn(format string, args ...any)
+}) (int, error) {
 
-	fmt.Println("\nChecking which packages need rebuilding...")
+	logger.Info("\nChecking which packages need rebuilding...")
 
 	needBuild := 0
 	checked := 0
@@ -689,7 +697,7 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 		currentCRC, err := builddb.ComputePortCRC(portPath)
 		if err != nil {
 			// On error computing CRC, rebuild to be safe
-			fmt.Printf("  %s: needs rebuild (CRC computation error: %v)\n", pkg.PortDir, err)
+			logger.Info("  %s: needs rebuild (CRC computation error: %v)", pkg.PortDir, err)
 			needBuild++
 			continue
 		}
@@ -697,28 +705,28 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 		needsBuild, err := buildDB.NeedsBuild(pkg.PortDir, currentCRC)
 		if err != nil {
 			// On database error, rebuild to be safe
-			fmt.Printf("  %s: needs rebuild (DB error: %v)\n", pkg.PortDir, err)
+			logger.Info("  %s: needs rebuild (DB error: %v)", pkg.PortDir, err)
 			needBuild++
 			continue
 		}
 
 		if needsBuild {
 			needBuild++
-			fmt.Printf("  %s: needs rebuild\n", pkg.PortDir)
+			logger.Info("  %s: needs rebuild", pkg.PortDir)
 		} else {
 			// Mark as already successful (no build needed)
 			registry.AddFlags(pkg, PkgFSuccess|PkgFPackaged)
-			fmt.Printf("  %s: up-to-date\n", pkg.PortDir)
+			logger.Info("  %s: up-to-date", pkg.PortDir)
 		}
 
 		if checked%100 == 0 {
-			fmt.Printf("  Checked %d packages...\r", checked)
+			logger.Info("  Checked %d packages...", checked)
 		}
 	}
 
-	fmt.Printf("  Checked %d packages\n", checked)
-	fmt.Printf("  %d packages need building\n", needBuild)
-	fmt.Printf("  %d packages are up-to-date\n", checked-needBuild)
+	logger.Info("  Checked %d packages", checked)
+	logger.Info("  %d packages need building", needBuild)
+	logger.Info("  %d packages are up-to-date", checked-needBuild)
 
 	return needBuild, nil
 }
@@ -847,16 +855,25 @@ func GetAllPorts(cfg *config.Config) ([]string, error) {
 }
 
 // Parse is a thin alias for ParsePortList for Phase 1 API compatibility
-func Parse(portSpecs []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) ([]*Package, error) {
-	return ParsePortList(portSpecs, cfg, registry, pkgRegistry)
+func Parse(portSpecs []string, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry, logger interface {
+	Warn(format string, args ...any)
+}) ([]*Package, error) {
+	return ParsePortList(portSpecs, cfg, registry, pkgRegistry, logger)
 }
 
 // Resolve wraps ResolveDependencies for Phase 1 API compatibility
-func Resolve(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry) error {
-	return ResolveDependencies(packages, cfg, registry, pkgRegistry)
+func Resolve(packages []*Package, cfg *config.Config, registry *BuildStateRegistry, pkgRegistry *PackageRegistry, logger interface {
+	Info(format string, args ...any)
+	Warn(format string, args ...any)
+}) error {
+	return ResolveDependencies(packages, cfg, registry, pkgRegistry, logger)
 }
 
 // TopoOrder wraps GetBuildOrder for Phase 1 API compatibility
-func TopoOrder(packages []*Package) []*Package {
-	return GetBuildOrder(packages)
+func TopoOrder(packages []*Package, logger interface {
+	Info(format string, args ...any)
+	Warn(format string, args ...any)
+	Debug(format string, args ...any)
+}) []*Package {
+	return GetBuildOrder(packages, logger)
 }

@@ -269,7 +269,7 @@ func TestIntegration_FirstBuildWorkflow(t *testing.T) {
 	// Parse port
 	pkgRegistry := pkg.NewPackageRegistry()
 	stateRegistry := pkg.NewBuildStateRegistry()
-	packages, err := pkg.ParsePortList([]string{"misc/testport1"}, cfg, stateRegistry, pkgRegistry)
+	packages, err := pkg.ParsePortList([]string{"misc/testport1"}, cfg, stateRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Failed to parse port: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 	stateRegistry := pkg.NewBuildStateRegistry()
 
 	// Build 1: Initial build
-	packages1, err := pkg.ParsePortList([]string{"misc/testport2"}, cfg, stateRegistry, pkgRegistry)
+	packages1, err := pkg.ParsePortList([]string{"misc/testport2"}, cfg, stateRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Failed to parse port: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 
 	// Build 2: Rebuild without changes (should skip)
 	stateRegistry2 := pkg.NewBuildStateRegistry()
-	packages2, err := pkg.ParsePortList([]string{"misc/testport2"}, cfg, stateRegistry2, pkgRegistry)
+	packages2, err := pkg.ParsePortList([]string{"misc/testport2"}, cfg, stateRegistry2, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Failed to parse port for rebuild: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 	stateRegistry := pkg.NewBuildStateRegistry()
 
 	// Build 1: Initial build
-	packages1, err := pkg.ParsePortList([]string{"misc/testport3"}, cfg, stateRegistry, pkgRegistry)
+	packages1, err := pkg.ParsePortList([]string{"misc/testport3"}, cfg, stateRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Failed to parse port: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 
 	// Build 2: After change (should rebuild)
 	stateRegistry2 := pkg.NewBuildStateRegistry()
-	packages2, err := pkg.ParsePortList([]string{"misc/testport3"}, cfg, stateRegistry2, pkgRegistry)
+	packages2, err := pkg.ParsePortList([]string{"misc/testport3"}, cfg, stateRegistry2, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Failed to parse port for rebuild: %v", err)
 	}

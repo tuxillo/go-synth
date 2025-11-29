@@ -19,6 +19,7 @@ import (
 
 	"dsynth/config"
 	"dsynth/pkg"
+	dslog "dsynth/log"
 )
 
 func main() {
@@ -46,7 +47,7 @@ func main() {
 
 	// 3. Parse ports
 	fmt.Println("Parsing ports...")
-	packages, err := pkg.ParsePortList(portSpecs, cfg, bsRegistry, pkgRegistry)
+	packages, err := pkg.ParsePortList(portSpecs, cfg, bsRegistry, pkgRegistry, dslog.StdoutLogger{})
 	if err != nil {
 		log.Fatalf("Failed to parse ports: %v", err)
 	}
@@ -54,7 +55,7 @@ func main() {
 
 	// 4. Resolve dependencies
 	fmt.Println("\nResolving dependencies...")
-	err = pkg.ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry)
+	err = pkg.ResolveDependencies(packages, cfg, bsRegistry, pkgRegistry, dslog.StdoutLogger{})
 	if err != nil {
 		log.Fatalf("Failed to resolve dependencies: %v", err)
 	}
@@ -64,7 +65,7 @@ func main() {
 	fmt.Println("\nComputing topological build order...")
 	// Note: GetBuildOrder needs ALL packages from the registry, not just the root package(s)
 	allPackages := pkgRegistry.AllPackages()
-	buildOrder := pkg.GetBuildOrder(allPackages)
+	buildOrder := pkg.GetBuildOrder(allPackages, dslog.StdoutLogger{})
 
 	// 6. Display build order
 	fmt.Printf("\nBuild Order (%d packages total):\n", len(buildOrder))

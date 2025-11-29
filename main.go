@@ -663,24 +663,24 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	// Create package registry
 	pkgRegistry := pkg.NewPackageRegistry()
 
-	// Parse port specifications into package list
-	packages, err := pkg.ParsePortList(portList, cfg, registry, pkgRegistry)
+	// Parse all port specifications
+	packages, err := pkg.ParsePortList(portList, cfg, registry, pkgRegistry, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing port list: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Resolve all dependencies
-	if err := pkg.ResolveDependencies(packages, cfg, registry, pkgRegistry); err != nil {
+	// Resolve dependencies
+	if err := pkg.ResolveDependencies(packages, cfg, registry, pkgRegistry, logger); err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving dependencies: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Get all packages (including dependencies) from registry
+	// Get all packages from registry (includes all transitive dependencies)
 	packages = pkgRegistry.AllPackages()
 
-	// Check which packages need building (CRC-based)
-	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, registry, buildDB)
+	// Mark which packages need building
+	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, registry, buildDB, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error checking build status: %v\n", err)
 		os.Exit(1)
