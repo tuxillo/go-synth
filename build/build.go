@@ -60,7 +60,6 @@ package build
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -144,11 +143,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 	// Create cleanup function
 	cleanup := func() {
-		fmt.Fprintf(os.Stderr, "Cleaning up worker environments...\n")
+		logger.Info("Cleaning up worker environments")
 		for i, worker := range ctx.workers {
 			if worker != nil && worker.Env != nil {
 				if err := worker.Env.Cleanup(); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to cleanup worker %d: %v\n", i, err)
+					logger.Warn("Failed to cleanup worker %d: %v", i, err)
 				}
 			}
 		}
@@ -167,7 +166,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		}
 	}
 
-	fmt.Printf("\nStarting build: %d packages (%d skipped, %d ignored)\n",
+	logger.Info("Starting build: %d packages (%d skipped, %d ignored)",
 		ctx.stats.Total, ctx.stats.Skipped, ctx.stats.Ignored)
 
 	// Create workers
@@ -344,7 +343,7 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	}
 	if err := ctx.buildDB.SaveRecord(buildRecord); err != nil {
 		// Log warning but don't fail build (DB operations are non-fatal)
-		fmt.Fprintf(os.Stderr, "Warning: Failed to save build record for %s: %v\n", p.PortDir, err)
+		ctxLogger.Warn("Failed to save build record: %v", err)
 	}
 
 	// Execute all build phases
@@ -380,7 +379,7 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 
 			// Update build record status to failed
 			if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "failed", time.Now()); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to update build record for %s: %v\n", p.PortDir, err)
+				ctxLogger.Warn("Failed to update build record status: %v", err)
 			}
 
 			return false
@@ -393,7 +392,7 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 
 	// Update build record status to success
 	if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "success", time.Now()); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to update build record for %s: %v\n", p.PortDir, err)
+		ctxLogger.Warn("Failed to update build record status: %v", err)
 	}
 
 	// Update CRC database after successful build
@@ -401,17 +400,17 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	crc, err := builddb.ComputePortCRC(portPath)
 	if err != nil {
 		// Log warning but don't fail the build (CRC update is non-fatal)
-		fmt.Fprintf(os.Stderr, "Warning: Failed to compute CRC for %s: %v\n", p.PortDir, err)
+		ctxLogger.Warn("Failed to compute CRC: %v", err)
 	} else {
 		if err := ctx.buildDB.UpdateCRC(p.PortDir, crc); err != nil {
 			// Log warning but don't fail the build (CRC update is non-fatal)
-			fmt.Fprintf(os.Stderr, "Warning: Failed to update CRC for %s: %v\n", p.PortDir, err)
+			ctxLogger.Warn("Failed to update CRC: %v", err)
 		}
 	}
 
 	// Update package index to point to this successful build
 	if err := ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, p.BuildUUID); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to update package index for %s: %v\n", p.PortDir, err)
+		ctxLogger.Warn("Failed to update package index: %v", err)
 	}
 
 	return true
@@ -460,7 +459,7 @@ func (ctx *BuildContext) waitForDependencies(p *pkg.Package) bool {
 	}
 }
 
-// printProgress prints current build progress
+// printProgress logs current build progress
 func (ctx *BuildContext) printProgress() {
 	ctx.statsMu.Lock()
 	defer ctx.statsMu.Unlock()
@@ -468,8 +467,7 @@ func (ctx *BuildContext) printProgress() {
 	elapsed := time.Since(ctx.startTime)
 	done := ctx.stats.Success + ctx.stats.Failed
 
-	fmt.Printf("\r[%s] Progress: %d/%d (S:%d F:%d) %s elapsed",
-		time.Now().Format("15:04:05"),
+	ctx.logger.Debug("Progress: %d/%d (success: %d, failed: %d) %s elapsed",
 		done, ctx.stats.Total,
 		ctx.stats.Success, ctx.stats.Failed,
 		formatDuration(elapsed))

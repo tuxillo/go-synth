@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"dsynth/config"
+	"dsynth/log"
 	"dsynth/pkg"
 )
 
@@ -18,7 +19,7 @@ type FetchStats struct {
 }
 
 // DoFetchOnly executes fetch-only mode (download distfiles without building)
-func DoFetchOnly(packages []*pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry) (*FetchStats, error) {
+func DoFetchOnly(packages []*pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry, logger log.LibraryLogger) (*FetchStats, error) {
 	stats := &FetchStats{}
 	var statsMu sync.Mutex
 
@@ -29,7 +30,7 @@ func DoFetchOnly(packages []*pkg.Package, cfg *config.Config, registry *pkg.Buil
 		}
 	}
 
-	fmt.Printf("Fetching distfiles for %d packages...\n", stats.Total)
+	logger.Info("Fetching distfiles for %d packages", stats.Total)
 
 	// Use worker pool for parallel fetching
 	numWorkers := cfg.MaxWorkers
@@ -52,10 +53,10 @@ func DoFetchOnly(packages []*pkg.Package, cfg *config.Config, registry *pkg.Buil
 				statsMu.Lock()
 				if success {
 					stats.Success++
-					fmt.Printf("[Worker %d] ✓ %s\n", workerID, p.PortDir)
+					logger.Info("Worker %d: fetched %s", workerID, p.PortDir)
 				} else {
 					stats.Failed++
-					fmt.Printf("[Worker %d] ✗ %s\n", workerID, p.PortDir)
+					logger.Warn("Worker %d: failed to fetch %s", workerID, p.PortDir)
 				}
 				statsMu.Unlock()
 			}

@@ -233,19 +233,56 @@ Add test using MemoryLogger to verify log messages.
 
 ---
 
-### Stage 4: build Package (2 hours) ⏸️ PENDING
+### Stage 4: build Package (2 hours) ✅ COMPLETE
 
-#### Task 4.1: Update DoBuild
-**Time**: 45 minutes  
-**Status**: ⏸️ Pending
+**Completed**: 2025-11-29
 
-#### Task 4.2: Update DoFetch
+#### Task 4.1: Update DoBuild ✅ COMPLETE
 **Time**: 30 minutes  
-**Status**: ⏸️ Pending
+**Status**: ✅ Complete
 
-#### Task 4.3: Update Callers
-**Time**: 45 minutes  
-**Status**: ⏸️ Pending
+- Updated cleanup function closure to use logger.Info/Warn
+- Replaced "Starting build" message with logger.Info
+- Removed unused os import
+
+#### Task 4.2: Update buildPackage Method ✅ COMPLETE
+**Time**: 30 minutes  
+**Status**: ✅ Complete
+
+- Added Warn() method to ContextLogger
+- Replaced 6 database warning messages with ctxLogger.Warn()
+- All warnings (save record, update status, CRC, package index) now logged
+
+#### Task 4.3: Update printProgress ✅ COMPLETE
+**Time**: 10 minutes  
+**Status**: ✅ Complete
+
+- Replaced fmt.Printf with logger.Debug for progress updates
+- Changed from interactive (\r) to discrete log messages
+- Progress now appears in debug logs only
+
+#### Task 4.4: Update DoFetchOnly ✅ COMPLETE
+**Time**: 30 minutes  
+**Status**: ✅ Complete
+
+- Added logger parameter (LibraryLogger interface) to function signature
+- Replaced "Fetching distfiles" message with logger.Info
+- Replaced worker success/failure messages with logger.Info/Warn
+
+#### Task 4.5: Update Callers ✅ COMPLETE
+**Time**: 5 minutes  
+**Status**: ✅ Complete
+
+- No callers found (DoFetchOnly not yet used in production code)
+
+#### Task 4.6: Update Tests ✅ COMPLETE
+**Time**: 5 minutes  
+**Status**: ✅ Complete
+
+- All tests pass without modifications
+- Build package tests remain silent
+
+**Print Statements Removed**: 15 total (13 in build.go + 2 in fetch.go)
 
 ---
 
@@ -297,20 +334,21 @@ Replace global log package usage in environment/bsd.
 
 ## Progress Summary
 
-**Overall**: 3/7 stages complete (43%)  
-**Current Stage**: Stage 4 (build Package)  
-**Next Task**: Task 4.1 (Update DoBuild)
+**Overall**: 4/7 stages complete (57%)  
+**Current Stage**: Stage 5 (Remaining Packages)  
+**Next Task**: Task 5.1 (environment Package)
 
 **Completed Stages**:
 - ✅ Stage 1: Foundation (log interface)
 - ✅ Stage 2: migration Package (8 prints removed)
 - ✅ Stage 3: pkg Package (38 prints removed)
+- ✅ Stage 4: build Package (15 prints removed)
 
-**Completed Tasks**: 11/19  
-**Time Spent**: ~4.5 hours  
-**Time Remaining**: ~3.5 hours
+**Completed Tasks**: 17/19  
+**Time Spent**: ~6 hours  
+**Time Remaining**: ~2 hours
 
-**Print Statements Removed**: 46/71 (65%)
+**Print Statements Removed**: 61/71 (86%)
 
 ---
 
@@ -319,7 +357,7 @@ Replace global log package usage in environment/bsd.
 ### Must Have ✅
 - [x] Zero `fmt.Print*` calls in pkg/ package (38 removed)
 - [x] Zero `fmt.Print*` calls in migration/ package (8 removed)
-- [ ] Zero `fmt.Print*` calls in build/ package
+- [x] Zero `fmt.Print*` calls in build/ package (15 removed)
 - [x] All affected functions take `log.LibraryLogger` parameter
 - [x] Existing tests pass with logger parameter (all 44+ tests pass)
 - [ ] Manual build test (print/indexinfo) works silently

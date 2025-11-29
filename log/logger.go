@@ -409,3 +409,20 @@ func (cl *ContextLogger) Debug(format string, args ...interface{}) {
 	cl.logger.debugFile.WriteString(fullMsg)
 	cl.logger.debugFile.Sync()
 }
+
+// Warn logs a warning message with context
+func (cl *ContextLogger) Warn(format string, args ...interface{}) {
+	prefix := cl.formatPrefix()
+	cl.logger.mu.Lock()
+	defer cl.logger.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
+	fullMsg := fmt.Sprintf("[%s] %sWARN: %s\n", timestamp, prefix, msg)
+
+	cl.logger.resultsFile.WriteString(fullMsg)
+	cl.logger.debugFile.WriteString(fullMsg)
+
+	cl.logger.resultsFile.Sync()
+	cl.logger.debugFile.Sync()
+}
