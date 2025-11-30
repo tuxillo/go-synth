@@ -410,8 +410,35 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 
 	// Execute command and measure duration
 	startTime := time.Now()
-	err := execCmd.Run()
+
+	// Start the process (don't wait yet)
+	if err := execCmd.Start(); err != nil {
+		// Failed to start the process
+		return &environment.ExecResult{ExitCode: -1, Duration: 0}, &environment.ErrExecutionFailed{
+			Op:      "start",
+			Command: cmd.Command,
+			Err:     err,
+		}
+	}
+
+	// Track PID for cleanup (allows killing on signal)
+	e.pidMu.Lock()
+	e.activePIDs = append(e.activePIDs, execCmd.Process.Pid)
+	e.pidMu.Unlock()
+
+	// Wait for process to finish
+	err := execCmd.Wait()
 	duration := time.Since(startTime)
+
+	// Remove PID from tracking (process completed)
+	e.pidMu.Lock()
+	for i, pid := range e.activePIDs {
+		if pid == execCmd.Process.Pid {
+			e.activePIDs = append(e.activePIDs[:i], e.activePIDs[i+1:]...)
+			break
+		}
+	}
+	e.pidMu.Unlock()
 
 	// Build result
 	result := &environment.ExecResult{
@@ -516,6 +543,10 @@ func (e *BSDEnvironment) Cleanup() error {
 	}
 
 	stdlog.Printf("[Cleanup] Starting cleanup for environment: %s", e.baseDir)
+
+	// Kill any active processes before unmounting
+	// This prevents "device busy" errors from stuck child processes
+	e.killActiveProcesses()
 
 	// Track unmount failures for logging
 	var unmountFailures []string

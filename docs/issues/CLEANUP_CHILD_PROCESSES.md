@@ -226,10 +226,171 @@ Combine both:
 
 ---
 
+## Implementation Plan
+
+**Decision**: Proceeding with **Option 3 (Hybrid Approach)** - Context cancellation + Process tracking
+
+**Total Estimated Time**: 9.5 hours  
+**Status**: 🟡 In Progress
+
+### Task Breakdown
+
+#### Task 1: Add Cancellable Context to BuildContext (2 hours)
+**Status**: ✅ Completed  
+**Files**: `build/build.go`  
+**Description**: Replace `context.Background()` with cancellable context, update cleanup closure to cancel context before unmounting.
+
+**Changes**:
+1. ✅ Add `cancel context.CancelFunc` field to `BuildContext` struct
+2. ✅ Create cancellable context in `DoBuild()`: `buildCtx, cancel := context.WithCancel(context.Background())`
+3. ✅ Update cleanup closure to call `cancel()` before `ctx.wg.Wait()`
+4. ✅ Ensure cancel is called on error paths during setup
+
+**Rationale**: Provides graceful shutdown mechanism that workers can detect
+
+---
+
+#### Task 2: Check Context Cancellation in Worker Loop (1.5 hours)
+**Status**: ✅ Completed  
+**Depends on**: Task 1  
+**Files**: `build/build.go`  
+**Description**: Update `workerLoop()` to check for context cancellation using `select` statement.
+
+**Changes**:
+1. ✅ Replace `for p := range ctx.queue` with `select` checking `ctx.ctx.Done()` and channel
+2. ✅ Exit loop gracefully when context is cancelled
+3. ✅ Log worker shutdown for debugging
+
+**Rationale**: Allows workers to exit gracefully when context is cancelled
+
+---
+
+#### Task 3: Pass Context to Execute Commands (2 hours)
+**Status**: ✅ Completed  
+**Depends on**: Task 1  
+**Files**: `build/phases.go`, `build/build.go`  
+**Description**: Ensure BuildContext's cancellable context propagates to `env.Execute()` calls.
+
+**Changes**:
+1. ✅ Verify `executePhase()` receives correct context parameter
+2. ✅ Ensure all `env.Execute()` calls use the passed context
+3. ✅ Context will propagate to `exec.CommandContext()` in `BSDEnvironment.Execute()`
+
+**Rationale**: Ensures running commands are interrupted when context is cancelled
+
+---
+
+#### Task 4: Add Process Tracking to BSDEnvironment (2.5 hours)
+**Status**: ✅ Completed  
+**Files**: `environment/bsd/bsd.go`, `environment/bsd/mounts.go`  
+**Description**: Track spawned processes and kill them in `Cleanup()` before unmounting.
+
+**Changes**:
+1. ✅ Add `activePIDs []int` and `pidMu sync.Mutex` fields to `BSDEnvironment`
+2. ✅ Track process PID in `Execute()` after `execCmd.Start()`
+3. ✅ Remove PID from tracking after `execCmd.Wait()`
+4. ✅ Add `killActiveProcesses()` helper method in `mounts.go:338-397`
+5. ✅ Call `killActiveProcesses()` at start of `Cleanup()` before unmounting (`bsd.go:549`)
+6. ✅ Process group termination: SIGTERM (graceful, 2s wait) → SIGKILL (forceful)
+
+**Rationale**: Provides forceful termination fallback for processes that don't respond to context cancellation
+
+**Implementation Details**:
+- `killActiveProcesses()` method added to `environment/bsd/mounts.go:338-397`
+- Uses process group signaling with negative PIDs (`syscall.Kill(-pid, signal)`)
+- Two-phase approach: SIGTERM → 2s wait → SIGKILL
+- Thread-safe PID list access with mutex
+- Integrated into `Cleanup()` flow before unmounting
+
+---
+
+#### Task 5: Verify Signal Handler Integration (0.5 hours)
+**Status**: ⚪ Pending  
+**Depends on**: Tasks 1-4  
+**Files**: `main.go`  
+**Description**: Verify signal handler flow with new cleanup behavior.
+
+**Changes**:
+1. Review signal handler code (no changes needed)
+2. Verify cleanup closure captures BuildContext correctly
+3. Ensure flow is: signal → get cleanup → call cleanup (cancel → wait → kill → unmount) → close → exit
+
+**Rationale**: Ensure all pieces work together correctly
+
+---
+
+#### Task 6: VM Testing & Validation (2 hours)
+**Status**: ⚪ Pending  
+**Depends on**: Tasks 1-5  
+**Files**: VM environment  
+**Description**: Test on DragonFlyBSD VM with real builds and SIGINT.
+
+**Test Procedure**:
+1. Build dsynth: `make vm-build`
+2. Start long build: `./dsynth build devel/gmake`
+3. Wait 10 seconds for build to start
+4. Send SIGINT: `kill -INT <pid>` or Ctrl+C
+5. Verify:
+   - "Stopping build workers..." message
+   - "Waiting for workers to finish..." message
+   - Workers exit within 5 seconds
+   - No "device busy" errors
+   - `mount | grep /build/SL` returns empty
+   - `ps aux | grep make` returns empty
+
+**Success Criteria**:
+- ✅ Workers exit gracefully within 5 seconds
+- ✅ All child processes terminated before unmount
+- ✅ All mounts successfully unmounted
+- ✅ No "device busy" errors
+- ✅ Base directories removed cleanly
+
+**Rationale**: Only way to validate the fix works in real environment
+
+---
+
+### Deferred Tasks (Optional)
+
+- **Unit Tests** (2h): Test context cancellation and cleanup logic
+- **Integration Tests** (2h): Automated signal handling tests (covered by VM testing)
+- **Documentation Updates** (1h): Update DEVELOPMENT.md, environment/README.md after validation
+
+---
+
+## Implementation Notes
+
+### Why Hybrid Approach?
+
+1. **Context Cancellation** (graceful):
+   - Idiomatic Go pattern
+   - Respects ongoing work (finish current phase)
+   - Clean shutdown for cooperative processes
+
+2. **Process Tracking** (forceful):
+   - Fallback for stuck/unresponsive processes
+   - Guarantees cleanup even with misbehaving builds
+   - Platform-specific but necessary for BSD mounts
+
+3. **Together**:
+   - Best of both worlds: try graceful, fallback to forceful
+   - Robust against all failure modes
+   - Users see fast response to Ctrl+C
+
+### Key Decisions
+
+- **Context cancellation first**: Give workers 5 seconds to finish current operation
+- **Process group killing**: SIGTERM (-PID) kills process tree, not just parent
+- **Timing**: 2s for SIGTERM, 1s for SIGKILL (total 3s max delay)
+- **Fail-safe**: Even if process kill fails, continue with unmount retries
+
+---
+
 **Next Steps:**
-1. Decide on solution approach (Option 3 recommended)
-2. Implement context cancellation in BuildContext
-3. Add process tracking to BSDEnvironment
-4. Update cleanup function to cancel context → wait → unmount
-5. Add tests for graceful shutdown
-6. Test on VM with SIGINT during active build
+1. ✅ Document implementation plan (this section)
+2. ⚪ Create OpenCode todo list
+3. ⚪ Implement Task 1 (cancellable context)
+4. ⚪ Implement Task 2 (worker loop)
+5. ⚪ Implement Task 3 (pass context)
+6. ⚪ Implement Task 4 (process tracking)
+7. ⚪ Verify Task 5 (signal handler)
+8. ⚪ Validate Task 6 (VM testing)

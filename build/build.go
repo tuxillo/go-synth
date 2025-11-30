@@ -96,8 +96,12 @@ type Worker struct {
 // BuildContext holds the build orchestration state.
 // It manages worker pools, dependency tracking, and integrates with builddb
 // for CRC-based incremental builds and build record lifecycle tracking.
+//
+// The context field supports cancellation for graceful shutdown when signals
+// are received (SIGINT, SIGTERM). Workers check ctx.Done() to exit cleanly.
 type BuildContext struct {
 	ctx       context.Context
+	cancel    context.CancelFunc // Cancel function for stopping build gracefully
 	cfg       *config.Config
 	logger    *log.Logger
 	registry  *pkg.BuildStateRegistry
@@ -135,8 +139,13 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Get build order (topological sort)
 	buildOrder := pkg.GetBuildOrder(packages, logger)
 
+	// Create cancellable context for graceful shutdown
+	// When cancelled (e.g., via signal handler), workers will exit their loops
+	buildCtx, cancel := context.WithCancel(context.Background())
+
 	ctx := &BuildContext{
-		ctx:       context.Background(),
+		ctx:       buildCtx,
+		cancel:    cancel,
 		cfg:       cfg,
 		logger:    logger,
 		registry:  pkg.NewBuildStateRegistry(),
@@ -149,7 +158,24 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Note: ctx.workers will be populated after this function is created,
 	// but the closure captures the ctx pointer, so it will see the workers
 	// when cleanup is actually invoked
+	//
+	// Cleanup flow:
+	//  1. Cancel context to signal workers to stop
+	//  2. Wait for workers to exit their loops (respects ongoing work)
+	//  3. Cleanup worker environments (unmount, remove directories)
 	cleanup := func() {
+		logger.Info("Stopping build workers...")
+
+		// Cancel context to signal all workers to stop
+		if ctx.cancel != nil {
+			ctx.cancel()
+		}
+
+		logger.Info("Waiting for workers to finish current operations...")
+		// Wait for all worker goroutines to exit
+		// Workers will see ctx.Done() and exit gracefully
+		ctx.wg.Wait()
+
 		logger.Info("Cleaning up worker environments (total workers: %d)", len(ctx.workers))
 		for i, worker := range ctx.workers {
 			if worker != nil && worker.Env != nil {
@@ -278,45 +304,69 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	return &ctx.stats, cleanup, nil
 }
 
-// workerLoop is the main loop for a build worker
+// workerLoop is the main loop for a build worker.
+//
+// The loop processes packages from the queue until either:
+//   - The queue is closed (normal shutdown)
+//   - The context is cancelled (signal-triggered shutdown)
+//
+// When context is cancelled, the worker exits immediately without processing
+// more packages. Any ongoing buildPackage() call will be interrupted via
+// context propagation to env.Execute().
 func (ctx *BuildContext) workerLoop(worker *Worker) {
 	defer ctx.wg.Done()
 
-	for p := range ctx.queue {
-		worker.mu.Lock()
-		worker.Current = p
-		worker.Status = "building"
-		worker.StartTime = time.Now()
-		worker.mu.Unlock()
+	for {
+		// Check for cancellation before blocking on channel
+		// This ensures workers exit promptly when signaled
+		select {
+		case <-ctx.ctx.Done():
+			// Context cancelled (SIGINT, SIGTERM, etc.)
+			ctx.logger.Info("Worker %d: stopping due to context cancellation", worker.ID)
+			return
 
-		// Mark as running
-		ctx.registry.AddFlags(p, pkg.PkgFRunning)
+		case p, ok := <-ctx.queue:
+			if !ok {
+				// Channel closed, normal shutdown
+				ctx.logger.Debug("Worker %d: queue closed, exiting", worker.ID)
+				return
+			}
 
-		// Build the package
-		success := ctx.buildPackage(worker, p)
+			worker.mu.Lock()
+			worker.Current = p
+			worker.Status = "building"
+			worker.StartTime = time.Now()
+			worker.mu.Unlock()
 
-		// Update stats
-		ctx.statsMu.Lock()
-		if success {
-			ctx.stats.Success++
-			ctx.registry.AddFlags(p, pkg.PkgFSuccess)
-			ctx.registry.ClearFlags(p, pkg.PkgFRunning)
-			ctx.logger.Success(p.PortDir)
-		} else {
-			ctx.stats.Failed++
-			ctx.registry.AddFlags(p, pkg.PkgFFailed)
-			ctx.registry.ClearFlags(p, pkg.PkgFRunning)
-			ctx.logger.Failed(p.PortDir, ctx.registry.GetLastPhase(p))
+			// Mark as running
+			ctx.registry.AddFlags(p, pkg.PkgFRunning)
+
+			// Build the package (context will propagate to env.Execute())
+			success := ctx.buildPackage(worker, p)
+
+			// Update stats
+			ctx.statsMu.Lock()
+			if success {
+				ctx.stats.Success++
+				ctx.registry.AddFlags(p, pkg.PkgFSuccess)
+				ctx.registry.ClearFlags(p, pkg.PkgFRunning)
+				ctx.logger.Success(p.PortDir)
+			} else {
+				ctx.stats.Failed++
+				ctx.registry.AddFlags(p, pkg.PkgFFailed)
+				ctx.registry.ClearFlags(p, pkg.PkgFRunning)
+				ctx.logger.Failed(p.PortDir, ctx.registry.GetLastPhase(p))
+			}
+			ctx.statsMu.Unlock()
+
+			worker.mu.Lock()
+			worker.Current = nil
+			worker.Status = "idle"
+			worker.mu.Unlock()
+
+			// Print progress
+			ctx.printProgress()
 		}
-		ctx.statsMu.Unlock()
-
-		worker.mu.Lock()
-		worker.Current = nil
-		worker.Status = "idle"
-		worker.mu.Unlock()
-
-		// Print progress
-		ctx.printProgress()
 	}
 }
 
