@@ -1233,12 +1233,15 @@ Rationale: Package should contain only metadata, not build-time state
 ### ⚠️ Known Issues
 
 **Architectural/Design** (Critical for Library Reuse):
-- **stdout/stderr in library packages** (pkg, build, environment, ~~migration~~, mount, util)
-  - Context: Libraries print directly to terminal instead of using logger
-  - Impact: Blocks REST API, GUI, non-CLI usage (**Phase 5 blocker**)
-  - Status: 🔄 **Active Refactoring** - See [REFACTOR_ISSUE_FIXES.md](docs/refactoring/REFACTOR_ISSUE_FIXES.md)
-  - Progress: Stage 2/7 ✅ **COMPLETE** (migration package clean, 8/71 prints removed) - Stage 3 next
-  - Reference: INCONSISTENCIES.md Pattern 1 (5 packages remaining)
+- ✅ ~~**stdout/stderr in library packages**~~ - **RESOLVED** (2025-11-30)
+  - Context: Libraries previously printed directly to terminal
+  - Solution: Added LibraryLogger interface to all library functions
+  - Status: ✅ **COMPLETE** - Stage 7/7 finished (2025-11-29/30)
+  - Progress: All 85 print statements removed (120% of estimate)
+  - Packages: migration ✅, pkg ✅, build ✅, environment ✅, util ✅, mount ✅ (deleted)
+  - Impact: **Phase 5 REST API now unblocked** 🎉
+  - Documentation: [REFACTOR_ISSUE_FIXES.md](docs/refactoring/REFACTOR_ISSUE_FIXES.md), [INCONSISTENCIES.md](INCONSISTENCIES.md) Pattern 1
+  - Commits: c9c9153 → e4589a7 (6 stage commits), 8ad1bc0 (docs)
 - **Split CRC responsibility** between pkg and build
   - Context: "Needs build" logic duplicated in pkg.MarkPackagesNeedingBuild and build.DoBuild
   - Impact: Harder to maintain, risk of drift, wasted CRC computation
@@ -1307,11 +1310,12 @@ Rationale: Package should contain only metadata, not build-time state
 ### ✨ Planned Features
 
 **High Priority** (Blockers for Phase 5):
-- [ ] **[all]** Remove stdout/stderr from library packages
+- [x] ~~**[all]** Remove stdout/stderr from library packages~~ ✅ **COMPLETE** (2025-11-30)
   - Benefit: Enables Phase 5 REST API, GUI frontends
-  - Effort: ~8 hours (6 packages affected)
-  - **Blocker for**: Phase 5 REST API
-  - Reference: INCONSISTENCIES.md Pattern 1
+  - Effort: 8 hours actual (6 packages affected)
+  - Status: All 85 print statements removed, LibraryLogger interface implemented
+  - **Phase 5 REST API now unblocked** 🎉
+  - Reference: INCONSISTENCIES.md Pattern 1 (marked RESOLVED)
 - [ ] **[main.go]** Extract service layer from main.go
   - Benefit: Reusable functions for API/other frontends
   - Effort: ~4 hours
