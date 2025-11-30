@@ -15,13 +15,15 @@ This document tracks inconsistencies, design problems, and notable issues discov
 
 These patterns affect multiple packages and represent the highest-priority architectural concerns:
 
-### Pattern 1: Library Functions Write to stdout/stderr 🔴 HIGH
+### Pattern 1: Library Functions Write to stdout/stderr ✅ RESOLVED
 
 **Affects**: pkg/, build/, environment/, migration/, mount/, util/  
-**Priority**: HIGH - **Blocks Phase 5 REST API**  
+**Priority**: ~~HIGH~~ **COMPLETED** - Phase 5 REST API unblocked  
 **Items**: pkg/#2, build/#5, environment/#3, migration/#1, mount/#2, util/#2  
-**Impact**: Makes libraries unusable in non-CLI contexts (API, GUI, services)  
-**Solution**: Add logger parameter to all library functions (~8h effort)
+**Impact**: ~~Makes libraries unusable~~ Libraries now reusable in non-CLI contexts (API, GUI, services)  
+**Solution**: ✅ Added LibraryLogger interface to all library functions (8h actual effort)  
+**Status**: All 85 print statements removed across 6 packages (11/29/2025)  
+**See**: [docs/refactoring/REFACTOR_ISSUE_FIXES.md](docs/refactoring/REFACTOR_ISSUE_FIXES.md) for implementation details
 
 ### Pattern 2: Split Responsibilities 🟠 MEDIUM-HIGH
 
