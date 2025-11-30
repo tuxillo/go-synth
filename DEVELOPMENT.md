@@ -552,12 +552,23 @@ type ExecCommand struct {
 - Fail-safe mount error handling
 - Auto-registered backends ("bsd", "mock")
 
-**Critical Bug Fixed** (2025-11-28):
-- **Context timeout handling**: Execute() was not respecting context timeouts properly
-- **Root cause**: Error handling checked ExitError before context state
-- **Fix**: Reordered error checks to verify context.Err() FIRST (environment/bsd/bsd.go:421-448)
-- **Impact**: Now properly handles Ctrl+C interrupts and command timeouts
-- **Discovered by**: Integration test TestIntegration_ExecuteTimeout
+**Critical Bugs Fixed**:
+
+1. **Context timeout handling** (2025-11-28):
+   - **Root cause**: Execute() error handling checked ExitError before context state
+   - **Fix**: Reordered error checks to verify context.Err() FIRST (environment/bsd/bsd.go:421-448)
+   - **Impact**: Now properly handles Ctrl+C interrupts and command timeouts
+   - **Discovered by**: Integration test TestIntegration_ExecuteTimeout
+
+2. **Environment abstraction violation in cleanup** (2025-11-30, commit a88ac9f):
+   - **Root cause**: Signal handler called service.Cleanup() which used raw exec.Command()
+   - **Fix**: Return cleanup function in BuildResult, signal handler calls it properly
+   - **Changes**:
+     - Active workers: Use worker.Env.Cleanup() (respects abstraction)
+     - Stale workers: Use exec.Command() (acceptable, no Environment exists)
+     - Renamed service.Cleanup() → CleanupStaleWorkers() for clarity
+   - **Impact**: Signal handling now properly uses Environment.Cleanup() abstraction
+   - **Files modified**: main.go, service/build.go, service/cleanup.go, service/service.go, service/types.go
 
 ### 📖 Documentation
 - **[Phase 4 Overview](docs/design/PHASE_4_ENVIRONMENT.md)** - Complete specification (450 lines)
