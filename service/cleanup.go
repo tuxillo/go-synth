@@ -39,8 +39,9 @@ func (s *Service) Cleanup(opts CleanupOptions) (*CleanupResult, error) {
 			continue
 		}
 
-		// Worker directories match pattern "SL.*"
-		if strings.HasPrefix(entry.Name(), "SL.") {
+		// Worker directories match pattern "SL\d\d" (e.g., SL00, SL01, SL02)
+		// Note: Workers are created with fmt.Sprintf("SL%02d", workerID) in environment/bsd/bsd.go
+		if strings.HasPrefix(entry.Name(), "SL") && len(entry.Name()) == 4 {
 			workersFound++
 			workerPath := filepath.Join(baseDir, entry.Name())
 
@@ -48,16 +49,20 @@ func (s *Service) Cleanup(opts CleanupOptions) (*CleanupResult, error) {
 			if err := s.cleanupWorkerMounts(workerPath); err != nil {
 				result.Errors = append(result.Errors,
 					fmt.Errorf("failed to cleanup %s: %w", entry.Name(), err))
-				s.logger.Warn("Failed to cleanup %s: %v", entry.Name(), err)
+				if s.logger != nil {
+					s.logger.Warn("Failed to cleanup %s: %v", entry.Name(), err)
+				}
 				continue
 			}
 
 			result.WorkersCleaned++
-			s.logger.Info("Cleaned up %s", entry.Name())
+			if s.logger != nil {
+				s.logger.Info("Cleaned up %s", entry.Name())
+			}
 		}
 	}
 
-	if workersFound == 0 {
+	if workersFound == 0 && s.logger != nil {
 		s.logger.Info("No worker directories found")
 	}
 
@@ -66,27 +71,109 @@ func (s *Service) Cleanup(opts CleanupOptions) (*CleanupResult, error) {
 
 // cleanupWorkerMounts attempts to unmount and remove a worker directory
 func (s *Service) cleanupWorkerMounts(workerPath string) error {
-	// Common mount points in worker directories
-	commonMounts := []string{
-		"dev",
-		"proc",
-		"distfiles",
-		"packages",
-		"ccache",
-		"logs",
-		"options",
-		"construction",
+	// Get all active mounts for this worker by parsing mount output
+	// This is more reliable than hardcoding mount points since the environment
+	// package may add/remove/reorder mounts over time
+	cmd := exec.Command("mount")
+	output, err := cmd.Output()
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("Failed to get mount list: %v", err)
+		}
+		// Continue with fallback cleanup
 	}
 
-	// Try to unmount in reverse order
-	for i := len(commonMounts) - 1; i >= 0; i-- {
-		mountPoint := filepath.Join(workerPath, commonMounts[i])
-		// Ignore errors - mount might not exist
+	// Find all mounts under workerPath (must match exactly or be subdirectory)
+	var mountPoints []string
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			// Mount format: "device on /path (type, options)"
+			parts := strings.Split(line, " on ")
+			if len(parts) >= 2 {
+				pathParts := strings.Split(parts[1], " (")
+				if len(pathParts) >= 1 {
+					mountPath := pathParts[0]
+					// Check if this mount is under our worker directory
+					if strings.HasPrefix(mountPath, workerPath+"/") || mountPath == workerPath {
+						mountPoints = append(mountPoints, mountPath)
+					}
+				}
+			}
+		}
+	}
+
+	// Sort mount points by depth (deepest first) to unmount in correct order
+	// This is critical - must unmount nested mounts before parent mounts
+	sortByDepthDescending(mountPoints)
+
+	// Unmount all found mounts
+	for _, mp := range mountPoints {
+		if s.logger != nil {
+			s.logger.Debug("Unmounting %s", mp)
+		}
+		cmd := exec.Command("umount", "-f", mp)
+		if err := cmd.Run(); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("Failed to unmount %s: %v", mp, err)
+			}
+			// Continue trying other mounts
+		}
+	}
+
+	// Also try common mount points as fallback (in case mount parsing failed)
+	commonMounts := []string{
+		"usr/local",
+		"construction",
+		"options",
+		"packages",
+		"distfiles",
+		"xports",
+		"usr/games",
+		"usr/share",
+		"usr/sbin",
+		"usr/libexec",
+		"usr/libdata",
+		"usr/lib",
+		"usr/include",
+		"usr/bin",
+		"libexec",
+		"lib",
+		"sbin",
+		"bin",
+		"proc",
+		"dev",
+		"boot",
+		"", // The base directory itself (tmpfs)
+	}
+
+	for _, mp := range commonMounts {
+		mountPoint := filepath.Join(workerPath, mp)
 		exec.Command("umount", "-f", mountPoint).Run()
+		// Ignore errors - mount might not exist
 	}
 
 	// Try to remove the directory
-	return os.RemoveAll(workerPath)
+	if err := os.RemoveAll(workerPath); err != nil {
+		return fmt.Errorf("failed to remove directory: %w", err)
+	}
+
+	return nil
+}
+
+// sortByDepthDescending sorts paths by depth (deepest first)
+// This ensures nested mounts are unmounted before their parents
+func sortByDepthDescending(paths []string) {
+	// Simple bubble sort by path depth (number of slashes)
+	for i := 0; i < len(paths); i++ {
+		for j := i + 1; j < len(paths); j++ {
+			depthI := strings.Count(paths[i], "/")
+			depthJ := strings.Count(paths[j], "/")
+			if depthJ > depthI {
+				paths[i], paths[j] = paths[j], paths[i]
+			}
+		}
+	}
 }
 
 // GetWorkerDirectories returns a list of active worker directories.
@@ -99,7 +186,8 @@ func (s *Service) GetWorkerDirectories() ([]string, error) {
 
 	workers := make([]string, 0)
 	for _, entry := range entries {
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), "SL.") {
+		// Worker directories match pattern "SL\d\d" (e.g., SL00, SL01, SL02)
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), "SL") && len(entry.Name()) == 4 {
 			workers = append(workers, filepath.Join(baseDir, entry.Name()))
 		}
 	}

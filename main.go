@@ -587,7 +587,19 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	go func() {
 		sig := <-sigChan
 		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
-		svc.Close()
+
+		// Cleanup any active workers (this handles both in-flight builds and stale workers)
+		// Use Force option to ensure all mounts are unmounted
+		result, err := svc.Cleanup(service.CleanupOptions{Force: true})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cleanup error: %v\n", err)
+		} else if result != nil && result.WorkersCleaned > 0 {
+			fmt.Fprintf(os.Stderr, "Cleaned up %d worker(s)\n", result.WorkersCleaned)
+		}
+
+		// Close service (DB, logger, etc.)
+		_ = svc.Close()
+
 		os.Exit(1)
 	}()
 

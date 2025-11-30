@@ -1579,6 +1579,103 @@ See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for features deferred bey
 
 ---
 
+## 🐛 Known Issues
+
+### Critical Issues
+
+#### Issue #1: Signal Handler Cleanup Failure (CRITICAL)
+**Status**: 🔴 Open - Blocks production use  
+**Discovered**: 2025-11-30  
+**Affects**: All builds terminated with Ctrl+C or signals
+
+**Problem**:
+When a build is interrupted with Ctrl+C (or SIGTERM/SIGHUP), the signal handler calls `os.Exit(1)` which bypasses deferred cleanup functions. This leaves worker mount points active (24+ mounts per worker), polluting the system.
+
+**Evidence**:
+```bash
+# After Ctrl+C during build
+$ mount | grep SL00
+tmpfs on /build/synth/build/SL00 (tmpfs, local)
+devfs on /build/synth/build/SL00/dev (devfs, local)
+... (22 more mounts still active)
+```
+
+**Root Causes**:
+1. `main.go:590` - Signal handler calls `os.Exit(1)` which bypasses deferred functions
+2. `service/build.go:67` - `defer cleanup()` never runs when process exits
+3. `service/cleanup.go:43` - Wrong pattern match: looks for `"SL."` but workers are `"SL00"`, `"SL01"`
+
+**Impact**: 
+- System accumulates unmounted filesystems
+- Manual cleanup doesn't work due to pattern mismatch
+- Requires manual `umount -f` commands or system reboot
+
+**Solution Plan**:
+1. Store cleanup function reference accessible to signal handler
+2. Call cleanup BEFORE `os.Exit(1)`
+3. Fix worker directory pattern from `"SL."` to `"SL"`
+4. Add comprehensive cleanup tests
+
+**Related Files**:
+- `main.go` (signal handler)
+- `service/build.go` (cleanup tracking)
+- `service/cleanup.go` (pattern match fix)
+- `environment/bsd/bsd.go` (worker naming)
+
+---
+
+#### Issue #2: Missing ports-mgmt/pkg Bootstrap (CRITICAL)
+**Status**: 🔴 Open - Blocks most package builds  
+**Discovered**: 2025-11-30  
+**Affects**: All packages with dependencies (99% of ports)
+
+**Problem**:
+ports-mgmt/pkg is required to CREATE package files, but we try to build it like any other port, creating a chicken-and-egg problem. Almost all ports depend on pkg, so most builds will fail.
+
+**Evidence**:
+```bash
+$ cd /usr/dports && make -C misc/help2man build-depends-list
+/usr/dports/ports-mgmt/pkg   # ← ALWAYS first dependency
+/usr/dports/devel/p5-Locale-gettext
+...
+```
+
+**Root Cause**:
+Original C dsynth has special handling (`GetPkgPkg()` function, `PKGF_PKGPKG` flag) to build pkg first, before workers start. Our Go implementation is missing this.
+
+**Documented In**:
+```
+docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md:
+| `GetPkgPkg()` | pkglist.c:586 | ❌ None | - | ⚠️ MISSING (pkg bootstrap) |
+| `PKGF_PKGPKG` | ❌ | ⚠️ | Missing (pkg bootstrap) |
+```
+
+**Impact**:
+- Cannot build most ports (those with dependencies)
+- Build fails early in dependency resolution
+- Blocks end-to-end testing of build system
+
+**Solution Options**:
+1. **Option A** (Quick): Use system `/usr/sbin/pkg` to bootstrap pkg package
+2. **Option B** (Proper): Add `PkgFPkgPkg` flag and build pkg before starting workers
+3. **Option C** (Simplest): Always install pkg from system before builds
+
+**Recommended**: Start with Option A for immediate unblocking, implement Option B properly in Phase 5.
+
+**Related Files**:
+- `pkg/flags.go` (add PkgFPkgPkg flag)
+- `pkg/pkg.go` (detection logic)
+- `build/build.go` (pre-build pkg handling)
+- `docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md` (original analysis)
+
+---
+
+### Non-Critical Issues
+
+None currently tracked.
+
+---
+
 ## ❓ Getting Help
 
 - **Issues**: Check existing GitHub issues or create new ones
