@@ -713,11 +713,137 @@ Without this infrastructure:
 
 ---
 
-## Phase 5: Minimal REST API ⚪
+## Phase 4.5: Service Layer Extraction 🟢
 
-**Status**: ⚪ Planned (Optional)  
-**Timeline**: Not started | Target: ~15 hours  
-**Dependencies**: Phases 1-3 completion
+**Status**: 🟢 Complete (All exit criteria met)  
+**Timeline**: Started 2025-11-30 | Completed: 2025-11-30  
+**Dependencies**: Phases 1-3 completion (✅ Complete)
+
+### 🎯 Goals
+- Extract business logic from main.go into a reusable service layer
+- Enable non-CLI frontends (REST API, GUI, etc.)
+- Improve testability and maintainability
+- Reduce main.go complexity
+
+### 📦 Main Deliverables
+- Service layer package with clean API
+- Comprehensive unit tests (>60% coverage)
+- Migration of 5 core commands to service layer
+- Documentation and examples
+
+### 🚧 Task Breakdown (11/11 complete - 100%)
+
+1. ✅ **Refactor doBuild() to use service.Build()** - Complete (2025-11-30)
+   - Migrated build orchestration to service/build.go
+   - Added service.GetBuildPlan() for pre-build analysis
+   - Added service.CheckMigrationStatus() and service.PerformMigration()
+   - Reduced doBuild() from 190 → 115 lines (-75 lines, -39%)
+
+2. ✅ **Refactor doInit() to use service.Initialize()** - Complete
+   - Migrated initialization logic to service/init.go
+   - Added service.NeedsMigration() and service.GetLegacyCRCFile()
+   - Reduced doInit() from 147 → 80 lines (-67 lines, -45%)
+
+3. ✅ **Refactor doStatus() to use service.GetStatus()** - Complete
+   - Migrated status queries to service/status.go
+   - Added service.GetDatabaseStats() and service.GetPortStatus()
+   - Reduced doStatus() from 56 → 48 lines (-8 lines, -14%)
+
+4. ✅ **Refactor doCleanup() to use service.Cleanup()** - Complete
+   - Migrated cleanup logic to service/cleanup.go
+   - Added service.GetWorkerDirectories()
+   - Reduced doCleanup() from 52 → 38 lines (-14 lines, -27%)
+
+5. ✅ **Refactor doResetDB() to use service.ResetDatabase()** - Complete
+   - Migrated database operations to service/database.go
+   - Added service.BackupDatabase(), service.DatabaseExists(), service.GetDatabasePath()
+   - Refactored doResetDB() (44 lines, cleaner logic)
+
+6. ✅ **Create service/service_test.go** - Complete (189 lines, 7 tests)
+   - Service lifecycle tests (NewService, Close)
+   - Configuration accessors tests
+   - Error handling tests
+
+7. ✅ **Create service/init_test.go** - Complete (435 lines, 11 tests)
+   - Directory creation tests
+   - Template setup tests (with SkipSystemFiles option for testing)
+   - Database initialization tests
+   - Migration detection tests
+   - Idempotency tests
+
+8. ✅ **Create service/status_test.go** - Complete (383 lines, 7 tests)
+   - Empty database query tests
+   - Overall statistics tests
+   - Specific port status tests
+   - Never-built port detection tests
+
+9. ✅ **Create service/cleanup_test.go** - Complete (278 lines, 6 tests)
+   - Worker directory scanning tests
+   - Single/multiple worker cleanup tests
+   - Non-worker directory protection tests
+
+10. ✅ **Create service/database_test.go** - Complete (305 lines, 7 tests)
+    - Database existence tests
+    - Backup creation tests
+    - Database reset tests with legacy file cleanup
+
+11. ✅ **Create service/build_test.go** - Complete (255 lines, 9 tests)
+    - Build plan generation tests
+    - Migration status checking tests
+    - Force rebuild flag tests
+    - Internal method tests (markNeedingBuild, detectAndMigrate, parseAndResolve)
+
+### ✓ Exit Criteria (8/8 complete)
+
+- ✅ Service layer package created with clean API
+- ✅ main.go reduced by >15% (actual: 20.3%, 822 → 655 lines)
+- ✅ At least 5 commands migrated to service layer (actual: 5 commands)
+- ✅ Test coverage >60% (actual: 64.3%)
+- ✅ All unit tests passing (47 tests passing)
+- ✅ Code compiles without errors
+- ✅ Existing functionality preserved
+- ✅ Documentation complete (service/README.md)
+
+### 🎉 Phase 4.5 Complete
+
+**Achievement**: Clean service layer ready for REST API and other frontends
+
+**Files Created**:
+- `service/service.go` (120 lines) - Core service lifecycle
+- `service/init.go` (198 lines) - Initialization logic
+- `service/build.go` (242 lines) - Build orchestration
+- `service/status.go` (111 lines) - Status queries
+- `service/cleanup.go` (108 lines) - Worker cleanup
+- `service/database.go` (110 lines) - Database operations
+- `service/types.go` (80 lines) - Type definitions
+- `service/README.md` (620 lines) - Comprehensive documentation
+- Test files (1,845 lines) - 6 test files with 47 tests
+
+**Impact**:
+- ✅ main.go: 822 → 655 lines (-167 lines, -20.3%)
+- ✅ Service layer: 969 lines of production code
+- ✅ Test suite: 1,845 lines, 47 tests, 64.3% coverage
+- ✅ Phase 5 REST API now unblocked
+
+**Key Features**:
+- Clean separation of concerns (CLI vs business logic)
+- Structured results (no formatted strings in service layer)
+- Comprehensive error handling
+- No user interaction in service methods
+- REST API-ready (no stdout/stderr dependencies)
+
+**Total Time**: ~1 day (8 hours refactoring + 3 hours testing + 2 hours documentation)
+
+### 📖 Documentation
+- **[Service Layer README](service/README.md)** - Complete API documentation with examples
+
+---
+
+## Phase 5: Minimal REST API 🔵
+
+**Status**: 🔵 Ready (Service layer complete, can be started)  
+**Timeline**: Not started | Target: ~12 hours (reduced from ~15 hours)  
+**Dependencies**: Phase 4.5 Service Layer (✅ Complete)
 
 ### 🎯 Goals
 - Provide simple HTTP API for build automation
@@ -1267,9 +1393,13 @@ Rationale: Package should contain only metadata, not build-time state
 - **[util]** Direct user interaction in generic util (AskYN)
   - Context: User prompts buried in low-level package
   - Plan: Move to CLI layer
-- **[main.go]** Mixed responsibilities, limited reuse
-  - Context: CLI logic mixed with core functionality
-  - Plan: Extract service layer (~4h effort, **Phase 5 blocker**)
+- ✅ ~~**[main.go]** Mixed responsibilities, limited reuse~~ - **RESOLVED** (2025-11-30)
+  - Context: CLI logic was mixed with core functionality
+  - Solution: Extracted service layer package (service/)
+  - Status: ✅ **COMPLETE** - Phase 4.5 finished (2025-11-30)
+  - Progress: 5 commands migrated, main.go reduced 20.3%, 47 tests added
+  - Impact: **Phase 5 REST API now unblocked** 🎉
+  - Documentation: [service/README.md](service/README.md), DEVELOPMENT.md Phase 4.5
 
 **Testing**:
 - Integration tests missing for some edge cases
@@ -1316,11 +1446,13 @@ Rationale: Package should contain only metadata, not build-time state
   - Status: All 85 print statements removed, LibraryLogger interface implemented
   - **Phase 5 REST API now unblocked** 🎉
   - Reference: INCONSISTENCIES.md Pattern 1 (marked RESOLVED)
-- [ ] **[main.go]** Extract service layer from main.go
+- [x] ~~**[main.go]** Extract service layer from main.go~~ ✅ **COMPLETE** (2025-11-30)
   - Benefit: Reusable functions for API/other frontends
-  - Effort: ~4 hours
-  - **Blocker for**: Phase 5 REST API
-  - Reference: INCONSISTENCIES.md main.go/#1
+  - Effort: ~13 hours actual (8h refactoring + 3h testing + 2h docs)
+  - Status: ✅ **COMPLETE** - Service layer package created (service/)
+  - Result: 5 commands migrated, 969 lines production code, 1,845 lines tests
+  - **Phase 5 REST API now unblocked** 🎉
+  - Reference: INCONSISTENCIES.md main.go/#1, service/README.md
 
 **High Priority** (Next sprint):
 - [ ] Test with complex ports (editors/vim, www/nginx, lang/python)

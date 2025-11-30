@@ -4,20 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	"dsynth/build"
-	"dsynth/builddb"
 	"dsynth/config"
 	_ "dsynth/environment/bsd" // Register BSD backend
-	"dsynth/log"
-	"dsynth/migration"
 	"dsynth/pkg"
+	"dsynth/service"
 	"dsynth/util"
 )
 
@@ -196,142 +192,80 @@ func doInit(cfg *config.Config) {
 	fmt.Println("Initializing dsynth environment...")
 	fmt.Println()
 
-	// 1. Create required directories
-	fmt.Println("Setting up directories:")
-	dirs := map[string]string{
-		"Build base":   cfg.BuildBase,
-		"Logs":         cfg.LogsPath,
-		"Ports":        cfg.DPortsPath,
-		"Repository":   cfg.RepositoryPath,
-		"Packages":     cfg.PackagesPath,
-		"Distribution": cfg.DistFilesPath,
-		"Options":      cfg.OptionsPath,
-	}
-
-	for label, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "✗ Failed to create %s directory: %v\n", label, err)
-			os.Exit(1)
-		}
-		fmt.Printf("  ✓ %s: %s\n", label, dir)
-	}
-
-	// Create template directory with essential files
-	templateDir := filepath.Join(cfg.BuildBase, "Template")
-	if err := os.MkdirAll(templateDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "✗ Failed to create template directory: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Create necessary directory structure in template
-	templateDirs := []string{
-		"etc",
-		"var/run",
-		"var/db",
-		"tmp",
-	}
-	for _, dir := range templateDirs {
-		fullPath := filepath.Join(templateDir, dir)
-		if err := os.MkdirAll(fullPath, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "✗ Failed to create template /%s directory: %v\n", dir, err)
-			os.Exit(1)
-		}
-	}
-
-	// Copy ld-elf.so.hints from host (needed for dynamic linker)
-	hintsSrc := "/var/run/ld-elf.so.hints"
-	hintsDst := filepath.Join(templateDir, "var/run/ld-elf.so.hints")
-	if err := exec.Command("cp", hintsSrc, hintsDst).Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "⚠  Warning: Failed to copy ld-elf.so.hints: %v\n", err)
-		fmt.Fprintf(os.Stderr, "   Some ports may fail during installation phase\n")
-	}
-
-	etcDir := filepath.Join(templateDir, "etc")
-
-	// Copy essential /etc files for chroot functionality
-	etcFiles := []string{
-		"resolv.conf",   // DNS resolution
-		"passwd",        // User database (needed for mtree, chown, etc)
-		"group",         // Group database
-		"master.passwd", // Password database
-		"pwd.db",        // Password database (Berkeley DB format)
-		"spwd.db",       // Secure password database
-	}
-
-	for _, file := range etcFiles {
-		src := filepath.Join("/etc", file)
-		dst := filepath.Join(etcDir, file)
-		if err := exec.Command("cp", src, dst).Run(); err != nil {
-			// Only warn for resolv.conf, fail for critical files
-			if file == "resolv.conf" {
-				fmt.Fprintf(os.Stderr, "⚠  Warning: Failed to copy %s: %v\n", file, err)
-				fmt.Fprintf(os.Stderr, "   DNS resolution may not work in chroot environments\n")
-			} else {
-				fmt.Fprintf(os.Stderr, "✗ Failed to copy /etc/%s: %v\n", file, err)
-				fmt.Fprintf(os.Stderr, "   This file is required for build operations\n")
-				os.Exit(1)
-			}
-		}
-	}
-
-	fmt.Printf("  ✓ Template: %s (with /etc files)\n", templateDir)
-
-	// 2. Initialize BuildDB
-	fmt.Println("\nInitializing build database:")
-	dbPath := cfg.Database.Path
-	db, err := builddb.OpenDB(dbPath)
+	// Create service
+	svc, err := service.NewService(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "✗ Failed to initialize database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "✗ Failed to initialize service: %v\n", err)
 		os.Exit(1)
 	}
-	defer db.Close()
-	fmt.Printf("  ✓ Database: %s\n", dbPath)
+	defer svc.Close()
 
-	// 3. Check for legacy CRC migration
-	if cfg.Migration.AutoMigrate && migration.DetectMigrationNeeded(cfg) {
-		fmt.Println("\n⚠️  Legacy CRC data detected!")
-		legacyFile := filepath.Join(cfg.BuildBase, "crc_index")
+	// Check for migration and prompt user if needed
+	autoMigrate := cfg.Migration.AutoMigrate
+	if svc.NeedsMigration() && !cfg.YesAll && !autoMigrate {
+		legacyFile, _ := svc.GetLegacyCRCFile()
+		fmt.Println("⚠️  Legacy CRC data detected!")
 		fmt.Printf("Found: %s\n", legacyFile)
+		fmt.Print("Migrate legacy data now? [Y/n]: ")
+		var response string
+		fmt.Scanln(&response)
+		if response == "" || strings.EqualFold(response, "y") || strings.EqualFold(response, "yes") {
+			autoMigrate = true
+		}
+	}
 
-		if cfg.YesAll {
-			fmt.Println("Migrating automatically (-y flag)...")
-			if err := migration.MigrateLegacyCRC(cfg, db, log.StdoutLogger{}); err != nil {
-				fmt.Fprintf(os.Stderr, "✗ Migration failed: %v\n", err)
-				os.Exit(1)
-			}
+	// Initialize environment using service layer
+	result, err := svc.Initialize(service.InitOptions{
+		AutoMigrate: autoMigrate || cfg.YesAll,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ Initialization failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Display results to user
+	fmt.Println("Setting up directories:")
+	for _, dir := range result.DirsCreated {
+		fmt.Printf("  ✓ %s\n", dir)
+	}
+
+	if result.TemplateCreated {
+		templateDir := filepath.Join(cfg.BuildBase, "Template")
+		fmt.Printf("  ✓ Template: %s (with /etc files)\n", templateDir)
+	}
+
+	if result.DatabaseInitalized {
+		fmt.Println("\nInitializing build database:")
+		fmt.Printf("  ✓ Database: %s\n", cfg.Database.Path)
+	}
+
+	if result.MigrationNeeded {
+		fmt.Println()
+		if result.MigrationPerformed {
 			fmt.Println("  ✓ Legacy data migrated successfully")
 		} else {
-			fmt.Print("Migrate legacy data now? [Y/n]: ")
-			var response string
-			fmt.Scanln(&response)
-			if response == "" || strings.EqualFold(response, "y") || strings.EqualFold(response, "yes") {
-				if err := migration.MigrateLegacyCRC(cfg, db, log.StdoutLogger{}); err != nil {
-					fmt.Fprintf(os.Stderr, "✗ Migration failed: %v\n", err)
-					os.Exit(1)
-				}
-				fmt.Println("  ✓ Legacy data migrated successfully")
-			} else {
-				fmt.Println("  - Migration skipped (can migrate later with first build)")
-			}
+			fmt.Println("  - Migration skipped (can migrate later with first build)")
 		}
 	}
 
-	// 4. Verify ports directory exists and has content
+	// Display warnings if any
+	if len(result.Warnings) > 0 {
+		fmt.Println("\nWarnings:")
+		for _, warning := range result.Warnings {
+			fmt.Printf("  ⚠  %s\n", warning)
+		}
+	}
+
+	// Verify ports directory
 	fmt.Println("\nVerifying environment:")
-	if _, err := os.Stat(cfg.DPortsPath); os.IsNotExist(err) {
+	if result.PortsFound == 0 {
 		fmt.Printf("  ⚠  Ports directory is empty: %s\n", cfg.DPortsPath)
 		fmt.Println("     You'll need to populate it before building")
 	} else {
-		// Quick check if it has any content
-		entries, _ := os.ReadDir(cfg.DPortsPath)
-		if len(entries) == 0 {
-			fmt.Printf("  ⚠  Ports directory is empty: %s\n", cfg.DPortsPath)
-		} else {
-			fmt.Printf("  ✓ Ports directory: %s (%d entries)\n", cfg.DPortsPath, len(entries))
-		}
+		fmt.Printf("  ✓ Ports directory: %s (%d entries)\n", cfg.DPortsPath, result.PortsFound)
 	}
 
-	// 5. Success summary
+	// Success summary
 	fmt.Println("\n✓ Initialization complete!")
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Verify configuration file (if needed)")
@@ -341,43 +275,45 @@ func doInit(cfg *config.Config) {
 }
 
 func doStatus(cfg *config.Config, portList []string) {
-	// Open database
-	dbPath := cfg.Database.Path
-	db, err := builddb.OpenDB(dbPath)
+	// Create service
+	svc, err := service.NewService(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to initialize service: %v\n", err)
 		fmt.Println("No build history available. Run a build first.")
 		return
 	}
-	defer db.Close()
+	defer svc.Close()
+
+	// Get status from service
+	result, err := svc.GetStatus(service.StatusOptions{
+		PortList: portList,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get status: %v\n", err)
+		os.Exit(1)
+	}
 
 	if len(portList) == 0 {
 		// Show overall database statistics
-		stats, err := db.Stats()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get database stats: %v\n", err)
-			os.Exit(1)
-		}
-
 		fmt.Println("=== Build Database Status ===")
-		fmt.Printf("Database:      %s\n", stats.DatabasePath)
-		fmt.Printf("Size:          %s\n", formatBytes(stats.DatabaseSize))
-		fmt.Printf("Total builds:  %d\n", stats.TotalBuilds)
-		fmt.Printf("Unique ports:  %d\n", stats.TotalPorts)
-		fmt.Printf("CRC entries:   %d\n", stats.TotalCRCs)
+		fmt.Printf("Database:      %s\n", result.Stats.DatabasePath)
+		fmt.Printf("Size:          %s\n", formatBytes(result.Stats.DatabaseSize))
+		fmt.Printf("Total builds:  %d\n", result.Stats.TotalBuilds)
+		fmt.Printf("Unique ports:  %d\n", result.Stats.TotalPorts)
+		fmt.Printf("CRC entries:   %d\n", result.Stats.TotalCRCs)
 		return
 	}
 
 	// Show status for specific ports
 	fmt.Println("=== Port Build Status ===")
-	for _, portDir := range portList {
-		rec, err := db.LatestFor(portDir, "")
-		if err != nil || rec == nil {
-			fmt.Printf("\n%s: never built\n", portDir)
+	for _, portStatus := range result.Ports {
+		if portStatus.LastBuild == nil {
+			fmt.Printf("\n%s: never built\n", portStatus.PortDir)
 			continue
 		}
 
-		fmt.Printf("\n%s:\n", portDir)
+		rec := portStatus.LastBuild
+		fmt.Printf("\n%s:\n", portStatus.PortDir)
 		fmt.Printf("  Status:      %s\n", rec.Status)
 		fmt.Printf("  UUID:        %s\n", rec.UUID[:8]) // Short UUID
 		if rec.Version != "" {
@@ -391,8 +327,8 @@ func doStatus(cfg *config.Config, portList []string) {
 		}
 
 		// Show CRC if available
-		if crc, exists, err := db.GetCRC(portDir); err == nil && exists {
-			fmt.Printf("  CRC:         %08x\n", crc)
+		if portStatus.CRC != 0 {
+			fmt.Printf("  CRC:         %08x\n", portStatus.CRC)
 		}
 	}
 }
@@ -414,43 +350,33 @@ func formatBytes(bytes int64) string {
 func doCleanup(cfg *config.Config) {
 	fmt.Println("Cleaning up stale worker environments...")
 
-	// Look for worker directories in BuildBase
-	baseDir := cfg.BuildBase
-	workersFound := 0
-	workersCleanedUp := 0
-
-	// Scan for SL.* directories (worker directories)
-	entries, err := os.ReadDir(baseDir)
+	// Create service
+	svc, err := service.NewService(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to read build directory: %v\n", err)
-		return
+		fmt.Fprintf(os.Stderr, "Failed to initialize service: %v\n", err)
+		os.Exit(1)
+	}
+	defer svc.Close()
+
+	// Cleanup using service layer
+	result, err := svc.Cleanup(service.CleanupOptions{
+		Force: cfg.Force,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cleanup failed: %v\n", err)
+		os.Exit(1)
 	}
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		// Worker directories match pattern "SL.*"
-		if strings.HasPrefix(entry.Name(), "SL.") {
-			workersFound++
-			workerPath := filepath.Join(baseDir, entry.Name())
-
-			// Try to cleanup mounts for this worker
-			if err := cleanupWorkerMounts(workerPath); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to cleanup %s: %v\n", entry.Name(), err)
-				continue
-			}
-
-			workersCleanedUp++
-			fmt.Printf("  ✓ Cleaned up %s\n", entry.Name())
-		}
-	}
-
-	if workersFound == 0 {
+	// Display results
+	if result.WorkersCleaned == 0 {
 		fmt.Println("No worker directories found")
 	} else {
-		fmt.Printf("\nCleaned up %d/%d worker directories\n", workersCleanedUp, workersFound)
+		// Display any errors that occurred
+		for _, cleanupErr := range result.Errors {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", cleanupErr)
+		}
+
+		fmt.Printf("\nCleaned up %d worker directories\n", result.WorkersCleaned)
 	}
 
 	// Also cleanup old logs (optional)
@@ -462,33 +388,6 @@ func doCleanup(cfg *config.Config) {
 	}
 
 	fmt.Println("\n✓ Cleanup complete")
-}
-
-// cleanupWorkerMounts attempts to unmount and remove a worker directory
-func cleanupWorkerMounts(workerPath string) error {
-	// This is a simplified version that just tries to unmount common mount points
-	// In a full implementation, we'd scan /proc/mounts or use mount(8) to find all mounts
-
-	commonMounts := []string{
-		"dev",
-		"proc",
-		"distfiles",
-		"packages",
-		"ccache",
-		"logs",
-		"options",
-		"construction",
-	}
-
-	// Try to unmount in reverse order
-	for i := len(commonMounts) - 1; i >= 0; i-- {
-		mountPoint := filepath.Join(workerPath, commonMounts[i])
-		// Ignore errors - mount might not exist
-		exec.Command("umount", "-f", mountPoint).Run()
-	}
-
-	// Try to remove the directory
-	return os.RemoveAll(workerPath)
 }
 
 func doConfigure(cfg *config.Config) {
@@ -530,10 +429,16 @@ func doPurgeDistfiles(cfg *config.Config) {
 }
 
 func doResetDB(cfg *config.Config) {
-	dbPath := cfg.Database.Path
+	// Create service
+	svc, err := service.NewService(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize service: %v\n", err)
+		os.Exit(1)
+	}
+	defer svc.Close()
 
 	// Check if database exists
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+	if !svc.DatabaseExists() {
 		fmt.Println("No database found")
 		return
 	}
@@ -541,7 +446,7 @@ func doResetDB(cfg *config.Config) {
 	// Confirm destructive operation (unless -y flag)
 	if !cfg.YesAll {
 		fmt.Printf("⚠️  WARNING: This will delete the build database\n")
-		fmt.Printf("Database: %s\n", dbPath)
+		fmt.Printf("Database: %s\n", svc.GetDatabasePath())
 		fmt.Print("\nAre you sure? [y/N]: ")
 		var response string
 		fmt.Scanln(&response)
@@ -551,26 +456,25 @@ func doResetDB(cfg *config.Config) {
 		}
 	}
 
-	// Remove database file
-	if err := os.Remove(dbPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to remove database: %v\n", err)
+	// Reset database using service layer
+	result, err := svc.ResetDatabase()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to reset database: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("✓ Build database reset successfully")
-
-	// Also remove legacy CRC file if present (optional cleanup)
-	legacyFile := filepath.Join(cfg.BuildBase, "crc_index")
-	if _, err := os.Stat(legacyFile); err == nil {
-		os.Remove(legacyFile)
-		fmt.Println("✓ Legacy CRC file also removed")
+	// Display results
+	if result.DatabaseRemoved {
+		fmt.Println("✓ Build database reset successfully")
 	}
 
-	// Also remove backup if present
-	backupFile := legacyFile + ".bak"
-	if _, err := os.Stat(backupFile); err == nil {
-		os.Remove(backupFile)
-		fmt.Println("✓ Legacy CRC backup also removed")
+	// Show all files that were removed
+	for _, file := range result.FilesRemoved {
+		if strings.Contains(file, "crc_index.bak") {
+			fmt.Println("✓ Legacy CRC backup also removed")
+		} else if strings.Contains(file, "crc_index") {
+			fmt.Println("✓ Legacy CRC file also removed")
+		}
 	}
 }
 
@@ -607,48 +511,71 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 		return
 	}
 
-	// Initialize logger
-	logger, err := log.NewLogger(cfg)
+	// Create service
+	svc, err := service.NewService(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing logger: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error initializing service: %v\n", err)
 		os.Exit(1)
 	}
-	defer logger.Close()
+	defer svc.Close()
 
-	// Open BuildDB once for the entire workflow
-	dbPath := cfg.Database.Path
-	buildDB, err := builddb.OpenDB(dbPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening build database: %v\n", err)
-		os.Exit(1)
-	}
-	defer buildDB.Close()
-
-	// Check for legacy CRC migration (if enabled in config)
-	if cfg.Migration.AutoMigrate && migration.DetectMigrationNeeded(cfg) {
-		fmt.Println("\n⚠️  Legacy CRC data detected!")
-		fmt.Printf("Found legacy CRC file: %s/crc_index\n", cfg.BuildBase)
-		fmt.Println("This data will be imported into the new BuildDB.")
-
-		if !cfg.YesAll {
+	// Check for migration and prompt user if needed (unless auto-migrate is on)
+	if !cfg.Migration.AutoMigrate {
+		migStatus, err := svc.CheckMigrationStatus()
+		if err == nil && migStatus.Needed && !cfg.YesAll {
+			fmt.Println("\n⚠️  Legacy CRC data detected!")
+			fmt.Printf("Found legacy CRC file: %s\n", migStatus.LegacyFile)
+			fmt.Println("This data will be imported into the new BuildDB.")
 			fmt.Print("Migrate legacy data now? [Y/n]: ")
 			var response string
 			fmt.Scanln(&response)
-			if strings.EqualFold(response, "n") || strings.EqualFold(response, "no") {
-				fmt.Println("Skipping migration. Note: CRC skip functionality requires migration.")
-			} else {
-				if err := migration.MigrateLegacyCRC(cfg, buildDB, logger); err != nil {
+			if !strings.EqualFold(response, "n") && !strings.EqualFold(response, "no") {
+				if err := svc.PerformMigration(); err != nil {
 					fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
 					os.Exit(1)
 				}
+			} else {
+				fmt.Println("Skipping migration. Note: CRC skip functionality requires migration.")
 			}
-		} else {
-			// Auto-migrate with -y flag
-			fmt.Println("Auto-migrating legacy CRC data (-y flag)...")
-			if err := migration.MigrateLegacyCRC(cfg, buildDB, logger); err != nil {
-				fmt.Fprintf(os.Stderr, "Migration failed: %v\n", err)
-				os.Exit(1)
+		}
+	}
+
+	// Get build plan to show user what will be built
+	fmt.Printf("Analyzing %d port(s)...\n", len(portList))
+	plan, err := svc.GetBuildPlan(portList)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error analyzing build: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Display build plan summary
+	fmt.Println("\nBuild Plan:")
+	fmt.Printf("  Total packages: %d\n", plan.TotalPackages)
+	fmt.Printf("  To build: %d\n", plan.NeedBuild)
+	fmt.Printf("  To skip: %d\n", len(plan.ToSkip))
+
+	if plan.NeedBuild > 0 {
+		fmt.Println("\nPackages to build:")
+		for i, portDir := range plan.ToBuild {
+			if i >= 10 {
+				fmt.Printf("  ... and %d more\n", len(plan.ToBuild)-10)
+				break
 			}
+			fmt.Printf("  - %s\n", portDir)
+		}
+	}
+	fmt.Println()
+
+	if plan.NeedBuild == 0 {
+		fmt.Println("All packages are up-to-date!")
+		return
+	}
+
+	// Confirm build
+	if !cfg.YesAll {
+		if !askYN(fmt.Sprintf("Build %d packages?", plan.NeedBuild), true) {
+			fmt.Println("Build cancelled")
+			return
 		}
 	}
 
@@ -656,136 +583,44 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	var buildCleanup func()
-
 	// Goroutine to handle signals
 	go func() {
 		sig := <-sigChan
 		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
-
-		if buildCleanup != nil {
-			buildCleanup()
-		}
-
-		// Close buildDB on signal
-		if buildDB != nil {
-			buildDB.Close()
-		}
-
+		svc.Close()
 		os.Exit(1)
 	}()
 
-	fmt.Printf("Building %d port(s)...\n", len(portList))
-
-	// Create build state registry
-	registry := pkg.NewBuildStateRegistry()
-
-	// Create package registry
-	pkgRegistry := pkg.NewPackageRegistry()
-
-	// Parse all port specifications
-	packages, err := pkg.ParsePortList(portList, cfg, registry, pkgRegistry, logger)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing port list: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Resolve dependencies
-	if err := pkg.ResolveDependencies(packages, cfg, registry, pkgRegistry, logger); err != nil {
-		fmt.Fprintf(os.Stderr, "Error resolving dependencies: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Get all packages from registry (includes all transitive dependencies)
-	packages = pkgRegistry.AllPackages()
-
-	// Mark which packages need building
-	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, registry, buildDB, logger)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error checking build status: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Display build plan summary
-	totalPkgs := len(packages)
-	skipCount := totalPkgs - needBuild
-
-	fmt.Println("\nBuild Plan:")
-	fmt.Printf("  Total packages: %d\n", totalPkgs)
-	fmt.Printf("  To build: %d\n", needBuild)
-	fmt.Printf("  To skip: %d\n", skipCount)
-
-	if needBuild > 0 {
-		fmt.Println("\nPackages to build:")
-		count := 0
-		for _, p := range packages {
-			flags := registry.GetFlags(p)
-			// Show packages that are NOT already packaged
-			if !flags.Has(pkg.PkgFPackaged) {
-				fmt.Printf("  - %s\n", p.PortDir)
-				count++
-				if count >= 10 {
-					if needBuild > 10 {
-						fmt.Printf("  ... and %d more\n", needBuild-10)
-					}
-					break
-				}
-			}
-		}
-	}
-	fmt.Println()
-
-	if needBuild == 0 {
-		fmt.Println("All packages are up-to-date!")
-		return
-	}
-
-	// Confirm build
-	if !cfg.YesAll {
-		if !askYN(fmt.Sprintf("Build %d packages?", needBuild), true) {
-			fmt.Println("Build cancelled")
-			return
-		}
-	}
-
-	// Execute build - NOW WITH 3 RETURN VALUES
-	stats, cleanup, err := build.DoBuild(packages, cfg, logger, buildDB)
-	buildCleanup = cleanup // Store cleanup function for signal handler
+	// Execute build using service layer
+	result, err := svc.Build(service.BuildOptions{
+		PortList:  portList,
+		Force:     cfg.Force,
+		JustBuild: justBuild,
+		TestMode:  testMode,
+	})
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Build error: %v\n", err)
-		if cleanup != nil {
-			cleanup()
-		}
 		os.Exit(1)
-	}
-
-	// Cleanup workers after successful build
-	if cleanup != nil {
-		cleanup()
 	}
 
 	// Print statistics
 	fmt.Println()
 	fmt.Println("Build Complete!")
 	fmt.Println("================")
-	fmt.Printf("  Total packages:  %d\n", stats.Total)
-	fmt.Printf("  ✓ Success:       %d\n", stats.Success)
-	if stats.Failed > 0 {
-		fmt.Printf("  ✗ Failed:        %d\n", stats.Failed)
-	} else {
-		fmt.Printf("  ✗ Failed:        %d\n", stats.Failed)
-	}
-	fmt.Printf("  - Skipped:       %d\n", stats.Skipped)
-	fmt.Printf("  - Ignored:       %d\n", stats.Ignored)
-	fmt.Printf("  Duration:        %s\n\n", stats.Duration)
+	fmt.Printf("  Total packages:  %d\n", result.Stats.Total)
+	fmt.Printf("  ✓ Success:       %d\n", result.Stats.Success)
+	fmt.Printf("  ✗ Failed:        %d\n", result.Stats.Failed)
+	fmt.Printf("  - Skipped:       %d\n", result.Stats.Skipped)
+	fmt.Printf("  - Ignored:       %d\n", result.Stats.Ignored)
+	fmt.Printf("  Duration:        %s\n\n", result.Stats.Duration)
 
 	// Also update repo if not just-build mode
 	if !justBuild {
 		doRebuildRepo(cfg)
 	}
 
-	if stats.Failed > 0 {
+	if result.Stats.Failed > 0 {
 		os.Exit(1)
 	}
 }
