@@ -64,32 +64,18 @@ func (s *Service) Build(opts BuildOptions) (*BuildResult, error) {
 	// Execute the build
 	stats, cleanup, err := build.DoBuild(packages, s.cfg, s.logger, s.db)
 
-	// Track cleanup function for signal handling
-	// This ensures Ctrl+C can properly cleanup worker mounts
-	s.cleanupMu.Lock()
-	s.activeCleanup = cleanup
-	s.cleanupMu.Unlock()
-
-	// Ensure cleanup runs on both success and error paths
-	if cleanup != nil {
-		defer func() {
-			cleanup()
-			// Clear the tracked cleanup after it runs
-			s.cleanupMu.Lock()
-			s.activeCleanup = nil
-			s.cleanupMu.Unlock()
-		}()
-	}
-
 	if err != nil {
 		return nil, fmt.Errorf("build failed: %w", err)
 	}
 
+	// Return cleanup function to caller - they control when to call it
+	// This allows proper signal handling where the signal handler can call cleanup
 	return &BuildResult{
 		Stats:     stats,
 		Packages:  packages,
 		NeedBuild: needBuild,
 		Duration:  time.Since(startTime),
+		Cleanup:   cleanup, // Return cleanup function for caller to manage
 	}, nil
 }
 

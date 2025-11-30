@@ -29,9 +29,9 @@ func TestCleanup_NoWorkers(t *testing.T) {
 	defer svc.Close()
 
 	// Cleanup with no workers
-	result, err := svc.Cleanup(CleanupOptions{})
+	result, err := svc.CleanupStaleWorkers(CleanupOptions{})
 	if err != nil {
-		t.Fatalf("Cleanup() failed: %v", err)
+		t.Fatalf("CleanupStaleWorkers() failed: %v", err)
 	}
 
 	if result.WorkersCleaned != 0 {
@@ -57,8 +57,8 @@ func TestCleanup_SingleWorker(t *testing.T) {
 		t.Fatalf("Failed to create logs dir: %v", err)
 	}
 
-	// Create a worker directory
-	workerDir := filepath.Join(tmpDir, "SL.001")
+	// Create a worker directory (format: SL00, SL01, etc.)
+	workerDir := filepath.Join(tmpDir, "SL00")
 	if err := os.MkdirAll(workerDir, 0755); err != nil {
 		t.Fatalf("Failed to create worker dir: %v", err)
 	}
@@ -70,9 +70,9 @@ func TestCleanup_SingleWorker(t *testing.T) {
 	defer svc.Close()
 
 	// Cleanup should remove the worker
-	result, err := svc.Cleanup(CleanupOptions{})
+	result, err := svc.CleanupStaleWorkers(CleanupOptions{})
 	if err != nil {
-		t.Fatalf("Cleanup() failed: %v", err)
+		t.Fatalf("CleanupStaleWorkers() failed: %v", err)
 	}
 
 	if result.WorkersCleaned != 1 {
@@ -99,8 +99,8 @@ func TestCleanup_MultipleWorkers(t *testing.T) {
 		t.Fatalf("Failed to create logs dir: %v", err)
 	}
 
-	// Create multiple worker directories
-	workers := []string{"SL.001", "SL.002", "SL.003"}
+	// Create multiple worker directories (format: SL00, SL01, etc.)
+	workers := []string{"SL00", "SL01", "SL02"}
 	for _, worker := range workers {
 		workerDir := filepath.Join(tmpDir, worker)
 		if err := os.MkdirAll(workerDir, 0755); err != nil {
@@ -115,9 +115,9 @@ func TestCleanup_MultipleWorkers(t *testing.T) {
 	defer svc.Close()
 
 	// Cleanup should remove all workers
-	result, err := svc.Cleanup(CleanupOptions{})
+	result, err := svc.CleanupStaleWorkers(CleanupOptions{})
 	if err != nil {
-		t.Fatalf("Cleanup() failed: %v", err)
+		t.Fatalf("CleanupStaleWorkers() failed: %v", err)
 	}
 
 	if result.WorkersCleaned != 3 {
@@ -156,8 +156,8 @@ func TestCleanup_IgnoresNonWorkerDirs(t *testing.T) {
 		}
 	}
 
-	// Create one worker directory
-	workerDir := filepath.Join(tmpDir, "SL.001")
+	// Create one worker directory (format: SL00, SL01, etc.)
+	workerDir := filepath.Join(tmpDir, "SL00")
 	if err := os.MkdirAll(workerDir, 0755); err != nil {
 		t.Fatalf("Failed to create worker dir: %v", err)
 	}
@@ -169,9 +169,9 @@ func TestCleanup_IgnoresNonWorkerDirs(t *testing.T) {
 	defer svc.Close()
 
 	// Cleanup should only remove the worker
-	result, err := svc.Cleanup(CleanupOptions{})
+	result, err := svc.CleanupStaleWorkers(CleanupOptions{})
 	if err != nil {
-		t.Fatalf("Cleanup() failed: %v", err)
+		t.Fatalf("CleanupStaleWorkers() failed: %v", err)
 	}
 
 	if result.WorkersCleaned != 1 {
@@ -206,8 +206,8 @@ func TestGetWorkerDirectories(t *testing.T) {
 		t.Fatalf("Failed to create logs dir: %v", err)
 	}
 
-	// Create worker directories
-	expectedWorkers := []string{"SL.001", "SL.002"}
+	// Create worker directories (format: SL00, SL01, etc.)
+	expectedWorkers := []string{"SL00", "SL01"}
 	for _, worker := range expectedWorkers {
 		workerDir := filepath.Join(tmpDir, worker)
 		if err := os.MkdirAll(workerDir, 0755); err != nil {

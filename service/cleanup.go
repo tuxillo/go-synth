@@ -8,7 +8,14 @@ import (
 	"strings"
 )
 
-// Cleanup removes stale worker directories and cleans up build artifacts.
+// CleanupStaleWorkers removes orphaned worker directories from crashed builds.
+//
+// This method is for STALE/ORPHANED workers only (no Environment instances exist).
+// It uses raw exec.Command() for mount operations since these workers have no
+// associated Environment objects.
+//
+// For ACTIVE workers (during build), use the cleanup function returned by
+// build.DoBuild() instead, which properly uses the Environment abstraction.
 //
 // This method scans the build base directory for worker directories (SL.*),
 // attempts to unmount any active mounts, and removes the directories.
@@ -19,7 +26,7 @@ import (
 //   - Confirming destructive operations
 //
 // Returns CleanupResult containing the number of workers cleaned and any errors.
-func (s *Service) Cleanup(opts CleanupOptions) (*CleanupResult, error) {
+func (s *Service) CleanupStaleWorkers(opts CleanupOptions) (*CleanupResult, error) {
 	result := &CleanupResult{
 		WorkersCleaned: 0,
 		Errors:         make([]error, 0),

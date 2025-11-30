@@ -19,7 +19,6 @@ package service
 
 import (
 	"fmt"
-	"sync"
 
 	"dsynth/builddb"
 	"dsynth/config"
@@ -45,11 +44,9 @@ import (
 //	    Force:    false,
 //	})
 type Service struct {
-	cfg           *config.Config
-	logger        *log.Logger
-	db            *builddb.DB
-	activeCleanup func() // Tracks active build's cleanup function for signal handling
-	cleanupMu     sync.Mutex
+	cfg    *config.Config
+	logger *log.Logger
+	db     *builddb.DB
 }
 
 // NewService creates a new Service instance with the given configuration.
@@ -87,28 +84,13 @@ func NewService(cfg *config.Config) (*Service, error) {
 //	svc, err := service.NewService(cfg)
 //	if err != nil { ... }
 //	defer svc.Close()
+//
+// Note: This does NOT call cleanup for active builds. The caller is responsible
+// for calling the cleanup function returned in BuildResult.
 func (s *Service) Close() error {
 	var errs []error
 
-	// First, call active build cleanup if there is one
-	// This is critical for signal handling - ensures worker mounts are cleaned up
-	s.cleanupMu.Lock()
-	cleanup := s.activeCleanup
-	s.activeCleanup = nil
-	s.cleanupMu.Unlock()
-
-	if cleanup != nil {
-		if s.logger != nil {
-			s.logger.Info("Cleaning up active build workers...")
-		}
-		cleanup()
-	} else {
-		if s.logger != nil {
-			s.logger.Info("No active build cleanup needed")
-		}
-	}
-
-	// Then close database and logger
+	// Close database and logger
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("database close: %w", err))

@@ -22,6 +22,7 @@ type BuildResult struct {
 	Packages  []*pkg.Package    // All packages (including dependencies)
 	NeedBuild int               // Number of packages that need building
 	Duration  time.Duration     // Total build duration
+	Cleanup   func()            // Cleanup function for caller to manage worker environments
 }
 
 // InitOptions contains options for the Initialize service.

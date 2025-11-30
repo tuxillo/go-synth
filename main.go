@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -358,8 +359,9 @@ func doCleanup(cfg *config.Config) {
 	}
 	defer svc.Close()
 
-	// Cleanup using service layer
-	result, err := svc.Cleanup(service.CleanupOptions{
+	// Cleanup stale workers using service layer
+	// This handles orphaned worker directories from crashed builds
+	result, err := svc.CleanupStaleWorkers(service.CleanupOptions{
 		Force: cfg.Force,
 	})
 	if err != nil {
@@ -369,14 +371,14 @@ func doCleanup(cfg *config.Config) {
 
 	// Display results
 	if result.WorkersCleaned == 0 {
-		fmt.Println("No worker directories found")
+		fmt.Println("No stale worker directories found")
 	} else {
 		// Display any errors that occurred
 		for _, cleanupErr := range result.Errors {
 			fmt.Fprintf(os.Stderr, "Warning: %v\n", cleanupErr)
 		}
 
-		fmt.Printf("\nCleaned up %d worker directories\n", result.WorkersCleaned)
+		fmt.Printf("\nCleaned up %d stale worker directories\n", result.WorkersCleaned)
 	}
 
 	// Also cleanup old logs (optional)
@@ -583,18 +585,23 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
+	// Track the build's cleanup function for signal handling
+	var buildCleanup func()
+	var cleanupMu sync.Mutex
+
 	// Goroutine to handle signals
 	go func() {
 		sig := <-sigChan
 		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
 
-		// Cleanup any active workers (this handles both in-flight builds and stale workers)
-		// Use Force option to ensure all mounts are unmounted
-		result, err := svc.Cleanup(service.CleanupOptions{Force: true})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Cleanup error: %v\n", err)
-		} else if result != nil && result.WorkersCleaned > 0 {
-			fmt.Fprintf(os.Stderr, "Cleaned up %d worker(s)\n", result.WorkersCleaned)
+		// Call the build's cleanup function (uses Environment abstraction properly)
+		cleanupMu.Lock()
+		cleanup := buildCleanup
+		cleanupMu.Unlock()
+
+		if cleanup != nil {
+			fmt.Fprintf(os.Stderr, "Cleaning up active build workers...\n")
+			cleanup()
 		}
 
 		// Close service (DB, logger, etc.)
@@ -614,6 +621,16 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Build error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Store cleanup function for signal handler and ensure it runs on exit
+	cleanupMu.Lock()
+	buildCleanup = result.Cleanup
+	cleanupMu.Unlock()
+
+	// Ensure cleanup runs on normal completion
+	if result.Cleanup != nil {
+		defer result.Cleanup()
 	}
 
 	// Print statistics
