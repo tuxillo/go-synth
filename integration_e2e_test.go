@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -131,6 +132,10 @@ func createLegacyCRCFile(t *testing.T, buildBase string, entries map[string]uint
 // ==================== E2E Test Cases ====================
 
 func TestE2E_InitCommand(t *testing.T) {
+	if runtime.GOOS != "dragonfly" && runtime.GOOS != "freebsd" {
+		t.Skip("E2E tests require BSD system (init copies /etc/master.passwd, etc.)")
+	}
+
 	tmpDir, configDir := setupTestEnvironment(t)
 	buildBase := filepath.Join(tmpDir, "build")
 
@@ -172,6 +177,10 @@ func TestE2E_InitCommand(t *testing.T) {
 }
 
 func TestE2E_InitIdempotent(t *testing.T) {
+	if runtime.GOOS != "dragonfly" && runtime.GOOS != "freebsd" {
+		t.Skip("E2E tests require BSD system (init copies /etc/master.passwd, etc.)")
+	}
+
 	tmpDir, configDir := setupTestEnvironment(t)
 	buildBase := filepath.Join(tmpDir, "build")
 
@@ -201,6 +210,10 @@ func TestE2E_InitIdempotent(t *testing.T) {
 }
 
 func TestE2E_LegacyMigration(t *testing.T) {
+	if runtime.GOOS != "dragonfly" && runtime.GOOS != "freebsd" {
+		t.Skip("E2E tests require BSD system (init copies /etc/master.passwd, etc.)")
+	}
+
 	tmpDir, configDir := setupTestEnvironment(t)
 	buildBase := filepath.Join(tmpDir, "build")
 
@@ -257,6 +270,10 @@ func TestE2E_LegacyMigration(t *testing.T) {
 }
 
 func TestE2E_StatusCommand(t *testing.T) {
+	if runtime.GOOS != "dragonfly" && runtime.GOOS != "freebsd" {
+		t.Skip("E2E tests require BSD system (init copies /etc/master.passwd, etc.)")
+	}
+
 	tmpDir, configDir := setupTestEnvironment(t)
 	buildBase := filepath.Join(tmpDir, "build")
 
@@ -344,6 +361,10 @@ func TestE2E_StatusCommand(t *testing.T) {
 }
 
 func TestE2E_ResetDBCommand(t *testing.T) {
+	if runtime.GOOS != "dragonfly" && runtime.GOOS != "freebsd" {
+		t.Skip("E2E tests require BSD system (init copies /etc/master.passwd, etc.)")
+	}
+
 	tmpDir, configDir := setupTestEnvironment(t)
 	buildBase := filepath.Join(tmpDir, "build")
 
