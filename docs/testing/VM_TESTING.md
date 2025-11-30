@@ -310,10 +310,11 @@ This saves the VM state to `vm/dfly-vm-clean.qcow2`. You can now restore to this
 | `make vm-sync` | Sync project files to VM |
 | `make vm-build` | Build `dsynth` in VM |
 | `make vm-test-unit` | Run unit tests |
-| `make vm-test-integration` | Run integration tests |
+| `make vm-test-integration` | Run integration tests (tags=integration) |
+| `make vm-test-integration-e2e` | Run E2E integration tests (requires BSD) |
 | `make vm-test-phase4` | Run Phase 4 tests (mount, chroot) |
-| `make vm-test-e2e` | Run end-to-end tests |
-| `make vm-test-all` | Run all tests |
+| `make vm-test-e2e` | Run end-to-end tests (tags=e2e) |
+| `make vm-test-all` | Run all tests (unit + integration + phase4) |
 | `make vm-quick` | Quick cycle: sync + Phase 4 tests |
 
 ### Help
@@ -352,9 +353,10 @@ make vm-start
 make vm-test-all
 
 # Or run specific test suites
-make vm-test-unit           # Unit tests only
-make vm-test-integration    # Integration tests only
-make vm-test-phase4         # Phase 4 mount tests only
+make vm-test-unit                # Unit tests only
+make vm-test-integration         # Integration tests (tags=integration)
+make vm-test-integration-e2e     # E2E integration tests (requires BSD)
+make vm-test-phase4              # Phase 4 mount tests only
 
 # Stop VM
 make vm-stop
