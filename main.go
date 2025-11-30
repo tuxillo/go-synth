@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -585,23 +584,20 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	// Track the build's cleanup function for signal handling
-	var buildCleanup func()
-	var cleanupMu sync.Mutex
-
 	// Goroutine to handle signals
 	go func() {
 		sig := <-sigChan
 		fmt.Fprintf(os.Stderr, "\nReceived signal %v, cleaning up...\n", sig)
 
-		// Call the build's cleanup function (uses Environment abstraction properly)
-		cleanupMu.Lock()
-		cleanup := buildCleanup
-		cleanupMu.Unlock()
-
+		// Get the active build's cleanup function from service
+		// This is set immediately when workers are created
+		cleanup := svc.GetActiveCleanup()
 		if cleanup != nil {
 			fmt.Fprintf(os.Stderr, "Cleaning up active build workers...\n")
 			cleanup()
+			fmt.Fprintf(os.Stderr, "Worker cleanup complete\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "No active cleanup function found (build may not have started workers yet)\n")
 		}
 
 		// Close service (DB, logger, etc.)
@@ -621,16 +617,6 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Build error: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Store cleanup function for signal handler and ensure it runs on exit
-	cleanupMu.Lock()
-	buildCleanup = result.Cleanup
-	cleanupMu.Unlock()
-
-	// Ensure cleanup runs on normal completion
-	if result.Cleanup != nil {
-		defer result.Cleanup()
 	}
 
 	// Print statistics

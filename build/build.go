@@ -121,13 +121,17 @@ type BuildContext struct {
 // Returns build statistics, cleanup function, and error.
 // The cleanup function must be called to unmount worker filesystems.
 //
+// The onCleanupReady callback (if provided) is called immediately when the cleanup
+// function is created, before workers are started. This allows signal handlers to
+// access the cleanup function as soon as workers exist.
+//
 // Build lifecycle for each port:
 //  1. Generate UUID
 //  2. SaveRecord with status="running"
 //  3. Execute build phases
 //  4. UpdateRecordStatus to "success" or "failed"
 //  5. Update CRC and package index (on success only)
-func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB) (*BuildStats, func(), error) {
+func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB, onCleanupReady func(func())) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
 	buildOrder := pkg.GetBuildOrder(packages, logger)
 
@@ -141,16 +145,29 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		startTime: time.Now(),
 	}
 
-	// Create cleanup function
+	// Create cleanup function that will access ctx.workers when called
+	// Note: ctx.workers will be populated after this function is created,
+	// but the closure captures the ctx pointer, so it will see the workers
+	// when cleanup is actually invoked
 	cleanup := func() {
-		logger.Info("Cleaning up worker environments")
+		logger.Info("Cleaning up worker environments (total workers: %d)", len(ctx.workers))
 		for i, worker := range ctx.workers {
 			if worker != nil && worker.Env != nil {
+				logger.Info("Cleaning up worker %d", i)
 				if err := worker.Env.Cleanup(); err != nil {
 					logger.Warn("Failed to cleanup worker %d: %v", i, err)
 				}
+			} else {
+				logger.Warn("Worker %d is nil or has no environment", i)
 			}
 		}
+		logger.Info("Cleanup complete")
+	}
+
+	// Notify caller that cleanup function is ready
+	// The cleanup function captures ctx pointer, so it will see workers when they're created
+	if onCleanupReady != nil {
+		onCleanupReady(cleanup)
 	}
 
 	// Count packages that need building

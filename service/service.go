@@ -19,6 +19,7 @@ package service
 
 import (
 	"fmt"
+	"sync"
 
 	"dsynth/builddb"
 	"dsynth/config"
@@ -44,9 +45,11 @@ import (
 //	    Force:    false,
 //	})
 type Service struct {
-	cfg    *config.Config
-	logger *log.Logger
-	db     *builddb.DB
+	cfg           *config.Config
+	logger        *log.Logger
+	db            *builddb.DB
+	activeCleanup func() // Cleanup function for active build (set immediately when workers created)
+	cleanupMu     sync.Mutex
 }
 
 // NewService creates a new Service instance with the given configuration.
@@ -121,4 +124,30 @@ func (s *Service) Logger() *log.Logger {
 // Database returns the service's build database.
 func (s *Service) Database() *builddb.DB {
 	return s.db
+}
+
+// SetActiveCleanup stores the cleanup function for the active build.
+// This is called by Build() as soon as workers are created, allowing
+// signal handlers to access the cleanup function immediately.
+func (s *Service) SetActiveCleanup(cleanup func()) {
+	s.cleanupMu.Lock()
+	s.activeCleanup = cleanup
+	s.cleanupMu.Unlock()
+}
+
+// GetActiveCleanup returns the cleanup function for the active build.
+// Returns nil if no build is active.
+// This is called by signal handlers to cleanup workers on interruption.
+func (s *Service) GetActiveCleanup() func() {
+	s.cleanupMu.Lock()
+	defer s.cleanupMu.Unlock()
+	return s.activeCleanup
+}
+
+// ClearActiveCleanup removes the stored cleanup function.
+// This is called after cleanup completes.
+func (s *Service) ClearActiveCleanup() {
+	s.cleanupMu.Lock()
+	s.activeCleanup = nil
+	s.cleanupMu.Unlock()
 }

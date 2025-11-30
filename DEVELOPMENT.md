@@ -1341,6 +1341,19 @@ Rationale: Package should contain only metadata, not build-time state
 - None! 🎉
 
 **High** (🟠 Significant impact):
+- ✅ ~~**[build/service]** Signal handler cleanup race condition~~ - **RESOLVED** (2025-11-30)
+  - Context: Signal handler bypassed Environment abstraction, violating architecture
+  - Issue: `service.Cleanup()` used raw `exec.Command()` instead of `env.Cleanup()`
+  - Root Cause: Cleanup function only available AFTER `svc.Build()` returns, but signal arrives DURING build
+  - Solution: Callback pattern - cleanup function registered immediately when created (before workers start)
+  - Implementation: Added `onCleanupReady func(func())` parameter to `build.DoBuild()`
+  - Status: ✅ **FIXED** - Cleanup correctly invoked via Environment abstraction on SIGINT/SIGTERM
+  - Verification: VM test confirms "Cleaning up active build workers..." message and unmount attempts
+  - Files Changed: `build/build.go`, `service/build.go`, `service/service.go`, `main.go`, test files
+  - Test: `build/closure_test.go` verifies closure correctly captures BuildContext pointer
+  - **New Issues Discovered** (tracked below):
+    - Child processes (make) not killed before unmount → "device busy" errors
+    - All workers appear to use SL00 (tripled mount entries) - worker ID assignment issue?
 - **[environment]** Cleanup not idempotent - violates interface contract (discovered: 2025-11-29)
   - Impact: Cannot safely `defer env.Cleanup()` after failed Setup
   - Workaround: Check baseDir before calling Cleanup
@@ -1351,6 +1364,20 @@ Rationale: Package should contain only metadata, not build-time state
 - **[config]** AutoVacuum forced to true, ignoring INI setting (discovered: 2025-11-29)
   - Impact: User config override silently ignored
   - Fix: Respect INI value instead of forcing at end of LoadConfig
+- **[build/environment]** Child processes not killed during cleanup (discovered: 2025-11-30)
+  - Context: After SIGINT, cleanup attempts to unmount but child processes hold filesystems
+  - Impact: Unmount fails with "device busy", mounts remain active, cleanup hangs
+  - Evidence: `make` processes remain running after SIGINT, preventing `/build/SL00/construction` unmount
+  - Root Cause: Workers start build processes but signal handler doesn't kill them before cleanup
+  - **Detailed Analysis**: [docs/issues/CLEANUP_CHILD_PROCESSES.md](docs/issues/CLEANUP_CHILD_PROCESSES.md)
+  - Proposed Fix: Context cancellation + process tracking hybrid approach
+- **[build]** Multiple workers using same slot (SL00) (discovered: 2025-11-30)
+  - Context: VM test shows tripled mount entries for `/build/SL00` only, no SL01/SL02/etc.
+  - Impact: Worker isolation violated, concurrent builds may corrupt each other
+  - Evidence: `mount | grep /build/SL` shows 3 copies of same 22 mounts on SL00
+  - Hypothesis: Worker ID not being passed correctly or workers created with wrong IDs
+  - **Detailed Analysis**: [docs/issues/WORKER_SLOT_ASSIGNMENT.md](docs/issues/WORKER_SLOT_ASSIGNMENT.md)
+  - Investigation Needed: Add debug logging to trace worker creation and ID assignment
 
 **Medium** (🟡 Quality/usability):
 - **[builddb]** Double-wrapping PackageIndexError obscures root cause (discovered: 2025-11-29)

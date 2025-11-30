@@ -279,7 +279,7 @@ func TestIntegration_FirstBuildWorkflow(t *testing.T) {
 	}
 
 	// Build the port
-	stats, cleanupBuild, err := DoBuild(packages, cfg, logger, db)
+	stats, cleanupBuild, err := DoBuild(packages, cfg, logger, db, nil)
 	if cleanupBuild != nil {
 		t.Cleanup(cleanupBuild)
 	}
@@ -328,7 +328,7 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 		t.Fatalf("Failed to parse port: %v", err)
 	}
 
-	_, cleanup1, err := DoBuild(packages1, cfg, logger, db)
+	_, cleanup1, err := DoBuild(packages1, cfg, logger, db, nil)
 	if cleanup1 != nil {
 		t.Cleanup(cleanup1)
 	}
@@ -345,7 +345,7 @@ func TestIntegration_IncrementalBuildSkip(t *testing.T) {
 		t.Fatalf("Failed to parse port for rebuild: %v", err)
 	}
 
-	stats2, cleanup2, err := DoBuild(packages2, cfg, logger, db)
+	stats2, cleanup2, err := DoBuild(packages2, cfg, logger, db, nil)
 	if cleanup2 != nil {
 		t.Cleanup(cleanup2)
 	}
@@ -385,7 +385,7 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 		t.Fatalf("Failed to parse port: %v", err)
 	}
 
-	_, cleanup1, err := DoBuild(packages1, cfg, logger, db)
+	_, cleanup1, err := DoBuild(packages1, cfg, logger, db, nil)
 	if cleanup1 != nil {
 		t.Cleanup(cleanup1)
 	}
@@ -409,7 +409,7 @@ func TestIntegration_RebuildAfterChange(t *testing.T) {
 		t.Fatalf("Failed to parse port for rebuild: %v", err)
 	}
 
-	stats2, cleanup2, err := DoBuild(packages2, cfg, logger, db)
+	stats2, cleanup2, err := DoBuild(packages2, cfg, logger, db, nil)
 	if cleanup2 != nil {
 		t.Cleanup(cleanup2)
 	}

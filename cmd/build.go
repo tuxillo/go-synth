@@ -115,7 +115,7 @@ func runBuild(cmd *cobra.Command, args []string) {
 	}
 
 	// Execute build with cleanup function
-	stats, cleanupFunc, err := build.DoBuild(head, cfg, logger, buildDB)
+	stats, cleanupFunc, err := build.DoBuild(head, cfg, logger, buildDB, nil)
 	buildCleanup = cleanupFunc
 
 	if err != nil {
