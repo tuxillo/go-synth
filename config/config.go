@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 
@@ -11,7 +12,9 @@ import (
 
 // Config holds go-synth configuration
 type Config struct {
-	Profile        string
+	Profile    string
+	ConfigPath string
+
 	BuildBase      string
 	DPortsPath     string
 	RepositoryPath string
@@ -89,6 +92,7 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 	if configDir != "" {
 		configFile = configDir + "/dsynth.ini"
 	}
+	cfg.ConfigPath = configFile
 
 	// Try to load config file
 	configFileExists := false
@@ -287,4 +291,85 @@ func parseBool(s string) bool {
 	// Handle yes/no
 	s = s
 	return s == "yes" || s == "Yes" || s == "YES" || s == "1" || s == "on" || s == "On" || s == "ON"
+}
+
+func boolToYesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
+// SaveConfig writes the current configuration to disk in INI format.
+// The path parameter takes precedence; when empty, cfg.ConfigPath is used,
+// falling back to the default /etc/dsynth/dsynth.ini.
+func SaveConfig(path string, cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+
+	targetPath := path
+	if targetPath == "" {
+		targetPath = cfg.ConfigPath
+	}
+	if targetPath == "" {
+		targetPath = "/etc/dsynth/dsynth.ini"
+	}
+
+	iniFile := ini.Empty()
+	section, err := iniFile.NewSection("Global Configuration")
+	if err != nil {
+		return fmt.Errorf("failed to create config section: %w", err)
+	}
+
+	profile := cfg.Profile
+	if profile == "" {
+		profile = "default"
+	}
+	section.Key("profile_selected").SetValue(profile)
+
+	setStr := func(key, value string) {
+		if value != "" {
+			section.Key(key).SetValue(value)
+		}
+	}
+
+	setStr("Directory_buildbase", cfg.BuildBase)
+	setStr("Directory_portsdir", cfg.DPortsPath)
+	setStr("Directory_repository", cfg.RepositoryPath)
+	setStr("Directory_packages", cfg.PackagesPath)
+	setStr("Directory_distfiles", cfg.DistFilesPath)
+	setStr("Directory_options", cfg.OptionsPath)
+	setStr("Directory_logs", cfg.LogsPath)
+	setStr("Directory_ccache", cfg.CCachePath)
+	setStr("Directory_system", cfg.SystemPath)
+
+	section.Key("Number_of_builders").SetValue(strconv.Itoa(cfg.MaxWorkers))
+	section.Key("Max_jobs_per_builder").SetValue(strconv.Itoa(cfg.MaxJobs))
+
+	section.Key("Tmpfs_workdir").SetValue(boolToYesNo(cfg.UseTmpfs))
+	section.Key("Tmpfs_localbase").SetValue(boolToYesNo(cfg.UseTmpfs))
+	section.Key("Display_with_ncurses").SetValue(boolToYesNo(!cfg.DisableUI))
+
+	section.Key("Migration_auto_migrate").SetValue(boolToYesNo(cfg.Migration.AutoMigrate))
+	section.Key("Migration_backup_legacy").SetValue(boolToYesNo(cfg.Migration.BackupLegacy))
+
+	setStr("Database_path", cfg.Database.Path)
+	section.Key("Database_auto_vacuum").SetValue(boolToYesNo(cfg.Database.AutoVacuum))
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	tmpPath := targetPath + ".tmp"
+	if err := iniFile.SaveTo(tmpPath); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		return fmt.Errorf("failed to finalize config: %w", err)
+	}
+
+	cfg.ConfigPath = targetPath
+	return nil
 }

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"gopkg.in/ini.v1"
 )
 
 func TestParseBool(t *testing.T) {
@@ -503,5 +505,56 @@ func TestConfig_ZeroAndNegativeWorkers(t *testing.T) {
 				t.Errorf("MaxJobs = %d, want %d", cfg.MaxJobs, tt.expectJobs)
 			}
 		})
+	}
+}
+
+func TestSaveConfigWritesIni(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &Config{
+		Profile:        "default",
+		BuildBase:      filepath.Join(tmpDir, "build"),
+		DPortsPath:     filepath.Join(tmpDir, "dports"),
+		RepositoryPath: filepath.Join(tmpDir, "repo"),
+		PackagesPath:   filepath.Join(tmpDir, "packages"),
+		DistFilesPath:  filepath.Join(tmpDir, "dist"),
+		OptionsPath:    filepath.Join(tmpDir, "options"),
+		LogsPath:       filepath.Join(tmpDir, "logs"),
+		CCachePath:     filepath.Join(tmpDir, "ccache"),
+		SystemPath:     "/",
+		MaxWorkers:     4,
+		MaxJobs:        2,
+		UseTmpfs:       true,
+	}
+	cfg.Migration.AutoMigrate = true
+	cfg.Migration.BackupLegacy = true
+	cfg.Database.Path = filepath.Join(tmpDir, "builds.db")
+	cfg.Database.AutoVacuum = true
+
+	configPath := filepath.Join(tmpDir, "etc", "dsynth", "dsynth.ini")
+	if err := SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() failed: %v", err)
+	}
+
+	iniFile, err := ini.Load(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load saved config: %v", err)
+	}
+
+	sec := iniFile.Section("Global Configuration")
+	if sec.Key("Directory_buildbase").String() != cfg.BuildBase {
+		t.Fatalf("Directory_buildbase mismatch: %s", sec.Key("Directory_buildbase").String())
+	}
+	if got := sec.Key("Number_of_builders").String(); got != "4" {
+		t.Fatalf("Number_of_builders mismatch: %s", got)
+	}
+	if sec.Key("Tmpfs_workdir").String() != "yes" {
+		t.Fatalf("Tmpfs_workdir should be yes, got %s", sec.Key("Tmpfs_workdir").String())
+	}
+	if got := sec.Key("Database_path").String(); got != cfg.Database.Path {
+		t.Fatalf("Database_path mismatch: got %s want %s", got, cfg.Database.Path)
+	}
+
+	if cfg.ConfigPath != configPath {
+		t.Fatalf("ConfigPath not updated, got %s want %s", cfg.ConfigPath, configPath)
 	}
 }

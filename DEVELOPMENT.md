@@ -1447,7 +1447,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 **Discovered**: 2025-11-30  
 **Priority**: P0 (historical)
 
-**Summary**: Bootstrap now mirrors the C dsynth workflow: it detects when `ports-mgmt/pkg` already exists in `{BuildBase}/Template`, replays tar extraction when using cached builds, and always extracts the freshly built package before handing control to workers. Dependency install phases return errors immediately, so "pkg: command not found" no longer slips by as a warning.
+**Summary**: Bootstrap now mirrors the C dsynth workflow: it detects when `ports-mgmt/pkg` already exists in `{BuildBase}/Template`, replays the tar extraction when using cached builds, and always extracts the freshly built package before handing control to workers. Dependency install phases return errors immediately, so "pkg: command not found" no longer slips by as a warning.
 
 **Fix Highlights**:
 1. **Template-aware bootstrap** (`build/bootstrap.go:57-113`, `226-258`)
@@ -1461,6 +1461,26 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
    - DragonFly VM run (`echo "y" | ./go-synth -C /nonexistent build print/indexinfo`) confirms `/build/synth/Template/usr/local/sbin/pkg` exists prior to worker startup
 
 **Documentation**: `docs/issues/PKG_TEMPLATE_INSTALLATION.md` captures the fix details and validation steps
+
+##### Issue #4: `go-synth init` does not create `/etc/dsynth/dsynth.ini` (RESOLVED)
+**Status**: 🟢 Resolved – Verified 2025-12-01  
+**Discovered**: 2025-12-01  
+**Priority**: P1 (must fix for onboarding)
+
+**Summary**: Added `config.SaveConfig()` to serialize the active configuration and taught `go-synth init` to call it when the target INI file is missing. Successful init now creates `/etc/dsynth/dsynth.ini` (or the path supplied via `-C`) and reports whether the file was created or already present.
+
+**Fix Highlights**:
+1. **Config serialization helper** (`config.SaveConfig`)
+   - Writes a `[Global Configuration]` section with the values consumed by `LoadConfig`
+   - Updates `cfg.ConfigPath` so future saves respect overrides
+2. **CLI integration** (`main.go:191-275`)
+   - After initialization, `doInit` checks for the config file and runs `config.SaveConfig` when it’s missing, surfacing warnings if permissions prevent writing
+3. **Regression coverage**
+   - `config/config_test.go:500+` verifies that `SaveConfig` writes expected keys and updates `ConfigPath`
+   - Documentation updated in `docs/issues/INIT_CONFIG_CREATION.md`
+
+**Documentation**: `docs/issues/INIT_CONFIG_CREATION.md` captures the fix details and follow-up items.
+
 
 #### Architectural/Design (Critical for Library Reuse):
 - ✅ ~~**stdout/stderr in library packages**~~ - **RESOLVED** (2025-11-30)

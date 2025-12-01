@@ -43,7 +43,7 @@ sudo install -m 0755 go-synth /usr/local/bin/
 > Compatibility note: The CLI binary installed by go-synth is now named `go-synth`, but configuration paths remain under `/etc/dsynth/` for compatibility.
 
 ```bash
-# Initialize configuration
+# Initialize configuration (creates /etc/dsynth/dsynth.ini if missing)
 sudo go-synth init
 
 # Edit configuration (adjust paths and worker count)

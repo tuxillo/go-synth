@@ -265,6 +265,25 @@ func doInit(cfg *config.Config) {
 		fmt.Printf("  ✓ Ports directory: %s (%d entries)\n", cfg.DPortsPath, result.PortsFound)
 	}
 
+	configPath := cfg.ConfigPath
+	if configPath == "" {
+		configPath = "/etc/dsynth/dsynth.ini"
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		fmt.Println("\nWriting configuration file:")
+		if err := config.SaveConfig(configPath, cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "  ⚠  Failed to write %s: %v\n", configPath, err)
+			fmt.Println("     Please run go-synth as root or create the config manually.")
+		} else {
+			fmt.Printf("  ✓ Config file created: %s\n", configPath)
+		}
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "\n⚠  Unable to check config file: %v\n", err)
+	} else {
+		fmt.Printf("\nConfiguration file already exists: %s (not modified)\n", configPath)
+	}
+
 	// Success summary
 	fmt.Println("\n✓ Initialization complete!")
 	fmt.Println("\nNext steps:")
