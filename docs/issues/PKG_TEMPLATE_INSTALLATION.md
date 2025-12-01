@@ -1,12 +1,26 @@
 # Issue #3: pkg Not Installed into Template
 
-**Status**: 🔴 Open  
-**Priority**: P0 - Critical (Blocks all builds)  
+**Status**: 🟢 Resolved (2025-12-01)  
+**Priority**: P0 - Critical (formerly blocking; now permanent regression test)  
 **Discovered**: 2025-11-30  
 **Component**: `build/bootstrap.go`, `build/phases.go`  
-**Affects**: All packages with dependencies (99% of ports)
+**Affects**: All packages with dependencies (99% of ports)  
+**Fix Validation**: Verified in go-synth master (build/bootstrap.go@HEAD, build/phases.go@HEAD) and VM build of `print/indexinfo`
 
 ---
+
+## Resolution Summary
+
+1. **Template fast-path + reinstall** (`build/bootstrap.go`)
+   - Detects `/Template/usr/local/sbin/pkg` + cached package before rebuilding
+   - On CRC match, replays the tar extraction so Template always contains pkg/pkg-static
+   - After rebuilding pkg it now always extracts the `.pkg` into Template using `tar --exclude '+*' --exclude '*/man/*' -xzpf`
+2. **Dependency install now fatal on error** (`build/phases.go`)
+   - `installDependencyPackages` and `installMissingPackages` return errors for execution/exit failures instead of logging warnings
+   - Worker loop aborts the phase immediately, surfacing missing pkg or pkg add failures to the user
+3. **Tests / Validation**
+   - `go test ./build` exercises the bootstrap CRC-path + Template extraction (`TestBootstrapPkg_*`)
+   - DragonFly VM run building `print/indexinfo` now shows pkg present in `/build/synth/Template/usr/local/sbin/pkg`
 
 ## Problem Statement
 
@@ -16,7 +30,7 @@ Additionally, the build continues after dependency installation failures instead
 
 ---
 
-## Observed Behavior
+## Observed Behavior (pre-fix)
 
 ### Test Case: Building print/indexinfo
 
@@ -62,16 +76,18 @@ pkg: command not found           ← ERROR but logged as warning
 
 ### 1. Missing Template Installation (build/bootstrap.go)
 
-**Current Code** (lines 165-169):
+> **Status**: Fixed. `bootstrapPkg` now checks for `/Template/usr/local/sbin/pkg`, replays cached installs, and always extracts the built pkg into Template before returning.
+
+**Previous Code (pre-fix)**:
 ```go
 // Step 9: Mark success
 registry.AddFlags(pkgPkg, pkg.PkgFSuccess|pkg.PkgFPackaged)
 logger.Success("ports-mgmt/pkg (bootstrap build succeeded)")
 
-return nil  // ← Exits without installing pkg into Template!
+return nil  // ← Exited without installing pkg into Template
 ```
 
-**What's Missing**: After building pkg, we need to extract the `.pkg` file into Template using tar.
+**Resolution**: Added Template presence check + tar extraction mirroring the C dsynth workflow (see `build/bootstrap.go:57-113` and `226-258`).
 
 **C dsynth Reference** (build.c:266-286):
 ```c
@@ -100,17 +116,19 @@ if (newtemplate && FetchOnlyOpt == 0) {
 
 ### 2. No Template Check Before Bootstrap (build/bootstrap.go)
 
-**Current Code** (lines 48-67):
+> **Status**: Fixed. Lines 57-70 now short-circuit when both the Template pkg binary and cached package file exist.
+
+**Previous Behavior**:
 ```go
 logger.Info("Bootstrap phase: checking ports-mgmt/pkg...")
 
 // Step 2: Compute CRC of pkg port directory
 portPath := filepath.Join(cfg.DPortsPath, pkgPkg.Category, pkgPkg.Name)
 currentCRC, err := builddb.ComputePortCRC(portPath)
-// ... proceeds to check CRC and potentially rebuild
+// ... proceeded to rebuild even if Template already had pkg
 ```
 
-**Problem**: Doesn't check if `/build/synth/Template/usr/local/sbin/pkg` already exists before computing CRC and potentially rebuilding.
+**Resolution**: Added Template/pkg existence guard so bootstrap exits early when pkg is already available, matching the dsynth template semantics.
 
 **C dsynth Reference** (build.c:230-237):
 ```c
@@ -140,41 +158,23 @@ if ((scan->flags & (PKGF_SUCCESS | PKGF_PACKAGED)) == 0 && FetchOnlyOpt == 0) {
 
 ### 3. Wrong Error Handling (build/phases.go)
 
-**Problem 1**: `installPackages()` continues on failure (lines 172-183)
+> **Status**: Fixed. Both `installDependencyPackages` and `installMissingPackages` now return errors immediately on execution failure or non-zero exit codes (see `build/phases.go:159-181` and `216-252`).
 
-**Current Code**:
+**Previous Behavior**:
 ```go
 result, err := worker.Env.Execute(ctx, execCmd)
 if err != nil {
-    // Execution failed - log warning but don't fail build
-    logger.WriteWarning(fmt.Sprintf("Package install execution failed for %s: %v", pkgFile, err))
-    continue  // ← WRONG: Should return error
+    logger.WriteWarning(...)
+    continue  // ← build kept going without pkg installed
 }
 
 if result.ExitCode != 0 {
-    // pkg add failed, but this might be acceptable (already installed)
-    // Output already captured by logger, just log warning
-    logger.WriteWarning(fmt.Sprintf("Package install returned exit code %d for %s", result.ExitCode, pkgFile))
-    // ← WRONG: Should return error
+    logger.WriteWarning(...)
+    // ← build kept going
 }
 ```
 
-**Problem 2**: `installMissingPackages()` continues on exec error (lines 250-256)
-
-**Current Code**:
-```go
-result, err := worker.Env.Execute(ctx, installCmd)
-if err != nil {
-    logger.WriteWarning(fmt.Sprintf("Failed to execute install for %s: %v", pkgFile, err))
-    continue  // ← WRONG: Should return error
-}
-
-if result.ExitCode != 0 {
-    logger.WriteWarning(fmt.Sprintf("Failed to install %s: exit code %d", pkgFile, result.ExitCode))
-    return fmt.Errorf("failed to install required package %s: exit code %d", pkgFile, result.ExitCode)
-    // ← This one is correct, but inconsistent
-}
-```
+**Resolution**: Functions now bubble errors back to `executePhase`, causing the worker to abort the build immediately when pkg installation fails.
 
 ---
 
@@ -196,6 +196,8 @@ if result.ExitCode != 0 {
 ---
 
 ## Solution Plan (3 Steps)
+
+_Status: Completed in go-synth HEAD (2025-12-01)._ 
 
 ### Step 1: Check Template for Existing pkg (Skip if Present)
 

@@ -1398,7 +1398,71 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### ⚠️ Known Issues
 
-**Architectural/Design** (Critical for Library Reuse):
+#### Critical Issues
+
+##### Issue #1: Signal Handler Cleanup Failure (CRITICAL)
+**Status**: 🔴 Open – Blocks production use  
+**Discovered**: 2025-11-30  
+**Affects**: All builds terminated with Ctrl+C or signals
+
+**Problem**: When a build is interrupted, the signal handler calls `os.Exit(1)` before cleanup runs. Worker mount points (24+ per worker) stay active, polluting the host.
+
+**Evidence**:
+```bash
+# After Ctrl+C during build
+$ mount | grep SL00
+tmpfs on /build/synth/build/SL00 (tmpfs, local)
+devfs on /build/synth/build/SL00/dev (devfs, local)
+... (22 more mounts still active)
+```
+
+**Root Causes**:
+1. `main.go` signal handler invokes `os.Exit(1)` and skips deferred cleanup
+2. `service/build.go` defers cleanup inside worker loop; never reached on hard exit
+3. `service/cleanup.go` pattern match looks for `SL.` instead of `SL00`, `SL01`, etc.
+
+**Impact**: System accumulates unmounted filesystems; manual cleanup fails due to pattern mismatch; may require manual `umount -f`/reboot.
+
+**Solution Plan**:
+1. Track cleanup closures so signal handler can run them before exiting
+2. Replace `os.Exit(1)` with structured shutdown path
+3. Fix worker directory pattern from `SL.` to `SL`
+4. Add cleanup integration tests
+
+**Related Files**: `main.go`, `service/build.go`, `service/cleanup.go`, `environment/bsd/bsd.go`
+
+##### Issue #2: Missing ports-mgmt/pkg Bootstrap (CRITICAL) ✅ RESOLVED
+**Status**: ✅ Resolved – 2025-11-30  
+**Discovered**: 2025-11-30  
+**Affects**: All packages with dependencies (99% of ports)
+
+**Problem**: `ports-mgmt/pkg` must exist before any other package build, but we treated it like an ordinary port. This created a chicken-and-egg failure for almost every dependency graph.
+
+**Solution**: Added `PkgFPkgPkg` flag, detection during dependency resolution, and a dedicated `bootstrapPkg()` flow that runs in slot 99 before worker pools start. CRC-based incremental builds now skip unnecessary work, and pkg is removed from worker queues.
+
+**Testing**: `build/bootstrap_test.go` covers CRC/no-pkg paths; VM bootstrap for `print/indexinfo` validated manually.
+
+##### Issue #3: pkg Not Installed into Template (RESOLVED)
+**Status**: 🟢 Resolved – Verified 2025-12-01  
+**Discovered**: 2025-11-30  
+**Priority**: P0 (historical)
+
+**Summary**: Bootstrap now mirrors the C dsynth workflow: it detects when `ports-mgmt/pkg` already exists in `{BuildBase}/Template`, replays tar extraction when using cached builds, and always extracts the freshly built package before handing control to workers. Dependency install phases return errors immediately, so "pkg: command not found" no longer slips by as a warning.
+
+**Fix Highlights**:
+1. **Template-aware bootstrap** (`build/bootstrap.go:57-113`, `226-258`)
+   - Skips rebuilding when Template already contains pkg/pkg-static
+   - After any rebuild, extracts the `.pkg` into Template via `tar --exclude '+*' --exclude '*/man/*' -xzpf`
+2. **Fatal dependency install errors** (`build/phases.go:159-252`)
+   - `installDependencyPackages` and `installMissingPackages` now bubble errors when `/usr/sbin/pkg add` fails
+   - Worker loop aborts the phase instead of silently continuing
+3. **Regression coverage**
+   - `go test ./build` exercises `TestBootstrapPkg_*` for CRC and Template extraction
+   - DragonFly VM run (`echo "y" | ./go-synth -C /nonexistent build print/indexinfo`) confirms `/build/synth/Template/usr/local/sbin/pkg` exists prior to worker startup
+
+**Documentation**: `docs/issues/PKG_TEMPLATE_INSTALLATION.md` captures the fix details and validation steps
+
+#### Architectural/Design (Critical for Library Reuse):
 - ✅ ~~**stdout/stderr in library packages**~~ - **RESOLVED** (2025-11-30)
   - Context: Libraries previously printed directly to terminal
   - Solution: Added LibraryLogger interface to all library functions
@@ -1448,6 +1512,9 @@ Rationale: Package should contain only metadata, not build-time state
 - **[pkg]** Error types not surfaced consistently (ErrEmptySpec, ErrInvalidSpec defined but not used)
 - **[migration]** No dry-run or explicit idempotency controls
 - **[build]** Phase execution has unused helpers, narrow coverage
+
+#### Non-Critical Issues
+- None currently tracked
 
 **Code Quality**:
 - **[builddb]** Partial use of bucket name constants (uses strings in some places)
@@ -1619,9 +1686,6 @@ See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for features deferred bey
 
 ---
 
-## 🐛 Known Issues
-
-### Critical Issues
 
 #### Issue #1: Signal Handler Cleanup Failure (CRITICAL)
 **Status**: 🔴 Open - Blocks production use  
@@ -1731,66 +1795,27 @@ Implemented proper pkg bootstrap with CRC-based incremental build support:
 
 ---
 
-#### Issue #3: pkg Not Installed into Template (CRITICAL)
-**Status**: 🔴 Open - Blocks all package builds with dependencies  
+#### Issue #3: pkg Not Installed into Template (RESOLVED)
+**Status**: 🟢 Resolved – Verified 2025-12-01  
 **Discovered**: 2025-11-30  
-**Priority**: P0 - Must fix before any production use  
-**Affects**: All packages with dependencies (99% of ports)
+**Priority**: P0 (historical)
 
-**Problem**:
-While Issue #2 fixed pkg *building* first, it doesn't *install* pkg into the Template directory. Workers copy Template to their slots, so without pkg in Template, workers have no `/usr/local/sbin/pkg` binary. This causes all dependency installations to fail with "pkg: command not found", but the build continues anyway due to improper error handling.
+**Summary**:
+Bootstrap now mirrors the C dsynth workflow: it detects when `ports-mgmt/pkg` is already present in `{BuildBase}/Template`, replays the tar extraction when using cached builds, and always extracts the freshly built package before handing control to workers. Dependency installation phases now return errors immediately, so "pkg: command not found" no longer slips by as a warning.
 
-**Evidence**:
-```bash
-# Template missing pkg after bootstrap
-$ ls /build/Template/usr/local/sbin/pkg
-ls: /build/Template/usr/local/sbin/pkg: No such file or directory
+**Fix Highlights**:
+1. **Template-aware bootstrap** (`build/bootstrap.go:57-113`, `226-258`)
+   - Skips rebuilding when Template already contains pkg/pkg-static
+   - After any rebuild, extracts the `.pkg` into Template via `tar --exclude '+*' --exclude '*/man/*' -xzpf`
+2. **Fatal dependency install errors** (`build/phases.go:159-252`)
+   - `installDependencyPackages` and `installMissingPackages` now bubble errors when `/usr/sbin/pkg add` fails
+   - Worker loop aborts the phase instead of silently continuing
+3. **Regression coverage**
+   - `go test ./build` exercises `TestBootstrapPkg_*` for CRC and Template extraction
+   - DragonFly VM run (`echo "y" | ./go-synth -C /nonexistent build print/indexinfo`) confirms `/build/synth/Template/usr/local/sbin/pkg` exists prior to worker startup
 
-# Worker slots also missing pkg (copied from Template)
-$ ls /build/SL00/usr/local/sbin/pkg
-ls: /build/SL00/usr/local/sbin/pkg: No such file or directory
-
-# Builds fail but continue
-[Worker 0] print/indexinfo: Installing dependencies...
-pkg: command not found  # ← ERROR but build continues!
-[Worker 0] print/indexinfo: build phase...  # ← Shouldn't reach here
-```
-
-**Root Causes**:
-1. **Missing pkg installation**: `build/bootstrap.go` builds pkg but never extracts it into Template (C dsynth does this at build.c:273-285)
-2. **No Template check**: Doesn't verify if pkg already exists in Template before rebuilding
-3. **Silent error handling**: `build/phases.go:174-183` logs warnings on dependency install failure but continues instead of stopping
-
-**C dsynth Behavior (Expected)**:
-```c
-// build.c:273-285
-asprintf(&buf,
-    "cd %s/Template; "
-    "tar --exclude '+*' --exclude '*/man/*' "
-    "-xvzpf %s/%s > /dev/null 2>&1",
-    BuildBase, RepositoryPath, scan->pkgfile);
-rc = system(buf);
-if (rc)
-    dfatal("Command failed: %s\n", buf);  // ← FATAL on failure
-```
-
-**Impact**:
-- Workers cannot install dependencies (no pkg binary)
-- Builds fail silently and continue (wrong error handling)
-- Makes 99% of ports unbuildable
-
-**Solution Plan** (3 Steps):
-1. **Check Template first**: Before bootstrap, verify if `/build/Template/usr/local/sbin/pkg` exists and skip if present
-2. **Install pkg into Template**: After building pkg, extract package into Template with `tar --exclude '+*' --exclude '*/man/*' -xzpf`
-3. **Fix error handling**: Change `installPackages()` and `installMissingPackages()` to return errors instead of logging warnings
-
-**Related Files**:
-- `build/bootstrap.go` - Missing Template installation
-- `build/phases.go` - Wrong error handling (lines 174-183, 251-256)
-- C dsynth: `usr.bin/dsynth/build.c` (lines 220-290)
-
-**Detailed Documentation**:
-- `docs/issues/PKG_TEMPLATE_INSTALLATION.md` - Complete analysis and fix plan
+**Documentation**:
+- `docs/issues/PKG_TEMPLATE_INSTALLATION.md` captures the fix details and validation steps
 
 ---
 
