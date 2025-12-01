@@ -115,6 +115,12 @@ const (
 
 	// PkgFRunning indicates the package is currently being built.
 	PkgFRunning PackageFlags = 0x00000800
+
+	// PkgFPkgPkg indicates the ports-mgmt/pkg special bootstrap package.
+	// This port must be built first before the worker pool starts, since
+	// it's required to create .pkg files for all other packages.
+	// Matches C dsynth PKGF_PKGPKG (0x00008000).
+	PkgFPkgPkg PackageFlags = 0x00001000
 )
 
 // Has reports whether the flag f includes the specified flag.
@@ -174,6 +180,9 @@ func (f PackageFlags) String() string {
 	}
 	if f.Has(PkgFRunning) {
 		parts = append(parts, "RUNNING")
+	}
+	if f.Has(PkgFPkgPkg) {
+		parts = append(parts, "PKGPKG")
 	}
 
 	return strings.Join(parts, "|")

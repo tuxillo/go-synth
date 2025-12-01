@@ -131,7 +131,26 @@ func resolveDependencies(packages []*Package, cfg *config.Config, registry *Buil
 
 	// Phase 2: Build the dependency graph
 	logger.Info("Building dependency graph...")
-	return buildDependencyGraph(packages, cfg, pkgRegistry, logger)
+	if err := buildDependencyGraph(packages, cfg, pkgRegistry, logger); err != nil {
+		return err
+	}
+
+	// Mark ports-mgmt/pkg for special bootstrap handling
+	markPkgPkgFlag(packages, registry)
+
+	return nil
+}
+
+// markPkgPkgFlag marks ports-mgmt/pkg with the PkgFPkgPkg flag for special
+// bootstrap handling. This port must be built first before the worker pool
+// starts, since it's required to create .pkg files for all other packages.
+func markPkgPkgFlag(packages []*Package, registry *BuildStateRegistry) {
+	for _, pkg := range packages {
+		if pkg.PortDir == "ports-mgmt/pkg" {
+			registry.AddFlags(pkg, PkgFPkgPkg)
+			return
+		}
+	}
 }
 
 type depOrigin struct {

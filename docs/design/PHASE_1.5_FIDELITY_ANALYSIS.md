@@ -85,7 +85,7 @@
 | `parsepkglist_file()` | pkglist.c:244 | ❌ inline in `ParsePortList` | pkg.go | ✅ SIMPLER |
 | `GetLocalPackageList()` | pkglist.c:292 | `GetInstalledPackages()` | pkg.go:433 | ✅ EQUIVALENT |
 | `GetFullPackageList()` | pkglist.c:395 | `GetAllPorts()` | pkg.go:455 | ✅ EQUIVALENT |
-| `GetPkgPkg()` | pkglist.c:586 | ❌ None | - | ⚠️ MISSING (pkg bootstrap) |
+| `GetPkgPkg()` | pkglist.c:586 | `bootstrapPkg()` | build/bootstrap.go | ✅ IMPLEMENTED (2025-11-30) |
 | `processPackageListBulk()` | pkglist.c:412 | ❌ inline | pkg.go:158 | ✅ REFACTORED |
 | `scan_and_queue_dir()` | pkglist.c:1306 | ❌ inline in `GetAllPorts` | pkg.go:458 | ✅ SIMPLER |
 | `scan_binary_repo()` | pkglist.c:1348 | ❌ None | - | ⚠️ MISSING (prebuilt detection) |
@@ -428,7 +428,7 @@ const (
 | `PKGF_SUCCESS` | `PkgFSuccess` | ✅ | Different bit position |
 | `PKGF_FAILURE` | `PkgFFailed` | ✅ | Different bit position |
 | `PKGF_RUNNING` | `PkgFRunning` | ✅ | Different bit position |
-| `PKGF_PKGPKG` | ❌ | ⚠️ | Missing (pkg bootstrap) |
+| `PKGF_PKGPKG` | `PkgFPkgPkg` | ✅ | IMPLEMENTED (2025-11-30) |
 | `PKGF_NOTREADY` | ❌ | ⚠️ | Phase 3 |
 | `PKGF_MANUALSEL` | `PkgFManualSel` | ✅ | Different bit position |
 | `PKGF_META` | `PkgFMeta` | ✅ | Different bit position |

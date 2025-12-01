@@ -230,6 +230,14 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	logger.Info("Starting build: %d packages (%d skipped, %d ignored)",
 		ctx.stats.Total, ctx.stats.Skipped, ctx.stats.Ignored)
 
+	// Bootstrap ports-mgmt/pkg before starting workers
+	// This must succeed before any workers are created
+	logger.Info("Checking for ports-mgmt/pkg bootstrap requirement...")
+	if err := bootstrapPkg(buildCtx, buildOrder, cfg, logger, buildDB, ctx.registry); err != nil {
+		cancel() // Cancel context
+		return nil, cleanup, fmt.Errorf("pkg bootstrap failed: %w", err)
+	}
+
 	// Create workers
 	numWorkers := cfg.MaxWorkers
 	if cfg.SlowStart > 0 && cfg.SlowStart < numWorkers {
@@ -269,6 +277,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		for _, p := range buildOrder {
 			// Skip packages that don't need building
 			if ctx.registry.HasAnyFlags(p, pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) {
+				continue
+			}
+
+			// Skip ports-mgmt/pkg - already built in bootstrap phase
+			if ctx.registry.HasFlags(p, pkg.PkgFPkgPkg) {
 				continue
 			}
 

@@ -1662,8 +1662,8 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 
 ---
 
-#### Issue #2: Missing ports-mgmt/pkg Bootstrap (CRITICAL)
-**Status**: 🔴 Open - Blocks most package builds  
+#### Issue #2: Missing ports-mgmt/pkg Bootstrap (CRITICAL) ✅ RESOLVED
+**Status**: ✅ Resolved - 2025-11-30  
 **Discovered**: 2025-11-30  
 **Affects**: All packages with dependencies (99% of ports)
 
@@ -1679,32 +1679,53 @@ $ cd /usr/dports && make -C misc/help2man build-depends-list
 ```
 
 **Root Cause**:
-Original C dsynth has special handling (`GetPkgPkg()` function, `PKGF_PKGPKG` flag) to build pkg first, before workers start. Our Go implementation is missing this.
+Original C dsynth has special handling (`GetPkgPkg()` function, `PKGF_PKGPKG` flag) to build pkg first, before workers start. Our Go implementation was missing this.
 
-**Documented In**:
-```
-docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md:
-| `GetPkgPkg()` | pkglist.c:586 | ❌ None | - | ⚠️ MISSING (pkg bootstrap) |
-| `PKGF_PKGPKG` | ❌ | ⚠️ | Missing (pkg bootstrap) |
-```
+**Solution Implemented (Option B)**:
+Implemented proper pkg bootstrap with CRC-based incremental build support:
 
-**Impact**:
-- Cannot build most ports (those with dependencies)
-- Build fails early in dependency resolution
-- Blocks end-to-end testing of build system
+1. **✅ Added `PkgFPkgPkg` flag** (`pkg/pkg.go:122`)
+   - Marks ports-mgmt/pkg for special bootstrap handling
+   - Matches C dsynth PKGF_PKGPKG (0x00008000)
 
-**Solution Options**:
-1. **Option A** (Quick): Use system `/usr/sbin/pkg` to bootstrap pkg package
-2. **Option B** (Proper): Add `PkgFPkgPkg` flag and build pkg before starting workers
-3. **Option C** (Simplest): Always install pkg from system before builds
+2. **✅ Detection during dependency resolution** (`pkg/deps.go:137`)
+   - `markPkgPkgFlag()` function detects ports-mgmt/pkg
+   - Automatically marks it with PkgFPkgPkg flag
 
-**Recommended**: Start with Option A for immediate unblocking, implement Option B properly in Phase 5.
+3. **✅ Bootstrap before workers start** (`build/bootstrap.go`)
+   - `bootstrapPkg()` function builds pkg before worker pool
+   - Uses slot 99 for bootstrap worker (avoids conflicts)
+   - Respects context cancellation (SIGINT/SIGTERM)
 
-**Related Files**:
-- `pkg/flags.go` (add PkgFPkgPkg flag)
-- `pkg/pkg.go` (detection logic)
-- `build/build.go` (pre-build pkg handling)
-- `docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md` (original analysis)
+4. **✅ CRC-based incremental builds**
+   - Computes CRC32 of pkg port directory
+   - Skips build if CRC matches last successful build
+   - Updates BuildDB on successful build
+
+5. **✅ Skip in normal build queue** (`build/build.go:279`)
+   - Queue goroutine skips PkgFPkgPkg packages
+   - Prevents double-building pkg
+
+**Implementation Commits**:
+- TBD (will be added after commit)
+
+**Testing**:
+- ✅ Unit tests: `build/bootstrap_test.go` (3 tests)
+  - TestBootstrapPkg_NoPkgInGraph
+  - TestBootstrapPkg_CRCMatch
+  - TestMarkPkgPkgFlag
+- ⏳ VM Testing: Pending
+
+**Files Modified**:
+- `pkg/pkg.go` - Added PkgFPkgPkg flag and String() method
+- `pkg/deps.go` - Added markPkgPkgFlag() detection function
+- `build/bootstrap.go` - NEW: Bootstrap implementation (186 lines)
+- `build/bootstrap_test.go` - NEW: Unit tests (174 lines)
+- `build/build.go` - Integrated bootstrap before worker pool
+- `DEVELOPMENT.md` - Documented resolution
+
+**Related Documentation**:
+- `docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md` - Original analysis
 
 ---
 
