@@ -1454,7 +1454,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
    - Skips rebuilding when Template already contains pkg/pkg-static
    - After any rebuild, extracts the `.pkg` into Template via `tar --exclude '+*' --exclude '*/man/*' -xzpf`
 2. **Fatal dependency install errors** (`build/phases.go:159-252`)
-   - `installDependencyPackages` and `installMissingPackages` now bubble errors when `/usr/sbin/pkg add` fails
+   - `installDependencyPackages` and `installMissingPackages` now bubble errors when `/usr/local/sbin/pkg add` fails
    - Worker loop aborts the phase instead of silently continuing
 3. **Regression coverage**
    - `go test ./build` exercises `TestBootstrapPkg_*` for CRC and Template extraction
@@ -1828,7 +1828,7 @@ Bootstrap now mirrors the C dsynth workflow: it detects when `ports-mgmt/pkg` is
    - Skips rebuilding when Template already contains pkg/pkg-static
    - After any rebuild, extracts the `.pkg` into Template via `tar --exclude '+*' --exclude '*/man/*' -xzpf`
 2. **Fatal dependency install errors** (`build/phases.go:159-252`)
-   - `installDependencyPackages` and `installMissingPackages` now bubble errors when `/usr/sbin/pkg add` fails
+   - `installDependencyPackages` and `installMissingPackages` now bubble errors when `/usr/local/sbin/pkg add` fails
    - Worker loop aborts the phase instead of silently continuing
 3. **Regression coverage**
    - `go test ./build` exercises `TestBootstrapPkg_*` for CRC and Template extraction

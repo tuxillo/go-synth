@@ -893,7 +893,8 @@ Remove all direct chroot calls and use Environment.Execute() instead.
    // After:
    execCmd := &environment.ExecCommand{
        WorkDir: "/",
-       Command: "/usr/sbin/pkg",
+        Command: "/usr/local/sbin/pkg",
+
        Args:    []string{"add", pkgPath},
        Stdout:  logger,
        Stderr:  logger,

@@ -150,6 +150,7 @@ gh pr create --repo otheruser/somerepo
 - Do NOT push to any remote during iterative Phase work unless explicitly requested.
 - Group related minimal changes per commit; avoid large mixed commits.
 - Document rationale briefly in commit message (focus on why).
+- Keep every line of the commit message within 80 columns for readability.
 - Keep repository history clean for later Cobra/architecture migration.
 
 ### Building

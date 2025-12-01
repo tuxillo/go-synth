@@ -163,7 +163,7 @@ func installDependencyPackages(ctx context.Context, worker *Worker, p *pkg.Packa
 
 		logWriter := &loggerWriter{logger: logger}
 		execCmd := &environment.ExecCommand{
-			Command: "/usr/sbin/pkg",
+			Command: "/usr/local/sbin/pkg",
 			Args:    []string{"add", pkgPath},
 			Stdout:  logWriter,
 			Stderr:  logWriter,
@@ -221,7 +221,7 @@ func installMissingPackages(ctx context.Context, worker *Worker, requiredPkgs []
 
 		// Check if already installed
 		checkCmd := &environment.ExecCommand{
-			Command: "/usr/sbin/pkg",
+			Command: "/usr/local/sbin/pkg",
 			Args:    []string{"info", "-e", pkgFile},
 		}
 
@@ -234,7 +234,7 @@ func installMissingPackages(ctx context.Context, worker *Worker, requiredPkgs []
 		// Install package
 		logWriter := &loggerWriter{logger: logger}
 		installCmd := &environment.ExecCommand{
-			Command: "/usr/sbin/pkg",
+			Command: "/usr/local/sbin/pkg",
 			Args:    []string{"add", pkgPath},
 			Stdout:  logWriter,
 			Stderr:  logWriter,
