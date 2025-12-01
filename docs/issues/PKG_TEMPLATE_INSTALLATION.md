@@ -22,7 +22,7 @@ Additionally, the build continues after dependency installation failures instead
 
 ```bash
 $ cd /root/go-synth
-$ rm -rf /build/Template /build/packages /build/builds.db
+$ rm -rf /build/synth/Template /build/synth/packages /build/synth/builds.db
 $ echo "y" | doas ./dsynth -C /nonexistent build print/indexinfo
 
 # Output shows:
@@ -36,12 +36,12 @@ Packages to build:
   - print/indexinfo
 
 # But check Template after build:
-$ ls /build/Template/usr/local/sbin/pkg
-ls: /build/Template/usr/local/sbin/pkg: No such file or directory
+$ ls /build/synth/Template/usr/local/sbin/pkg
+ls: /build/synth/Template/usr/local/sbin/pkg: No such file or directory
 
 # Worker slots also missing pkg:
-$ ls /build/SL00/usr/local/sbin/pkg
-ls: /build/SL00/usr/local/sbin/pkg: No such file or directory
+$ ls /build/synth/SL00/usr/local/sbin/pkg
+ls: /build/synth/SL00/usr/local/sbin/pkg: No such file or directory
 ```
 
 ### Dependency Installation Failure (Silent)
@@ -110,7 +110,7 @@ currentCRC, err := builddb.ComputePortCRC(portPath)
 // ... proceeds to check CRC and potentially rebuild
 ```
 
-**Problem**: Doesn't check if `/build/Template/usr/local/sbin/pkg` already exists before computing CRC and potentially rebuilding.
+**Problem**: Doesn't check if `/build/synth/Template/usr/local/sbin/pkg` already exists before computing CRC and potentially rebuilding.
 
 **C dsynth Reference** (build.c:230-237):
 ```c
@@ -279,7 +279,7 @@ logger.Success("ports-mgmt/pkg installed into Template at /usr/local/sbin/pkg")
 
 **Expected Result**:
 ```bash
-$ ls -la /build/Template/usr/local/sbin/
+$ ls -la /build/synth/Template/usr/local/sbin/
 total 16
 drwxr-xr-x  2 root  wheel   512 Nov 30 23:00 .
 drwxr-xr-x  8 root  wheel   512 Nov 30 23:00 ..
@@ -354,7 +354,7 @@ if err != nil {
 
 **Setup**:
 ```bash
-ssh root@vm 'rm -rf /build/Template /build/packages /build/builds.db /build/SL*'
+ssh root@vm 'rm -rf /build/synth/Template /build/synth/packages /build/synth/builds.db /build/synth/SL*'
 ```
 
 **Test**:
@@ -385,16 +385,16 @@ Starting build: 1 packages (1 skipped, 0 ignored)
 **Verification**:
 ```bash
 # pkg binary in Template
-ssh root@vm 'ls -la /build/Template/usr/local/sbin/pkg'
--rwxr-xr-x  1 root  wheel  123456 Nov 30 23:00 /build/Template/usr/local/sbin/pkg
+ssh root@vm 'ls -la /build/synth/Template/usr/local/sbin/pkg'
+-rwxr-xr-x  1 root  wheel  123456 Nov 30 23:00 /build/synth/Template/usr/local/sbin/pkg
 
 # pkg package created
-ssh root@vm 'ls -la /build/packages/All/pkg-*.pkg'
--rw-r--r--  1 root  wheel  456789 Nov 30 23:00 /build/packages/All/pkg-1.21.3.pkg
+ssh root@vm 'ls -la /build/synth/packages/All/pkg-*.pkg'
+-rw-r--r--  1 root  wheel  456789 Nov 30 23:00 /build/synth/packages/All/pkg-1.21.3.pkg
 
 # indexinfo package created
-ssh root@vm 'ls -la /build/packages/All/indexinfo-*.pkg'
--rw-r--r--  1 root  wheel  12345 Nov 30 23:00 /build/packages/All/indexinfo-0.3.1.pkg
+ssh root@vm 'ls -la /build/synth/packages/All/indexinfo-*.pkg'
+-rw-r--r--  1 root  wheel  12345 Nov 30 23:00 /build/synth/packages/All/indexinfo-0.3.1.pkg
 ```
 
 ---
@@ -427,7 +427,7 @@ Starting build: 1 packages (1 skipped, 0 ignored)
 
 **Test**:
 ```bash
-ssh root@vm 'cd /root/go-synth && rm -rf /build/packages /build/builds.db && echo "y" | doas ./dsynth -C /nonexistent build misc/help2man'
+ssh root@vm 'cd /root/go-synth && rm -rf /build/synth/packages /build/synth/builds.db && echo "y" | doas ./dsynth -C /nonexistent build misc/help2man'
 ```
 
 **Expected**:
@@ -449,7 +449,7 @@ ssh root@vm 'echo "BROKEN_BUILD=yes" >> /usr/dports/ports-mgmt/pkg/Makefile'
 
 **Test**:
 ```bash
-ssh root@vm 'cd /root/go-synth && rm -rf /build/Template /build/packages /build/builds.db && echo "y" | doas ./dsynth -C /nonexistent build print/indexinfo'
+ssh root@vm 'cd /root/go-synth && rm -rf /build/synth/Template /build/synth/packages /build/synth/builds.db && echo "y" | doas ./dsynth -C /nonexistent build print/indexinfo'
 ```
 
 **Expected Output**:
@@ -479,7 +479,7 @@ Build failed: pkg bootstrap failed: bootstrap build failed: phase build failed: 
 
 ### Step 1: Check Template (5-10 min)
 - [ ] Add Template check after finding pkgPkg
-- [ ] Check both `/build/Template/usr/local/sbin/pkg` and package file
+- [ ] Check both `/build/synth/Template/usr/local/sbin/pkg` and package file
 - [ ] Return early if both exist
 - [ ] Log "already in Template, using existing"
 
@@ -647,7 +647,7 @@ if (newtemplate && FetchOnlyOpt == 0) {
 After all fixes, the build structure should be:
 
 ```
-/build/
+/build/synth/
 ├── Template/
 │   ├── usr/
 │   │   ├── local/
@@ -666,8 +666,8 @@ After all fixes, the build structure should be:
 
 **Worker slot verification** (during active build):
 ```bash
-$ ls -la /build/SL00/usr/local/sbin/pkg
-lrwxr-xr-x  1 root  wheel  32 Nov 30 23:00 /build/SL00/usr/local/sbin/pkg -> ../../Template/usr/local/sbin/pkg
+$ ls -la /build/synth/SL00/usr/local/sbin/pkg
+lrwxr-xr-x  1 root  wheel  32 Nov 30 23:00 /build/synth/SL00/usr/local/sbin/pkg -> ../../Template/usr/local/sbin/pkg
 ```
 
 ---
@@ -687,7 +687,7 @@ lrwxr-xr-x  1 root  wheel  32 Nov 30 23:00 /build/SL00/usr/local/sbin/pkg -> ../
 
 ## Success Criteria
 
-- [ ] `/build/Template/usr/local/sbin/pkg` exists after bootstrap
+- [ ] `/build/synth/Template/usr/local/sbin/pkg` exists after bootstrap
 - [ ] Second build skips bootstrap with "already in Template" message
 - [ ] Port with dependencies builds successfully (misc/help2man)
 - [ ] No "pkg: command not found" errors in any logs

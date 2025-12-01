@@ -167,12 +167,12 @@ Number_of_builders=8
 Max_jobs=8
 
 # Directory paths
-Directory_packages=/build/packages
-Directory_buildbase=/build
+Directory_packages=/build/synth/packages
+Directory_buildbase=/build/synth
 Directory_portsdir=/usr/ports
-Directory_distfiles=/build/distfiles
-Directory_options=/build/options
-Directory_logs=/build/logs
+Directory_distfiles=/build/synth/distfiles
+Directory_options=/build/synth/options
+Directory_logs=/build/synth/logs
 
 # System path (use / for native system)
 System_path=/
@@ -186,7 +186,7 @@ Tmpfs_localbasesize=16g
 
 # Use ccache to speed up rebuilds
 Use_ccache=no
-Ccache_dir=/build/ccache
+Ccache_dir=/build/synth/ccache
 
 # Use /usr/src for base system headers
 Use_usrsrc=no
@@ -202,6 +202,7 @@ Use_usrsrc=no
 - **Use_tmpfs**: Use tmpfs for faster builds (needs RAM)
 - **Tmpfs_worksize**: Size for work directories
 - **Tmpfs_localbasesize**: Size for /usr/local in chroot
+- **Default BuildBase**: Without a config file, go-synth uses `/build/synth` as `{BuildBase}`; replace `/build/...` in docs with your configured base.
 
 ## Commands
 

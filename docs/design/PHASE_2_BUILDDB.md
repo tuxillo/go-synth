@@ -222,7 +222,7 @@ crc_index/
   - ✅ `cmd/build.go` (~25 lines): Open buildDB at start, added to signal handler cleanup, pass to functions
   - ✅ `main.go` (~30 lines): Open buildDB at start, added to signal handler cleanup, pass to functions
 - **BuildDB Lifecycle**: Open → MarkPackagesNeedingBuild → DoBuild → buildPackage (CRC update) → Close
-- **Database Path**: `${BuildBase}/builds.db` (e.g., `/build/builds.db` - configurable via profile)
+- **Database Path**: `${BuildBase}/builds.db` (e.g., `/build/synth/builds.db` - configurable via profile)
 - **Concurrency Safety**: 
   - bbolt uses MVCC (multiple concurrent readers, single writer with automatic locking)
   - Different workers update different keys (no contention)
@@ -515,7 +515,7 @@ crc_index/
 - **Import Path**: `import bolt "go.etcd.io/bbolt"`
 
 ### Database Location
-- **Decision**: `${BuildBase}/builds.db` (default, e.g., `/build/builds.db`)
+- **Decision**: `${BuildBase}/builds.db` (default, e.g., `/build/synth/builds.db`)
 - **Current Implementation**: Uses `cfg.BuildBase` from configuration
 - **Future**: `--db-path` CLI flag for override (Task 12)
 - **Rationale**: Co-located with build artifacts; BuildBase is configurable per profile

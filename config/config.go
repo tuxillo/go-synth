@@ -146,8 +146,9 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 
 	// Apply defaults for unset paths
 	if cfg.BuildBase == "" {
-		cfg.BuildBase = "/build"
+		cfg.BuildBase = "/build/synth"
 	}
+
 	if cfg.DPortsPath == "" {
 		cfg.DPortsPath = "/usr/dports"
 		// Fall back to /usr/ports if dports doesn't exist

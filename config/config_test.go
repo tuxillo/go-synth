@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -46,32 +47,40 @@ func TestConfig_DefaultValues(t *testing.T) {
 	}
 
 	// Check default values
-	if cfg.BuildBase != "/build" {
-		t.Errorf("BuildBase = %q, want %q", cfg.BuildBase, "/build")
+	if cfg.BuildBase != "/build/synth" {
+		t.Errorf("BuildBase = %q, want %q", cfg.BuildBase, "/build/synth")
 	}
 	if cfg.DPortsPath != "/usr/dports" && cfg.DPortsPath != "/usr/ports" {
 		t.Errorf("DPortsPath = %q, want /usr/dports or /usr/ports", cfg.DPortsPath)
 	}
-	if cfg.RepositoryPath != "/build/packages" {
-		t.Errorf("RepositoryPath = %q, want %q", cfg.RepositoryPath, "/build/packages")
+	if cfg.RepositoryPath != "/build/synth/packages" {
+		t.Errorf("RepositoryPath = %q, want %q", cfg.RepositoryPath, "/build/synth/packages")
 	}
-	if cfg.DistFilesPath != "/build/distfiles" {
-		t.Errorf("DistFilesPath = %q, want %q", cfg.DistFilesPath, "/build/distfiles")
+	if cfg.DistFilesPath != "/build/synth/distfiles" {
+		t.Errorf("DistFilesPath = %q, want %q", cfg.DistFilesPath, "/build/synth/distfiles")
 	}
-	if cfg.OptionsPath != "/build/options" {
-		t.Errorf("OptionsPath = %q, want %q", cfg.OptionsPath, "/build/options")
+	if cfg.OptionsPath != "/build/synth/options" {
+		t.Errorf("OptionsPath = %q, want %q", cfg.OptionsPath, "/build/synth/options")
 	}
-	if cfg.PackagesPath != "/build/packages" {
-		t.Errorf("PackagesPath = %q, want %q", cfg.PackagesPath, "/build/packages")
+	if cfg.PackagesPath != "/build/synth/packages" {
+		t.Errorf("PackagesPath = %q, want %q", cfg.PackagesPath, "/build/synth/packages")
 	}
-	if cfg.LogsPath != "/build/logs" {
-		t.Errorf("LogsPath = %q, want %q", cfg.LogsPath, "/build/logs")
+	if cfg.LogsPath != "/build/synth/logs" {
+		t.Errorf("LogsPath = %q, want %q", cfg.LogsPath, "/build/synth/logs")
 	}
-	if cfg.CCachePath != "/build/ccache" {
-		t.Errorf("CCachePath = %q, want %q", cfg.CCachePath, "/build/ccache")
+	if cfg.CCachePath != "/build/synth/ccache" {
+		t.Errorf("CCachePath = %q, want %q", cfg.CCachePath, "/build/synth/ccache")
 	}
-	if cfg.MaxWorkers != 1 {
-		t.Errorf("MaxWorkers = %d, want 1", cfg.MaxWorkers)
+
+	expectedWorkers := runtime.NumCPU()
+	if expectedWorkers > 16 {
+		expectedWorkers = 16
+	}
+	if expectedWorkers < 1 {
+		expectedWorkers = 1
+	}
+	if cfg.MaxWorkers != expectedWorkers {
+		t.Errorf("MaxWorkers = %d, want %d", cfg.MaxWorkers, expectedWorkers)
 	}
 	if cfg.MaxJobs != 1 {
 		t.Errorf("MaxJobs = %d, want 1", cfg.MaxJobs)
@@ -448,6 +457,14 @@ func TestConfig_ZeroAndNegativeWorkers(t *testing.T) {
 	tempDir := t.TempDir()
 	configFile := filepath.Join(tempDir, "dsynth.ini")
 
+	defaultWorkers := runtime.NumCPU()
+	if defaultWorkers > 16 {
+		defaultWorkers = 16
+	}
+	if defaultWorkers < 1 {
+		defaultWorkers = 1
+	}
+
 	tests := []struct {
 		name          string
 		buildersValue string
@@ -455,13 +472,13 @@ func TestConfig_ZeroAndNegativeWorkers(t *testing.T) {
 		expectWorkers int
 		expectJobs    int
 	}{
-		{"zero builders", "0", "1", 1, 1},      // Should keep default
-		{"negative builders", "-1", "1", 1, 1}, // Should keep default
-		{"zero jobs", "2", "0", 2, 1},          // Should keep default
-		{"negative jobs", "2", "-1", 2, 1},     // Should keep default
-		{"valid values", "4", "8", 4, 8},       // Should use config
-		{"invalid builders", "abc", "1", 1, 1}, // Should keep default
-		{"invalid jobs", "2", "xyz", 2, 1},     // Should keep default
+		{"zero builders", "0", "1", defaultWorkers, 1},      // Should keep default
+		{"negative builders", "-1", "1", defaultWorkers, 1}, // Should keep default
+		{"zero jobs", "2", "0", 2, 1},                       // Should keep default
+		{"negative jobs", "2", "-1", 2, 1},                  // Should keep default
+		{"valid values", "4", "8", 4, 8},                    // Should use config
+		{"invalid builders", "abc", "1", defaultWorkers, 1}, // Should keep default
+		{"invalid jobs", "2", "xyz", 2, 1},                  // Should keep default
 	}
 
 	for _, tt := range tests {

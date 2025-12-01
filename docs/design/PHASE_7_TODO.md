@@ -775,7 +775,7 @@ Add Phase 7-related configuration options and ensure backward compatibility.
          "num_workers": 4,
          "packages_dir": "/usr/dports",
          "distfiles_dir": "/usr/distfiles",
-         "build_base": "/build"
+         "build_base": "/build/synth"
        }
      },
      "migration": {
@@ -783,11 +783,12 @@ Add Phase 7-related configuration options and ensure backward compatibility.
        "backup_legacy": true
      },
      "database": {
-       "path": "/build/builds.db",
+       "path": "/build/synth/builds.db",
        "auto_vacuum": true
      }
    }
    ```
+
 
 #### Implementation Summary
 
@@ -814,7 +815,7 @@ Add Phase 7-related configuration options and ensure backward compatibility.
 [LiveSystem]
 Migration_auto_migrate=yes
 Migration_backup_legacy=yes
-Database_path=/build/builds.db
+Database_path=/build/synth/builds.db
 Database_auto_vacuum=yes
 ```
 
@@ -949,17 +950,15 @@ Enhance `dsynth init` to set up the new BuildDB and perform initial migration.
 Initializing dsynth environment...
 
 Setting up directories:
-  ✓ Build base: /build
-  ✓ Logs: /build/logs
-  ✓ Ports: /usr/dports
-  ✓ Repository: /build/packages
-  ✓ Packages: /build/packages
-  ✓ Distribution: /build/distfiles
-  ✓ Options: /build/options
-  ✓ Template: /build/Template
+  ✓ Build base: /build/synth
+  ✓ Logs: /build/synth/logs
+  ✓ Repository: /build/synth/packages
+  ✓ Packages: /build/synth/packages
+  ✓ Distribution: /build/synth/distfiles
+  ✓ Options: /build/synth/options
+  ✓ Template: /build/synth/Template
+  ✓ Database: /build/synth/builds.db
 
-Initializing build database:
-  ✓ Database: /build/builds.db
 
 Verifying environment:
   ✓ Ports directory: /usr/dports (2847 entries)
@@ -1094,7 +1093,7 @@ database to build completion.
 
 **Validation Results**:
 - ✅ First successful end-to-end build of `print/indexinfo` 
-- ✅ Package file created: `/build/packages/All/indexinfo-0.3.1.pkg` (6.3 KB)
+- ✅ Package file created: `/build/synth/packages/All/indexinfo-0.3.1.pkg` (6.3 KB)
 - ✅ BuildDB record created with correct CRC
 - ✅ Second build correctly skipped via CRC match
 - ✅ Build statistics: 1 success, 0 failed, 1m38s duration
@@ -1193,48 +1192,12 @@ Update user-facing documentation to reflect new functionality and migration proc
    $ dsynth init
    Initializing dsynth environment...
    ✓ Created build base: /build
-   ✓ Initialized build database: /build/builds.db
-   
-   Legacy CRC data detected.
-   Migrating 142 CRC records...
-   Successfully migrated 142/142 records
-   Legacy file backed up to: /build/crc_index.bak
-   ```
-   
-   ### What Gets Migrated
-   
-   - **CRC Index**: Port checksums for incremental builds
-   - **Build History**: NOT migrated (fresh start)
-   
-   ### Backward Compatibility
-   
-   - Configuration files remain compatible
-   - Command-line flags unchanged
-   - Log format mostly preserved (UUIDs added)
-   
-   ### Manual Migration
-   
-   If automatic migration fails:
-   
-   ```bash
-   # Backup your data
-   cp /build/crc_index /tmp/crc_index.bak
-   
-   # Reset and reinitialize
-   dsynth reset-db
-   dsynth init
-   ```
-   
-   ### Rollback
-   
-   To revert to legacy dsynth:
-   
-   ```bash
-   # Restore legacy CRC file
-   mv /build/crc_index.bak /build/crc_index
-   
-   # Remove go-synth database
-   rm /build/builds.db
+  ✓ Initialized build database: /build/synth/builds.db
+  Legacy file backed up to: /build/synth/crc_index.bak
+   cp /build/synth/crc_index /tmp/crc_index.bak
+   mv /build/synth/crc_index.bak /build/synth/crc_index
+   rm /build/synth/builds.db
+
    
    # Use legacy dsynth binary
    /usr/local/bin/dsynth-legacy build editors/vim
@@ -1411,7 +1374,7 @@ Mark Phase 7 as complete and update project status.
 ```
 First Run:
   1. dsynth init
-  2. Detect /build/crc_index
+  2. Detect /build/synth/crc_index
   3. Prompt for migration (or auto with -y)
   4. Import CRCs into BuildDB
   5. Backup legacy file
@@ -1430,9 +1393,9 @@ Second Run:
 ```go
 // In doBuild()
 1. Load config from ~/.config/dsynth/config.json
-2. Open logger (/build/logs/build_*.log)
-3. Open BuildDB (/build/builds.db)
-4. Detect migration needed (check /build/crc_index)
+2. Open logger (/build/synth/logs/build_*.log)
+3. Open BuildDB (/build/synth/builds.db)
+4. Detect migration needed (check /build/synth/crc_index)
 5. Auto-migrate if present
 6. Parse ports (pkg.ParsePortList)
 7. Resolve dependencies (pkg.ResolveDependencies)
@@ -1691,7 +1654,7 @@ diff --git a/main.go b/main.go
 
 **Latest Validation** (2025-11-28):
 - ✅ Built `print/indexinfo` successfully in 1m38s
-- ✅ Package created: `/build/packages/All/indexinfo-0.3.1.pkg` (6.3 KB)
+- ✅ Package created: `/build/synth/packages/All/indexinfo-0.3.1.pkg` (6.3 KB)
 - ✅ Second build correctly skipped via CRC: "up-to-date"
 - ✅ BuildDB tracking working: 21 builds, 1 unique port, 1 CRC entry
 - ✅ Template directory populated with host files (DNS, users, linker)

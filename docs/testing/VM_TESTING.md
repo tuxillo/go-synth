@@ -194,7 +194,7 @@ This single command runs three automated phases:
 - Boots system again
 - Configures doas for passwordless root
 - Creates directories:
-  - `/build/Workers` - Worker chroot environments
+  - `/build/synth/Workers` - Worker chroot environments
   - `/usr/dports` - Ports tree location
 - Sets up Go environment (GOPATH, GOCACHE)
 - Configures bash as default shell
@@ -505,7 +505,7 @@ make vm-start
 make vm-ssh
 # Inside VM:
 command -v go
-ls -ld /build/Workers /usr/dports
+ls -ld /build/synth/Workers /usr/dports
 cat /usr/local/etc/doas.conf
 ```
 

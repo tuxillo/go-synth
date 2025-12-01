@@ -238,12 +238,14 @@ Configuration is loaded from INI files with profile support:
 [Global Configuration]
 Number_of_builders=8          # Parallel worker count
 Max_jobs=8                    # Make parallelism per worker
-Directory_packages=/build/packages
-Directory_buildbase=/build
+Directory_packages=/build/synth/packages
+Directory_buildbase=/build/synth
 Directory_portsdir=/usr/ports
 Use_tmpfs=yes                 # Use tmpfs for speed
 Tmpfs_worksize=64g           # Work directory size
 ```
+
+> When no `dsynth.ini` exists, go-synth falls back to `BuildBase=/build/synth`, so substitute `{BuildBase}` for any `/build/...` path in legacy logs.
 
 ### Important Config Fields
 - `BuildBase`, `PackagesPath`, `RepositoryPath` - Directory paths

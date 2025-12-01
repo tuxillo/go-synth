@@ -11,7 +11,7 @@
 
 ## Problem Statement
 
-During VM testing of signal-triggered cleanup, mount entries showed tripled mount points all under `/build/SL00`, with no evidence of `/build/SL01`, `/build/SL02`, etc. This suggests all workers are being created with the same ID (0) or are reusing the same slot, violating worker isolation.
+During VM testing of signal-triggered cleanup, mount entries showed tripled mount points all under `/build/synth/SL00`, with no evidence of `/build/synth/SL01`, `/build/synth/SL02`, etc. This suggests all workers are being created with the same ID (0) or are reusing the same slot, violating worker isolation.
 
 ## Observed Behavior
 
@@ -19,18 +19,18 @@ During VM testing of signal-triggered cleanup, mount entries showed tripled moun
 
 ```bash
 # After SIGINT during build:
-$ mount | grep "/build/SL"
-tmpfs on /build/SL00 (tmpfs, local)
-tmpfs on /build/SL00/boot (tmpfs, local)
-devfs on /build/SL00/dev (devfs, local)
-procfs on /build/SL00/proc (procfs, read-only, local)
-/bin on /build/SL00/bin (null)
+$ mount | grep "/build/synth/SL"
+tmpfs on /build/synth/SL00 (tmpfs, local)
+tmpfs on /build/synth/SL00/boot (tmpfs, local)
+devfs on /build/synth/SL00/dev (devfs, local)
+procfs on /build/synth/SL00/proc (procfs, read-only, local)
+/bin on /build/synth/SL00/bin (null)
 [... 18 more mounts for SL00 ...]
-tmpfs on /build/SL00 (tmpfs, local)              # DUPLICATE!
-tmpfs on /build/SL00/boot (tmpfs, local)         # DUPLICATE!
+tmpfs on /build/synth/SL00 (tmpfs, local)              # DUPLICATE!
+tmpfs on /build/synth/SL00/boot (tmpfs, local)         # DUPLICATE!
 [... 18 more mounts for SL00 AGAIN ...]
-tmpfs on /build/SL00 (tmpfs, local)              # TRIPLICATE!
-tmpfs on /build/SL00/boot (tmpfs, local)         # TRIPLICATE!
+tmpfs on /build/synth/SL00 (tmpfs, local)              # TRIPLICATE!
+tmpfs on /build/synth/SL00/boot (tmpfs, local)         # TRIPLICATE!
 [... 18 more mounts for SL00 AGAIN ...]
 ```
 
@@ -109,14 +109,14 @@ Number_of_builders=8  # <-- Should be 8
 ## Expected Behavior
 
 For `MaxWorkers=8`, the build should create:
-- `/build/SL00` (worker 0)
-- `/build/SL01` (worker 1)
-- `/build/SL02` (worker 2)
-- `/build/SL03` (worker 3)
-- `/build/SL04` (worker 4)
-- `/build/SL05` (worker 5)
-- `/build/SL06` (worker 6)
-- `/build/SL07` (worker 7)
+- `/build/synth/SL00` (worker 0)
+- `/build/synth/SL01` (worker 1)
+- `/build/synth/SL02` (worker 2)
+- `/build/synth/SL03` (worker 3)
+- `/build/synth/SL04` (worker 4)
+- `/build/synth/SL05` (worker 5)
+- `/build/synth/SL06` (worker 6)
+- `/build/synth/SL07` (worker 7)
 
 Each with 22 mounts:
 - 1 tmpfs base
@@ -194,13 +194,13 @@ Total: 176 mounts (8 workers × 22 mounts/worker)
 2. **Integration Test**: Create multiple workers, check directories
    ```bash
    # On VM after build start
-   ls /build/ | grep "^SL"  # Should show SL00 through SL07
-   mount | grep "/build/SL" | awk '{print $3}' | sort -u | wc -l  # Should be 8
+   ls /build/synth/ | grep "^SL"  # Should show SL00 through SL07
+   mount | grep "/build/synth/SL" | awk '{print $3}' | sort -u | wc -l  # Should be 8
    ```
 
 3. **VM Test**: Full build with logging
    ```bash
-   rm -f /build/builds.db
+   rm -f /build/synth/builds.db
    ./dsynth build --debug devel/gmake 2>&1 | tee /tmp/debug.log
    # Kill after 10 seconds
    kill -INT $!
@@ -310,10 +310,10 @@ Run 'dsynth init' to create a config file, or override with config file settings
 **VM Test Results:**
 ```bash
 === Worker Directories Created ===
-drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL00
-drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL01
-drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL02
-drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL03
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/synth/SL00
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/synth/SL01
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/synth/SL02
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/synth/SL03
 
 === Count of SL directories ===
        4 directories found

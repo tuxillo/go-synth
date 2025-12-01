@@ -1079,6 +1079,8 @@ GET /api/v1/builds
 
 The Template directory (`{BuildBase}/Template`) is copied into each worker chroot environment to provide essential system files. Our implementation differs from the original C dsynth:
 
+> **Note:** When no configuration file is present, go-synth now defaults to `BuildBase=/build/synth`. Any references to `/build/...` in historical logs map to `{BuildBase}`.
+
 #### Our Approach (go-synth)
 **Strategy**: Copy essential files from the host system
 
