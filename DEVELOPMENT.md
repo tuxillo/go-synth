@@ -1481,8 +1481,28 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 
 **Documentation**: `docs/issues/INIT_CONFIG_CREATION.md` captures the fix details and follow-up items.
 
+##### Issue #5: Build fails after wiping `/build` without rerunning `go-synth init` (RESOLVED)
+**Status**: 🟢 Resolved – Verified 2025-12-01  
+**Discovered**: 2025-12-01  
+**Priority**: P1 (must fix to improve UX)
 
+**Summary**: Running `go-synth build` against an empty `/build/synth` now fails fast with a clear instruction to rerun `go-synth init`, and bootstrap errors explicitly mention the missing Template. This prevents the opaque “template copy failed” message that previously appeared after manually wiping the build base.
+
+**Fix Highlights**:
+1. **Preflight build-base check** (`build/build.go:194-218`)
+   - Verifies that `{BuildBase}/Template`, options, distfiles, packages, and logs exist before pkg bootstrap
+   - Aborts immediately with “Run `go-synth init` to recreate the build base” when directories are missing
+2. **Bootstrap error clarity** (`build/bootstrap.go:125-133`)
+   - When Template copy fails, the error now calls out the missing Template path and points users to `go-synth init`
+3. **Regression coverage**
+   - VM repro: `rm -rf /build/*` → `go-synth build print/indexinfo` now surfaces the new message instead of failing mid-bootstrap
+   - `go test ./...` exercises the new guard logic
+
+**Documentation**: This issue entry now reflects the completed fix.
+
+ 
 #### Architectural/Design (Critical for Library Reuse):
+
 - ✅ ~~**stdout/stderr in library packages**~~ - **RESOLVED** (2025-11-30)
   - Context: Libraries previously printed directly to terminal
   - Solution: Added LibraryLogger interface to all library functions

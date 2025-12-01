@@ -62,6 +62,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,6 +114,35 @@ type BuildContext struct {
 	statsMu   sync.Mutex
 	startTime time.Time
 	wg        sync.WaitGroup
+}
+
+func ensureBuildBaseInitialized(cfg *config.Config) error {
+	required := []struct {
+		name string
+		path string
+	}{
+		{"Template", filepath.Join(cfg.BuildBase, "Template")},
+		{"options", cfg.OptionsPath},
+		{"distfiles", cfg.DistFilesPath},
+		{"packages", cfg.PackagesPath},
+		{"logs", cfg.LogsPath},
+	}
+
+	missing := make([]string, 0)
+	for _, entry := range required {
+		if entry.path == "" {
+			continue
+		}
+		if _, err := os.Stat(entry.path); err != nil {
+			missing = append(missing, fmt.Sprintf("%s (%s)", entry.name, entry.path))
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("build base missing required directories: %s. Run 'go-synth init' to recreate the build base.", strings.Join(missing, ", "))
+	}
+
+	return nil
 }
 
 // DoBuild executes the main build process with CRC-based incremental builds.
@@ -230,6 +260,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	logger.Info("Starting build: %d packages (%d skipped, %d ignored)",
 		ctx.stats.Total, ctx.stats.Skipped, ctx.stats.Ignored)
 
+	if err := ensureBuildBaseInitialized(cfg); err != nil {
+		cancel()
+		return nil, cleanup, err
+	}
+
 	// Bootstrap ports-mgmt/pkg before starting workers
 	// This must succeed before any workers are created
 	logger.Info("Checking for ports-mgmt/pkg bootstrap requirement...")
@@ -329,6 +364,10 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 	// Calculate duration
 	ctx.stats.Duration = time.Since(ctx.startTime)
+
+	if !cfg.DisableUI {
+		fmt.Printf("\n")
+	}
 
 	// Don't call cleanup here - let the caller do it
 	// This allows proper cleanup on signals
@@ -557,18 +596,26 @@ func (ctx *BuildContext) waitForDependencies(p *pkg.Package) bool {
 	}
 }
 
-// printProgress logs current build progress
+// printProgress logs current build progress and, when enabled, prints to stdout
 func (ctx *BuildContext) printProgress() {
 	ctx.statsMu.Lock()
-	defer ctx.statsMu.Unlock()
-
-	elapsed := time.Since(ctx.startTime)
 	done := ctx.stats.Success + ctx.stats.Failed
+	success := ctx.stats.Success
+	failed := ctx.stats.Failed
+	total := ctx.stats.Total
+	elapsed := time.Since(ctx.startTime)
+	ctx.statsMu.Unlock()
 
-	ctx.logger.Debug("Progress: %d/%d (success: %d, failed: %d) %s elapsed",
-		done, ctx.stats.Total,
-		ctx.stats.Success, ctx.stats.Failed,
-		formatDuration(elapsed))
+	progressMsg := fmt.Sprintf("Progress: %d/%d (success: %d, failed: %d) %s elapsed",
+		done, total, success, failed, formatDuration(elapsed))
+
+	ctx.logger.Debug(progressMsg)
+
+	if !ctx.cfg.DisableUI {
+		// Carriage return so the progress indicator updates in-place.
+		// Pad to avoid leftover characters from previous updates.
+		fmt.Printf("\r%-80s", progressMsg)
+	}
 }
 
 // formatDuration formats a duration for display

@@ -125,6 +125,10 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 	// Use slot 99 for bootstrap worker to avoid conflicts
 	if err := env.Setup(99, cfg, logger); err != nil {
 		env.Cleanup()
+		if setupErr, ok := err.(*environment.ErrSetupFailed); ok && setupErr.Op == "template-copy" {
+			templateDir := filepath.Join(cfg.BuildBase, "Template")
+			return fmt.Errorf("bootstrap: Template directory missing (%s). Run 'go-synth init' to recreate it: %w", templateDir, err)
+		}
 		return fmt.Errorf("bootstrap: environment setup failed: %w", err)
 	}
 
