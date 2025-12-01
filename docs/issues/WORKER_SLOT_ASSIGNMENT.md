@@ -304,14 +304,37 @@ Run 'dsynth init' to create a config file, or override with config file settings
 
 ### Testing
 
-- ✅ Local test: Warning message displays correctly, detects 8 workers (my CPU count)
-- ⚪ VM test: Pending verification that multiple SL directories created
+- ✅ **Local test**: Warning message displays correctly, detects 8 workers (8-CPU system)
+- ✅ **VM test**: Multiple workers verified on DragonFlyBSD 6.4.2 (4-CPU VM)
+
+**VM Test Results:**
+```bash
+=== Worker Directories Created ===
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL00
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL01
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL02
+drwxr-xr-x  18 root  wheel  1496 Nov 30 18:44 /build/SL03
+
+=== Count of SL directories ===
+       4 directories found
+✓ SUCCESS: Multiple workers created!
+```
+
+**Verification:**
+- ✅ 4 workers created automatically (matches 4 CPU cores)
+- ✅ Each worker has separate SL directory (SL00, SL01, SL02, SL03)
+- ✅ Each worker has 22 mounts (88 total = 4 workers × 22 mounts)
+- ✅ Warning message displayed correctly
+- ✅ Proper worker isolation achieved
 
 ---
 
 **Completed Steps:**
 1. ✅ Code investigation confirmed no bugs in worker creation
-2. ✅ Identified root cause: suboptimal default value
-3. ✅ Implemented intelligent CPU-based default
+2. ✅ Identified root cause: suboptimal default value (MaxWorkers=1)
+3. ✅ Implemented intelligent CPU-based default (runtime.NumCPU(), capped at 16)
 4. ✅ Added user-friendly warning message
-5. ⚪ VM testing to verify multiple workers (next step)
+5. ✅ VM testing verified: 4 workers created on 4-CPU VM
+6. ✅ Issue RESOLVED: Multiple workers now created automatically
+
+**Status**: ✅ **RESOLVED** - Auto-detection working correctly
