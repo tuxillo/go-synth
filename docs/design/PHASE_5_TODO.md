@@ -222,7 +222,7 @@ access to build endpoints.
    }
    ```
 
-3. **Add key generation utility** in `cmd/dsynth/main.go`:
+3. **Add key generation utility** in `cmd/go-synth/main.go`:
    ```go
    // In main command parsing
    case "generate-api-key":
@@ -273,11 +273,11 @@ Create endpoint to trigger new builds. This is the core API functionality.
        "net/http"
        "sync"
        
-       "dsynth/build"
-       "dsynth/builddb"
-       "dsynth/config"
-       "dsynth/log"
-       "dsynth/pkg"
+       "go-synth/build"
+       "go-synth/builddb"
+       "go-synth/config"
+       "go-synth/log"
+       "go-synth/pkg"
        
        "github.com/google/uuid"
    )
@@ -594,9 +594,9 @@ Wire up all handlers with routing and start HTTP server.
        "net/http"
        "time"
        
-       "dsynth/builddb"
-       "dsynth/config"
-       "dsynth/log"
+       "go-synth/builddb"
+       "go-synth/config"
+       "go-synth/log"
    )
    
    // Start starts the API server
@@ -648,7 +648,7 @@ Wire up all handlers with routing and start HTTP server.
    }
    ```
 
-2. **Update `cmd/dsynth/main.go`**:
+2. **Update `cmd/go-synth/main.go`**:
    ```go
    // After opening builddb
    if err := api.Start(cfg, logger, db); err != nil {
@@ -885,10 +885,10 @@ Add comprehensive integration tests for the API.
        "testing"
        "time"
        
-       "dsynth/api"
-       "dsynth/builddb"
-       "dsynth/config"
-       "dsynth/log"
+       "go-synth/api"
+       "go-synth/builddb"
+       "go-synth/config"
+       "go-synth/log"
    )
    
    func TestAPIIntegration(t *testing.T) {
@@ -1010,7 +1010,7 @@ Add comprehensive integration tests for the API.
 |---------|-----------|---------|
 | `api/` (new) | ~800 | Create package |
 | `config/` | +10 | Add API config |
-| `cmd/dsynth/` | +30 | Add generate-api-key |
+| `cmd/go-synth/` | +30 | Add generate-api-key |
 | `docs/api/` (new) | ~200 | Documentation |
 | **Total** | **~1,040** | **Minimal impact** |
 

@@ -1,4 +1,4 @@
-module dsynth
+module go-synth
 
 go 1.23
 

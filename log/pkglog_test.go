@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 func TestNewPackageLogger(t *testing.T) {

@@ -23,7 +23,7 @@ Additionally, the build continues after dependency installation failures instead
 ```bash
 $ cd /root/go-synth
 $ rm -rf /build/synth/Template /build/synth/packages /build/synth/builds.db
-$ echo "y" | doas ./dsynth -C /nonexistent build print/indexinfo
+$ echo "y" | doas ./go-synth -C /nonexistent build print/indexinfo
 
 # Output shows:
 Build Plan:
@@ -359,7 +359,7 @@ ssh root@vm 'rm -rf /build/synth/Template /build/synth/packages /build/synth/bui
 
 **Test**:
 ```bash
-ssh root@vm 'cd /root/go-synth && echo "y" | doas ./dsynth -C /nonexistent build print/indexinfo'
+ssh root@vm 'cd /root/go-synth && echo "y" | doas ./go-synth -C /nonexistent build print/indexinfo'
 ```
 
 **Expected Output**:
@@ -404,7 +404,7 @@ ssh root@vm 'ls -la /build/synth/packages/All/indexinfo-*.pkg'
 **Test**:
 ```bash
 # Run again WITHOUT cleaning
-ssh root@vm 'cd /root/go-synth && echo "y" | doas ./dsynth -C /nonexistent build print/indexinfo'
+ssh root@vm 'cd /root/go-synth && echo "y" | doas ./go-synth -C /nonexistent build print/indexinfo'
 ```
 
 **Expected Output**:
@@ -427,7 +427,7 @@ Starting build: 1 packages (1 skipped, 0 ignored)
 
 **Test**:
 ```bash
-ssh root@vm 'cd /root/go-synth && rm -rf /build/synth/packages /build/synth/builds.db && echo "y" | doas ./dsynth -C /nonexistent build misc/help2man'
+ssh root@vm 'cd /root/go-synth && rm -rf /build/synth/packages /build/synth/builds.db && echo "y" | doas ./go-synth -C /nonexistent build misc/help2man'
 ```
 
 **Expected**:
@@ -449,7 +449,7 @@ ssh root@vm 'echo "BROKEN_BUILD=yes" >> /usr/dports/ports-mgmt/pkg/Makefile'
 
 **Test**:
 ```bash
-ssh root@vm 'cd /root/go-synth && rm -rf /build/synth/Template /build/synth/packages /build/synth/builds.db && echo "y" | doas ./dsynth -C /nonexistent build print/indexinfo'
+ssh root@vm 'cd /root/go-synth && rm -rf /build/synth/Template /build/synth/packages /build/synth/builds.db && echo "y" | doas ./go-synth -C /nonexistent build print/indexinfo'
 ```
 
 **Expected Output**:

@@ -3,9 +3,9 @@ package service
 import (
 	"time"
 
-	"dsynth/build"
-	"dsynth/builddb"
-	"dsynth/pkg"
+	"go-synth/build"
+	"go-synth/builddb"
+	"go-synth/pkg"
 )
 
 // BuildOptions contains options for the Build service.

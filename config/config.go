@@ -9,7 +9,7 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-// Config holds dsynth configuration
+// Config holds go-synth configuration
 type Config struct {
 	Profile        string
 	BuildBase      string
@@ -141,7 +141,7 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 	if !configFileExists {
 		fmt.Fprintf(os.Stderr, "Warning: No config file found at %s\n", configFile)
 		fmt.Fprintf(os.Stderr, "Using defaults: %d workers (detected from CPU count)\n", cfg.MaxWorkers)
-		fmt.Fprintf(os.Stderr, "Run 'dsynth init' to create a config file, or override with config file settings.\n")
+		fmt.Fprintf(os.Stderr, "Run 'go-synth init' to create a config file, or override with config file settings.\n")
 	}
 
 	// Apply defaults for unset paths

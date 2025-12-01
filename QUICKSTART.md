@@ -1,6 +1,6 @@
-# dsynth Quick Start Guide
+# go-synth Quick Start Guide
 
-This guide will help you get started with dsynth-go quickly.
+This guide will help you get started with go-synth quickly.
 
 ## Prerequisites
 
@@ -23,17 +23,17 @@ git clone https://github.com/tuxillo/go-synth.git
 cd go-synth
 
 # Build
-go build -o dsynth
+go build -o go-synth
 
 # Install
-sudo install -m 0755 dsynth /usr/local/bin/
+sudo install -m 0755 go-synth /usr/local/bin/
 ```
 
 ### Using build.sh
 
 ```bash
 ./build.sh
-sudo install -m 0755 dsynth /usr/local/bin/
+sudo install -m 0755 go-synth /usr/local/bin/
 ```
 
 ## First-Time Setup
@@ -41,7 +41,7 @@ sudo install -m 0755 dsynth /usr/local/bin/
 ### 1. Initialize Configuration
 
 ```bash
-sudo dsynth init
+sudo go-synth init
 ```
 
 This creates:
@@ -93,7 +93,7 @@ sudo make dports-create
 
 ```bash
 # Build vim and all its dependencies
-sudo dsynth build editors/vim
+sudo go-synth build editors/vim
 ```
 
 This will:
@@ -106,7 +106,7 @@ This will:
 ### Building Multiple Packages
 
 ```bash
-sudo dsynth build editors/vim shells/bash devel/git
+sudo go-synth build editors/vim shells/bash devel/git
 ```
 
 ### Building with Flavors
@@ -115,10 +115,10 @@ Some ports have multiple flavors:
 
 ```bash
 # Build Python 3.9 flavor
-sudo dsynth build lang/python@py39
+sudo go-synth build lang/python@py39
 
 # Build Python 3.11 flavor
-sudo dsynth build lang/python@py311
+sudo go-synth build lang/python@py311
 ```
 
 ### Force Rebuild
@@ -126,7 +126,7 @@ sudo dsynth build lang/python@py311
 Ignore BuildDB cache and rebuild even if unchanged:
 
 ```bash
-sudo dsynth force editors/vim
+sudo go-synth force editors/vim
 ```
 
 ### Fetch Only (No Build)
@@ -134,7 +134,7 @@ sudo dsynth force editors/vim
 Download distfiles without building:
 
 ```bash
-sudo dsynth fetch-only editors/vim
+sudo go-synth fetch-only editors/vim
 ```
 
 ### Build All Installed Packages
@@ -142,7 +142,7 @@ sudo dsynth fetch-only editors/vim
 Update all packages currently installed on your system:
 
 ```bash
-sudo dsynth upgrade-system
+sudo go-synth upgrade-system
 ```
 
 This queries `pkg` to get list of installed packages and builds them all.
@@ -151,7 +151,7 @@ This queries `pkg` to get list of installed packages and builds them all.
 
 ### Real-time Progress
 
-During build, dsynth shows progress:
+During build, go-synth shows progress:
 
 ```
 [15:45:32] Progress: 45/100 (S:42 F:3) 25m30s elapsed
@@ -166,20 +166,20 @@ View summary logs:
 
 ```bash
 # Overall results
-sudo dsynth logs results
+sudo go-synth logs results
 
 # Successful builds
-sudo dsynth logs success
+sudo go-synth logs success
 
 # Failed builds
-sudo dsynth logs failure
+sudo go-synth logs failure
 ```
 
 View per-package logs:
 
 ```bash
 # View detailed log for a specific port
-sudo dsynth logs editors/vim
+sudo go-synth logs editors/vim
 ```
 
 Log files are stored in `/build/logs/`:
@@ -227,7 +227,7 @@ sudo -i
 mount | grep /build
 
 # Clean up stuck mounts
-sudo dsynth cleanup
+sudo go-synth cleanup
 ```
 
 ### Out of Disk Space
@@ -237,7 +237,7 @@ sudo dsynth cleanup
 df -h /build
 
 # Clean up old builds
-sudo dsynth cleanup
+sudo go-synth cleanup
 
 # Reduce tmpfs sizes in config
 sudo vi /etc/dsynth/dsynth.ini
@@ -247,7 +247,7 @@ sudo vi /etc/dsynth/dsynth.ini
 
 ```bash
 # Reset BuildDB database
-sudo dsynth reset-db
+sudo go-synth reset-db
 
 # Verify ports tree is up to date
 cd /usr/ports
@@ -319,18 +319,18 @@ sudo pkg install ccache
 cd /usr/ports
 git pull
 
-dsynth upgrade-system
-dsynth logs failure
+go-synth upgrade-system
+go-synth logs failure
 ```
 
 ### Building for Production
 
 ```bash
 # Build with verification
-sudo dsynth build -P editors/vim
+sudo go-synth build -P editors/vim
 
 # Verify packages
-sudo dsynth verify
+sudo go-synth verify
 
 # Rebuild repository metadata
 sudo pkg repo /build/packages
@@ -343,10 +343,10 @@ sudo pkg repo /build/packages
 sudo vi /usr/ports/editors/vim/Makefile
 
 # Force rebuild to test
-sudo dsynth force editors/vim
+sudo go-synth force editors/vim
 
 # Check logs
-sudo dsynth logs editors/vim
+sudo go-synth logs editors/vim
 ```
 
 ## Next Steps
@@ -359,8 +359,8 @@ sudo dsynth logs editors/vim
 
 ## Getting Help
 
-- View all commands: `dsynth help`
-- Check logs: `dsynth logs`
+- View all commands: `go-synth help`
+- Check logs: `go-synth logs`
 - Report issues: GitHub Issues
 - Documentation: README.md
 
@@ -370,7 +370,7 @@ sudo dsynth logs editors/vim
 2. **Monitor resources**: Watch CPU, RAM, and disk usage
 3. **Use tmpfs**: Much faster if you have RAM
 4. **Keep ports updated**: Regular `git pull` in ports tree
-5. **Clean regularly**: Run `dsynth cleanup` after builds
+5. **Clean regularly**: Run `go-synth cleanup` after builds
 6. **Check logs**: Always review failure logs
 7. **Backup packages**: Your built packages are valuable
 8. **Test before production**: Use a separate build server
@@ -379,29 +379,29 @@ sudo dsynth logs editors/vim
 
 ```bash
 # Initial setup
-sudo dsynth init
+sudo go-synth init
 sudo vi /etc/dsynth/dsynth.ini
 
 # Update ports tree
 cd /usr/ports && sudo git pull
 
 # Build some packages
-sudo dsynth build editors/vim shells/bash devel/git
+sudo go-synth build editors/vim shells/bash devel/git
 
 # Check results
-sudo dsynth logs results
-sudo dsynth logs success
+sudo go-synth logs results
+sudo go-synth logs success
 
 # If failures, check what went wrong
-sudo dsynth logs failure
-sudo dsynth logs editors/vim
+sudo go-synth logs failure
+sudo go-synth logs editors/vim
 
 # Install locally
 sudo pkg repo /build/packages
 sudo pkg install vim bash git
 
 # Clean up
-sudo dsynth cleanup
+sudo go-synth cleanup
 ```
 
 Happy building!

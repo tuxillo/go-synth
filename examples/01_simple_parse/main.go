@@ -16,9 +16,9 @@ import (
 	"log"
 	"os"
 
-	"dsynth/config"
-	dslog "dsynth/log"
-	"dsynth/pkg"
+	"go-synth/config"
+	dslog "go-synth/log"
+	"go-synth/pkg"
 )
 
 func main() {

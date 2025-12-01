@@ -6,11 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"dsynth/builddb"
-	"dsynth/migration"
+	"go-synth/builddb"
+	"go-synth/migration"
 )
 
-// Initialize sets up the dsynth environment for the first time.
+// Initialize sets up the go-synth environment for the first time.
 //
 // This method creates all necessary directories, sets up the build template,
 // initializes the build database, and optionally migrates legacy CRC data.

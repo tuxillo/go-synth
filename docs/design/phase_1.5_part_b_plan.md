@@ -1187,7 +1187,7 @@ go test ./... -cover
 
 # Build and smoke test
 go build .
-./dsynth --help
+./go-synth --help
 ```
 
 ---

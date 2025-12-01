@@ -6,7 +6,7 @@ This directory contains standalone, runnable examples demonstrating how to use t
 
 - Go 1.21 or later
 - FreeBSD or DragonFly BSD with ports tree
-- dsynth-go project configured
+- go-synth project configured
 
 ## Quick Start
 

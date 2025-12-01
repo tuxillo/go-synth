@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // Compile-time interface checks
 var _ LibraryLogger = (*Logger)(nil)
 
-// Logger manages multiple log files for dsynth
+// Logger manages multiple log files for go-synth
 type Logger struct {
 	cfg          *config.Config
 	resultsFile  *os.File
@@ -134,7 +134,7 @@ func (l *Logger) Close() {
 func (l *Logger) writeHeaders() {
 	timestamp := time.Now().Format(time.RFC3339)
 
-	fmt.Fprintf(l.resultsFile, "dsynth build log - %s\n", timestamp)
+	fmt.Fprintf(l.resultsFile, "go-synth build log - %s\n", timestamp)
 	fmt.Fprintf(l.resultsFile, "%s\n\n", strings.Repeat("=", 70))
 
 	fmt.Fprintf(l.successFile, "Successful builds - %s\n\n", timestamp)

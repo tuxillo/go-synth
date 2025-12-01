@@ -20,8 +20,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"dsynth/builddb"
-	"dsynth/config"
+	"go-synth/builddb"
+	"go-synth/config"
 )
 
 // CRCRecord represents a legacy CRC entry from file.

@@ -663,7 +663,7 @@ make vm-stop       # Shut down
 
 **Testing**:
 - `make vm-sync` - Sync project files to VM
-- `make vm-build` - Build dsynth in VM
+- `make vm-build` - Build go-synth in VM
 - `make vm-test-unit` - Run unit tests
 - `make vm-test-integration` - Run integration tests
 - `make vm-test-phase4` - Run Phase 4 mount tests (requires root)
@@ -1051,17 +1051,17 @@ GET /api/v1/builds
 - [x] Migration from file-based CRC completes successfully - ✅ Migration logic implemented and tested
 - [x] All existing CLI commands remain functional - ✅ build, status, cleanup, reset-db, init working
 - [x] UUID tracking visible in log files - ✅ Context logging with UUID implemented
-- [x] `dsynth init` sets up new environment - ✅ Creates directories and initializes BuildDB
+- [x] `go-synth init` sets up new environment - ✅ Creates directories and initializes BuildDB
 - [x] E2E tests pass - ✅ Real port build completed with all phases working
 - [x] BuildDB integration validated - ✅ 21 builds recorded, CRC tracking confirmed
 - [ ] Documentation complete and accurate - ⚪ Optional (Tasks 8-9, post-MVP)
 
 ### ⚙️ CLI Mapping
-- `dsynth build [ports...]` → uses pkg → builddb → build → environment
-- `dsynth force` → bypasses CRC check (NeedsBuild)
-- `dsynth init` → creates BuildDB, migrates legacy CRC
-- `dsynth status` → queries BuildDB
-- `dsynth reset-db` → removes BuildDB
+- `go-synth build [ports...]` → uses pkg → builddb → build → environment
+- `go-synth force` → bypasses CRC check (NeedsBuild)
+- `go-synth init` → creates BuildDB, migrates legacy CRC
+- `go-synth status` → queries BuildDB
+- `go-synth reset-db` → removes BuildDB
 - Legacy commands continue to work
 
 ### 📖 Documentation

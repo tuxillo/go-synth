@@ -2,8 +2,8 @@ package environment
 
 import (
 	"context"
-	"dsynth/config"
-	"dsynth/log"
+	"go-synth/config"
+	"go-synth/log"
 	"sync"
 	"time"
 )

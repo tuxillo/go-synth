@@ -47,9 +47,9 @@ package bsd
 
 import (
 	"context"
-	"dsynth/config"
-	"dsynth/environment"
-	"dsynth/log"
+	"go-synth/config"
+	"go-synth/environment"
+	"go-synth/log"
 	"errors"
 	"fmt"
 	stdlog "log"

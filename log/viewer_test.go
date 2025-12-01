@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 func TestGetLogSummary(t *testing.T) {

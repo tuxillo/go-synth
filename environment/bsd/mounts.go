@@ -7,7 +7,7 @@
 package bsd
 
 import (
-	"dsynth/config"
+	"go-synth/config"
 	"fmt"
 	stdlog "log"
 	"os"

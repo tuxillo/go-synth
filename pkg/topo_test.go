@@ -1,12 +1,12 @@
 package pkg
 
 import (
-	"dsynth/log"
+	"go-synth/log"
 	"errors"
 	"fmt"
 	"testing"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // createSimpleChain builds A->B->C where A depends on B and C

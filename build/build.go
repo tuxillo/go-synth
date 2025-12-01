@@ -65,11 +65,11 @@ import (
 	"sync"
 	"time"
 
-	"dsynth/builddb"
-	"dsynth/config"
-	"dsynth/environment"
-	"dsynth/log"
-	"dsynth/pkg"
+	"go-synth/builddb"
+	"go-synth/config"
+	"go-synth/environment"
+	"go-synth/log"
+	"go-synth/pkg"
 
 	"github.com/google/uuid"
 )

@@ -61,7 +61,7 @@ fi
 PORTS_DIR="${1:-$DEFAULT_PORTS_DIR}"
 
 # Verify we're in go-synth project root
-if [ ! -f "go.mod" ] || ! grep -q "module dsynth" go.mod; then
+if [ ! -f "go.mod" ] || ! grep -q "module github.com/tuxillo/go-synth" go.mod; then
     echo "Error: Must run from go-synth project root"
     exit 1
 fi

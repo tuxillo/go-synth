@@ -1,6 +1,6 @@
 # Environment Package
 
-The `environment` package provides abstractions for isolated build execution in dsynth. It enables build phases to run in isolated environments without knowing implementation details, allowing for testing via mock implementations and support for multiple platform-specific isolation mechanisms.
+The `environment` package provides abstractions for isolated build execution in go-synth. It enables build phases to run in isolated environments without knowing implementation details, allowing for testing via mock implementations and support for multiple platform-specific isolation mechanisms.
 
 ## Overview
 
@@ -72,8 +72,8 @@ See `mock.go` and `mock_test.go` for usage examples.
 ```go
 import (
     "context"
-    "dsynth/environment"
-    "dsynth/config"
+    "go-synth/environment"
+    "go-synth/config"
 )
 
 // Step 1: Create environment instance
@@ -328,7 +328,7 @@ To add a new backend (e.g., jails, containers):
 // environment/jail/jail.go
 package jail
 
-import "dsynth/environment"
+import "go-synth/environment"
 
 type JailEnvironment struct {
     jid  int
@@ -446,4 +446,4 @@ See `bsd/bsd.go` for the complete mount layout with detailed comments.
 
 ## License
 
-This package is part of dsynth (DragonFly BSD Ports Builder) and follows the project's license.
+This package is part of go-synth (DragonFly BSD Ports Builder) and follows the project's license.

@@ -1,6 +1,6 @@
 # Service Layer
 
-The service layer provides a clean, reusable API for dsynth's core functionality. It separates business logic from CLI presentation, making it suitable for use in REST APIs, GUIs, or other frontends.
+The service layer provides a clean, reusable API for go-synth's core functionality. It separates business logic from CLI presentation, making it suitable for use in REST APIs, GUIs, or other frontends.
 
 ## Architecture
 
@@ -58,8 +58,8 @@ service/
 
 ```go
 import (
-    "dsynth/config"
-    "dsynth/service"
+    "go-synth/config"
+    "go-synth/service"
 )
 
 // 1. Load configuration
@@ -112,7 +112,7 @@ defer svc.Close()
 ### Initialization
 
 #### Initialize(opts InitOptions) (*InitResult, error)
-Sets up the dsynth environment for the first time.
+Sets up the go-synth environment for the first time.
 
 **Features:**
 - Creates directory structure (build base, logs, packages, etc.)

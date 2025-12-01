@@ -227,7 +227,7 @@ Extract mount operations from mount/mount.go into environment/bsd/ package.
    package bsd
    
    import (
-       "dsynth/config"
+       "go-synth/config"
        "fmt"
        "os"
        "os/exec"
@@ -420,8 +420,8 @@ Implement Setup() method that creates and mounts the build environment.
    
    import (
        "context"
-       "dsynth/config"
-       "dsynth/environment"
+       "go-synth/config"
+       "go-synth/environment"
        "fmt"
        "os"
        "os/exec"
@@ -1257,7 +1257,7 @@ Test environment logic without requiring root or real mounts.
    
    import (
        "context"
-       "dsynth/config"
+       "go-synth/config"
        "fmt"
        "sync"
    )
@@ -1339,8 +1339,8 @@ Test environment logic without requiring root or real mounts.
    
    import (
        "context"
-       "dsynth/config"
-       "dsynth/environment"
+       "go-synth/config"
+       "go-synth/environment"
        "testing"
        "time"
    )
@@ -1493,7 +1493,7 @@ Validate with real mounts and document everything.
     
     import (
         "context"
-        "dsynth/config"
+        "go-synth/config"
         "os"
         "os/exec"
         "strings"

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // TestCleanup_NoWorkers tests cleanup when no worker directories exist

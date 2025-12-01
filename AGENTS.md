@@ -51,7 +51,9 @@ gh pr create --repo otheruser/somerepo
 
 ## Project Overview
 
-**go-synth** is a Go implementation of dsynth, the DragonFly BSD ports build system. It's a parallel package building tool that:
+**go-synth** is a Go implementation of the DragonFly BSD dsynth build system. It's a parallel package building tool that:
+
+> Naming note: We refer to this project as go-synth. The CLI binary is named `go-synth`, but configuration files and directories remain under `/etc/dsynth/` for compatibility.
 
 - Builds FreeBSD/DragonFly BSD ports packages efficiently using parallel workers
 - Uses chroot isolation for each build environment
@@ -161,7 +163,7 @@ make install    # Install to /usr/local/bin/
 ./build.sh
 
 # Direct go build
-go build -ldflags "-X main.Version=2.0.0" -o dsynth .
+go build -ldflags "-X main.Version=2.0.0" -o go-synth .
 ```
 
 ### Testing & Validation
@@ -182,15 +184,15 @@ go fmt ./...
 
 ```bash
 # Initialize configuration
-sudo ./dsynth init
+sudo ./go-synth init
 
 # Build packages
-sudo ./dsynth build editors/vim
-sudo ./dsynth build editors/vim shells/bash devel/git
+sudo ./go-synth build editors/vim
+sudo ./go-synth build editors/vim shells/bash devel/git
 
 # View logs
-./dsynth logs editors/vim
-./dsynth logs results
+./go-synth logs editors/vim
+./go-synth logs results
 ```
 
 ## Key Files & Directories
@@ -220,7 +222,7 @@ sudo ./dsynth build editors/vim shells/bash devel/git
 - **`FUTURE_BACKLOG.md`** - Deferred features
 
 ### Build Artifacts (Runtime)
-- **`dsynth`** - Compiled binary
+- **`go-synth`** - Compiled binary
 - **`/build/`** - Build base directory (configurable)
 - **`*.db`** - CRC database files
 - **`logs/`** - Build logs and results
@@ -323,7 +325,7 @@ require (
 1. Add command case to `main.go` switch statement
 2. Implement `doCommandName()` function
 3. Add command to `usage()` function
-4. Test with `./dsynth command-name`
+4. Test with `./go-synth command-name`
 
 ### Modifying Build Process
 1. Update `build/build.go` for orchestration changes
@@ -335,12 +337,12 @@ require (
 1. Update `config/config.go` struct definition
 2. Modify INI parsing logic
 3. Update documentation in README.md
-4. Test with `./dsynth init`
+4. Test with `./go-synth init`
 
 ### Debugging Build Issues
-1. Enable debug mode: `./dsynth -d build portname`
-2. Check logs: `./dsynth logs portname`
-3. Examine CRC database: `ls -la /build/dsynth.db`
+1. Enable debug mode: `./go-synth -d build portname`
+2. Check logs: `./go-synth logs portname`
+3. Examine CRC database: `ls -la /build/builds.db`
 4. Verify mounts: `mount | grep /build`
 
 ## Key Code Patterns
@@ -428,11 +430,11 @@ defer logger.Close()
 ### Debug Commands
 ```bash
 # Check configuration
-./dsynth -d init  # Debug mode
+./go-synth -d init  # Debug mode
 
 # Reset state
-sudo ./dsynth reset-db
-sudo ./dsynth cleanup
+sudo ./go-synth reset-db
+sudo ./go-synth cleanup
 
 # Verify ports tree
 ls /usr/ports/editors/vim

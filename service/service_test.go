@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // TestNewService tests successful service initialization

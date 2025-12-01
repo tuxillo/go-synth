@@ -2,7 +2,7 @@
 
 > NOTE: A trimmed MVP implementation scope is defined in `IDEAS_MVP.md`. Refer to that file for the actionable minimum set of features. This full document contains extended and deferred plans.
 
-This document outlines potential architectural improvements and features for go-dsynth.
+This document outlines potential architectural improvements and features for go-synth.
 
 ## Executive Summary
 
@@ -39,7 +39,7 @@ This document outlines potential architectural improvements and features for go-
 
 ### Current State Analysis
 
-The current go-dsynth has several packages that mix concerns:
+The current go-synth has several packages that mix concerns:
 - `pkg` - Package metadata, dependency resolution, CRC database, build status tracking (mixed concerns)
 - `build` - Build execution, tightly coupled to mount/worker
 - `mount` - DragonFly/FreeBSD specific mount operations
@@ -75,7 +75,7 @@ graph TB
 ### Proposed Refactored Structure
 
 ```
-dsynth/
+go-synth/
 ├── pkg/              # Package metadata & deps (pure library)
 │   ├── package.go    # Package struct and parsing
 │   ├── deps.go       # Dependency resolution
@@ -104,7 +104,7 @@ dsynth/
 │   └── websocket.go
 │
 └── cmd/
-    └── dsynth/       # CLI tool (thin wrapper)
+    └── go-synth/       # CLI tool (thin wrapper)
         └── main.go
 ```
 
@@ -112,7 +112,7 @@ dsynth/
 
 ```mermaid
 graph TB
-    CLI[cmd/dsynth/main.go] --> API[api/]
+    CLI[cmd/go-synth/main.go] --> API[api/]
     CLI --> Builder[builder/]
     CLI --> Pkg[pkg/]
     

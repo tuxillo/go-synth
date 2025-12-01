@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"dsynth/config"
-	_ "dsynth/environment/bsd" // Register BSD backend
-	"dsynth/pkg"
-	"dsynth/service"
-	"dsynth/util"
+	"go-synth/config"
+	_ "go-synth/environment/bsd" // Register BSD backend
+	"go-synth/pkg"
+	"go-synth/service"
+	"go-synth/util"
 )
 
 var Version = "dev"
@@ -105,7 +105,7 @@ func main() {
 	case "everything":
 		doEverything(cfg)
 	case "version":
-		fmt.Printf("dsynth version %s\n", Version)
+		fmt.Printf("go-synth version %s\n", Version)
 	case "help":
 		usage()
 	case "build":
@@ -149,8 +149,8 @@ func askYN(prompt string, defaultYes bool) bool {
 }
 
 func usage() {
-	fmt.Printf("dsynth version %s - DragonFly BSD ports build system\n\n", Version)
-	fmt.Println("Usage: dsynth [options] command [args]")
+	fmt.Printf("go-synth version %s - DragonFly BSD ports build system\n\n", Version)
+	fmt.Println("Usage: go-synth [options] command [args]")
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  -d            Debug verbosity")
@@ -179,7 +179,7 @@ func usage() {
 	fmt.Println("  status [ports...]        Show port build status")
 	fmt.Println("  status-everything        Status of entire ports tree")
 	fmt.Println("  cleanup                  Clean up stale mounts and logs")
-	fmt.Println("  configure                Configure dsynth")
+	fmt.Println("  configure                Configure go-synth")
 	fmt.Println("  rebuild-repository       Rebuild package repository")
 	fmt.Println("  purge-distfiles          Remove obsolete distfiles")
 	fmt.Println("  reset-db                 Reset CRC database")
@@ -189,7 +189,7 @@ func usage() {
 }
 
 func doInit(cfg *config.Config) {
-	fmt.Println("Initializing dsynth environment...")
+	fmt.Println("Initializing go-synth environment...")
 	fmt.Println()
 
 	// Create service
@@ -270,7 +270,7 @@ func doInit(cfg *config.Config) {
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Verify configuration file (if needed)")
 	fmt.Println("  2. Ensure ports tree is populated")
-	fmt.Println("  3. Run: dsynth build <package>")
+	fmt.Println("  3. Run: go-synth build <package>")
 	fmt.Println()
 }
 

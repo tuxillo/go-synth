@@ -1,6 +1,6 @@
 # Stub Commands Status
 
-This document tracks the implementation status of all dsynth commands.
+This document tracks the implementation status of all go-synth commands.
 
 **Last Updated**: 2025-11-30  
 **Status**: 10 implemented, 5 stubs remaining
@@ -13,7 +13,7 @@ This document tracks the implementation status of all dsynth commands.
 
 | Command | Status | Service Method | Description |
 |---------|--------|----------------|-------------|
-| `init` | ✅ Implemented | `service.Initialize()` | Initialize dsynth environment |
+| `init` | ✅ Implemented | `service.Initialize()` | Initialize go-synth environment |
 | `status` | ✅ Implemented | `service.GetStatus()` | Show build status for ports |
 | `cleanup` | ✅ Implemented | `service.Cleanup()` | Clean up stale worker environments |
 | `reset-db` | ✅ Implemented | `service.ResetDatabase()` | Reset build database |

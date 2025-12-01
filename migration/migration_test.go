@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/builddb"
-	"dsynth/config"
-	"dsynth/log"
-	"dsynth/migration"
+	"go-synth/builddb"
+	"go-synth/config"
+	"go-synth/log"
+	"go-synth/migration"
 )
 
 // testLogger wraps testing.T to provide a simple logger for tests

@@ -2,8 +2,8 @@ package bsd
 
 import (
 	"context"
-	"dsynth/config"
-	"dsynth/environment"
+	"go-synth/config"
+	"go-synth/environment"
 	"errors"
 	"os"
 	"path/filepath"

@@ -58,8 +58,8 @@ import (
 	"strings"
 	"sync"
 
-	"dsynth/builddb"
-	"dsynth/config"
+	"go-synth/builddb"
+	"go-synth/config"
 )
 
 // PackageFlags represents boolean attributes of a package using bitfield flags.
@@ -743,7 +743,7 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 // GetInstalledPackages queries the system's package database and returns
 // a list of port origins for all currently installed packages.
 //
-// This is typically used for "dsynth upgrade-system" to rebuild all
+// This is typically used for "go-synth upgrade-system" to rebuild all
 // installed packages after ports tree updates.
 //
 // The function executes "pkg query %o" to retrieve the origin (category/name)
@@ -793,7 +793,7 @@ func GetInstalledPackages(cfg *config.Config) ([]string, error) {
 //
 // This function is expensive and can take several minutes on a full ports
 // tree (30,000+ ports). Only use for operations that genuinely need all
-// ports, such as "dsynth status-all".
+// ports, such as "go-synth status-all".
 //
 // The function walks the ports tree directory structure, skipping special
 // directories (Mk, Templates, Tools, distfiles, packages) and hidden

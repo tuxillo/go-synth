@@ -3,7 +3,7 @@ package pkg
 import (
 	"errors"
 	"testing"
-	"dsynth/log"
+	"go-synth/log"
 )
 
 // createCycle builds A->B->C and introduces C depends on A forming a cycle

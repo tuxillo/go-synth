@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // ListLogs lists all available log files

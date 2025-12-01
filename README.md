@@ -1,10 +1,10 @@
-# dsynth-go
+# go-synth
 
-A Go implementation of dsynth, the DragonFly BSD ports build system.
+go-synth is a Go implementation of the DragonFly BSD dsynth build system.
 
 ## Overview
 
-dsynth is a parallel ports building system that uses chroot isolation to build FreeBSD/DragonFly BSD ports packages efficiently. This Go port maintains full compatibility with the original C implementation while providing improved maintainability and cross-platform potential.
+go-synth is a parallel ports building system that uses chroot isolation to build FreeBSD/DragonFly BSD ports packages efficiently. This Go port maintains full compatibility with the original C implementation while providing improved maintainability and cross-platform potential.
 
 ## Features
 
@@ -28,53 +28,55 @@ dsynth is a parallel ports building system that uses chroot isolation to build F
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/dsynth-go.git
-cd dsynth-go
+git clone https://github.com/yourusername/go-synth.git
+cd go-synth
 
 # Build
-go build -o dsynth
+go build -o go-synth
 
 # Install
-sudo install -m 0755 dsynth /usr/local/bin/
+sudo install -m 0755 go-synth /usr/local/bin/
 ```
 
 ## Quick Start
 
+> Compatibility note: The CLI binary installed by go-synth is now named `go-synth`, but configuration paths remain under `/etc/dsynth/` for compatibility.
+
 ```bash
 # Initialize configuration
-sudo dsynth init
+sudo go-synth init
 
 # Edit configuration (adjust paths and worker count)
 sudo vi /etc/dsynth/dsynth.ini
 
 # Build a single package with dependencies
-sudo dsynth build editors/vim
+sudo go-synth build editors/vim
 
 # Build multiple packages
-sudo dsynth build editors/vim shells/bash devel/git
+sudo go-synth build editors/vim shells/bash devel/git
 
 # Build with flavor
-sudo dsynth build lang/python@py39
+sudo go-synth build lang/python@py39
 
 # Force rebuild (ignore CRC cache)
-sudo dsynth force editors/vim
+sudo go-synth force editors/vim
 
 # Fetch distfiles without building
-sudo dsynth fetch-only editors/vim
+sudo go-synth fetch-only editors/vim
 
 # Build all installed packages
-sudo dsynth upgrade-system
+sudo go-synth upgrade-system
 
 # Build entire ports tree (WARNING: takes a long time!)
-sudo dsynth everything
+sudo go-synth everything
 
 # View build results
-sudo dsynth logs results
-sudo dsynth logs failure
-sudo dsynth logs editors/vim
+sudo go-synth logs results
+sudo go-synth logs failure
+sudo go-synth logs editors/vim
 
 # Clean up build environment
-sudo dsynth cleanup
+sudo go-synth cleanup
 ```
 
 ## Build Database
@@ -100,11 +102,11 @@ go-synth uses an embedded **bbolt** database (`~/.go-synth/builds.db`) for build
 **Example workflow:**
 ```bash
 # First build
-$ sudo dsynth build editors/vim
+$ sudo go-synth build editors/vim
 Building editors/vim... success (5m 30s)
 
 # Rebuild immediately (no changes)
-$ sudo dsynth build editors/vim
+$ sudo go-synth build editors/vim
 editors/vim (CRC match, skipped)
 Progress: 0/0 (S:0 F:0 Skipped:1)
 
@@ -112,7 +114,7 @@ Progress: 0/0 (S:0 F:0 Skipped:1)
 $ sudo vi /usr/dports/editors/vim/Makefile
 
 # Rebuild after change
-$ sudo dsynth build editors/vim
+$ sudo go-synth build editors/vim
 Building editors/vim... success (5m 35s)
 ```
 
@@ -135,16 +137,16 @@ Progress: 15/20 (S:12 F:3 Skipped:5) 2h 15m elapsed
 Future CLI commands for database queries:
 ```bash
 # View build history for a port
-dsynth db history editors/vim
+go-synth db history editors/vim
 
 # Show last successful build
-dsynth db latest editors/vim
+go-synth db latest editors/vim
 
 # List all failed builds
-dsynth db failures
+go-synth db failures
 
 # Show CRC for a port
-dsynth db crc editors/vim
+go-synth db crc editors/vim
 ```
 
 **Current Implementation**: Phase 3 complete - all core features working
@@ -228,7 +230,7 @@ Use_usrsrc=no
 ## Architecture
 
 ```
-dsynth-go/
+go-synth/
 ├── main.go                # CLI entry point
 ├── config/                # Configuration parsing
 │   └── config.go          # INI config and system detection
@@ -268,7 +270,7 @@ dsynth-go/
 
 ## Logging
 
-dsynth-go creates 8 distinct log files in the logs directory:
+go-synth creates 8 distinct log files in the logs directory:
 
 - **00_last_results.log**: Aggregate build results with timestamps
 - **01_success_list.log**: List of successfully built ports
@@ -281,7 +283,7 @@ dsynth-go creates 8 distinct log files in the logs directory:
 
 Additionally, detailed per-package logs are saved in `logs/logs/category/portname.log`.
 
-## Differences from Original dsynth
+## Differences from original dsynth
 
 - Written in Go instead of C
 - No ncurses UI (yet - terminal output only)
@@ -305,7 +307,7 @@ On a 16-core system building 100 ports:
 
 ### Package not found errors
 - Verify ports tree is checked out at configured path
-- Run `dsynth reset-db` to clear cached metadata
+- Run `go-synth reset-db` to clear cached metadata
 - Check port origin is correct (e.g., `editors/vim` not `vim`)
 
 ### Out of disk space
@@ -323,8 +325,8 @@ The `pkg` package provides a pure Go library for parsing port specifications, re
 
 ```go
 import (
-    "dsynth/config"
-    "dsynth/pkg"
+    "go-synth/config"
+    "go-synth/pkg"
 )
 
 func main() {

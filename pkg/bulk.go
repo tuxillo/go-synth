@@ -3,7 +3,7 @@ package pkg
 import (
 	"sync"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // BulkQueue implements a worker pool for parallel package information fetching.

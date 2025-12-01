@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"dsynth/config"
-	"dsynth/log"
-	"dsynth/pkg"
+	"go-synth/config"
+	"go-synth/log"
+	"go-synth/pkg"
 )
 
 // FetchStats tracks fetch statistics

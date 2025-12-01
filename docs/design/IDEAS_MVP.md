@@ -1,4 +1,4 @@
-# go-dsynth Architecture – MVP Scope
+# go-synth Architecture – MVP Scope
 
 This document defines the Minimum Viable Product (MVP) architecture extracted from the full `IDEAS.md`. It focuses on delivering a clean, testable, backward‑compatible core without advanced/distributed features.
 
@@ -27,12 +27,12 @@ Non-Goals (Deferred):
 
 ## 3. Target MVP Structure
 ```
-dsynth/
+go-synth/
 ├── pkg/          # Pure: metadata + dependency resolution
 ├── builddb/      # Minimal build tracking (bbolt)
 ├── builder/      # Orchestration + worker loop + phases
 ├── environment/  # DragonFly/FreeBSD impl only (interface)
-├── cmd/dsynth/   # Thin CLI wrapper
+├── cmd/go-synth/   # Thin CLI wrapper
 └── api/ (optional) # Minimal REST (if enabled)
 ```
 

@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"dsynth/build"
-	"dsynth/migration"
-	"dsynth/pkg"
+	"go-synth/build"
+	"go-synth/migration"
+	"go-synth/pkg"
 )
 
 // Build orchestrates the complete build workflow for the specified ports.

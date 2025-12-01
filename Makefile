@@ -1,6 +1,6 @@
-# Makefile for dsynth-go
+# Makefile for go-synth
 
-PROG=		dsynth
+PROG=		go-synth
 SRCS=		$(shell find . -name '*.go' -not -path './vendor/*')
 VERSION=	2.0.0
 
@@ -167,7 +167,7 @@ vm-sync:
 	@$(VM_RSYNC) . root@localhost:/root/go-synth/
 
 vm-build: vm-sync
-	@echo "==> Building dsynth in VM..."
+	@echo "==> Building go-synth in VM..."
 	@$(VM_SSH) 'cd /root/go-synth && make clean && make build'
 
 vm-test-unit: vm-build
@@ -226,7 +226,7 @@ vm-help:
 	@echo ""
 	@echo "TESTING:"
 	@echo "  vm-sync                Sync project files to VM"
-	@echo "  vm-build               Build dsynth in VM"
+	@echo "  vm-build               Build go-synth in VM"
 	@echo "  vm-test-unit           Run unit tests"
 	@echo "  vm-test-integration    Run integration tests (tags=integration)"
 	@echo "  vm-test-integration-e2e Run E2E integration tests (requires BSD)"

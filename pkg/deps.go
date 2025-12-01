@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // resolveDependencies builds the complete dependency graph

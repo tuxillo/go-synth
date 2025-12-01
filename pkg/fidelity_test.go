@@ -3,8 +3,8 @@ package pkg
 import (
 	"testing"
 
-	"dsynth/config"
-	"dsynth/log"
+	"go-synth/config"
+	"go-synth/log"
 )
 
 // TestCFidelity_DependencyResolutionTwoPass verifies the two-pass dependency

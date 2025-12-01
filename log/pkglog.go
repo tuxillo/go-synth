@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // PackageLogger logs build output for a specific package

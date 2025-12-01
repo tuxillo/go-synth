@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // portsQuerier is the package-level variable used to query port metadata.

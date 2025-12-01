@@ -162,7 +162,7 @@ Total: 176 mounts (8 workers × 22 mounts/worker)
 2. **Check Configuration Loading:**
    ```bash
    # On VM
-   ./dsynth build --debug devel/gmake 2>&1 | grep -i workers
+   ./go-synth build --debug devel/gmake 2>&1 | grep -i workers
    # Should show: "Starting build with 8 workers" or similar
    ```
 
@@ -201,7 +201,7 @@ Total: 176 mounts (8 workers × 22 mounts/worker)
 3. **VM Test**: Full build with logging
    ```bash
    rm -f /build/synth/builds.db
-   ./dsynth build --debug devel/gmake 2>&1 | tee /tmp/debug.log
+   ./go-synth build --debug devel/gmake 2>&1 | tee /tmp/debug.log
    # Kill after 10 seconds
    kill -INT $!
    # Analyze log for worker creation messages
@@ -285,7 +285,7 @@ cfg := &Config{
 ```
 Warning: No config file found at /etc/dsynth/dsynth.ini
 Using defaults: 8 workers (detected from CPU count)
-Run 'dsynth init' to create a config file, or override with config file settings.
+Run 'go-synth init' to create a config file, or override with config file settings.
 ```
 
 ### Benefits

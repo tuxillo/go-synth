@@ -96,8 +96,8 @@ This ensures users can upgrade without losing build history.
        "path/filepath"
        "strings"
        
-       "dsynth/builddb"
-       "dsynth/config"
+       "go-synth/builddb"
+       "go-synth/config"
    )
    
    // CRCRecord represents a legacy CRC entry from file
@@ -211,9 +211,9 @@ This ensures users can upgrade without losing build history.
        "path/filepath"
        "testing"
        
-       "dsynth/builddb"
-       "dsynth/config"
-       "dsynth/migration"
+       "go-synth/builddb"
+       "go-synth/config"
+       "go-synth/migration"
    )
    
    func TestMigrateLegacyCRC(t *testing.T) {
@@ -1035,14 +1035,14 @@ database to build completion.
        os.WriteFile(configPath, []byte(configData), 0644)
        
        // 2. Run init
-       cmd := exec.Command("./dsynth", "-C", tmpDir, "-y", "init")
+       cmd := exec.Command("./go-synth", "-C", tmpDir, "-y", "init")
        if output, err := cmd.CombinedOutput(); err != nil {
            t.Fatalf("init failed: %v\n%s", err, output)
        }
        
        // 3. Build a small package (twice to test CRC skip)
        for i := 0; i < 2; i++ {
-           cmd = exec.Command("./dsynth", "-C", tmpDir, "-y", "build", "misc/hello")
+           cmd = exec.Command("./go-synth", "-C", tmpDir, "-y", "build", "misc/hello")
            output, err := cmd.CombinedOutput()
            if err != nil {
                t.Fatalf("build %d failed: %v\n%s", i+1, err, output)
@@ -1087,7 +1087,7 @@ database to build completion.
 #### Implementation Summary
 
 **Critical Bugs Fixed**:
-1. **BSD Backend Not Registered**: Added `_ "dsynth/environment/bsd"` blank import to `main.go` (a57adf1)
+1. **BSD Backend Not Registered**: Added `_ "go-synth/environment/bsd"` blank import to `main.go` (a57adf1)
 2. **Dependencies Not in Build Order**: Added `packages = pkgRegistry.AllPackages()` after `ResolveDependencies()` (a57adf1)
 3. **Empty Template Directory**: Populated Template with essential files from host system (74e2c1d)
 
@@ -1444,7 +1444,7 @@ After implementing Tasks 1-7, E2E integration tests passed successfully but **ac
 
 **Symptoms**:
 ```bash
-$ cd /root/go-synth && ./dsynth build misc/hello
+$ cd /root/go-synth && ./go-synth build misc/hello
 Building 1 port(s)...
 ...
 Build error: worker 0 environment creation failed: unknown environment backend: bsd
@@ -1468,18 +1468,18 @@ env, err := environment.New("bsd")  // ← Tries to use "bsd" backend
 
 // main.go imports (lines 12-25)
 import (
-    "dsynth/build"
-    "dsynth/builddb"
-    "dsynth/config"
-    // ... no "dsynth/environment/bsd" import! ←
+    "go-synth/build"
+    "go-synth/builddb"
+    "go-synth/config"
+    // ... no "go-synth/environment/bsd" import! ←
 )
 
 // build/build.go imports (lines 61-75)
 import (
-    "dsynth/builddb"
-    "dsynth/config"
-    "dsynth/environment"
-    // ... no "dsynth/environment/bsd" import! ←
+    "go-synth/builddb"
+    "go-synth/config"
+    "go-synth/environment"
+    // ... no "go-synth/environment/bsd" import! ←
 )
 ```
 
@@ -1493,12 +1493,12 @@ Add blank import to trigger side-effect registration:
 ```go
 // Option 1: In main.go
 import (
-    _ "dsynth/environment/bsd"  // Register BSD backend
+    _ "go-synth/environment/bsd"  // Register BSD backend
 )
 
 // Option 2: In build/build.go  
 import (
-    _ "dsynth/environment/bsd"  // Register BSD backend
+    _ "go-synth/environment/bsd"  // Register BSD backend
 )
 ```
 
@@ -1508,7 +1508,7 @@ import (
 Added blank import to `main.go`:
 ```go
 import (
-    _ "dsynth/environment/bsd"  // Register BSD backend
+    _ "go-synth/environment/bsd"  // Register BSD backend
 )
 ```
 
@@ -1528,7 +1528,7 @@ import (
 
 **Symptoms**:
 ```bash
-$ ./dsynth build misc/hello
+$ ./go-synth build misc/hello
 Building 1 port(s)...
 Resolving dependencies...
   Processed 10/1 packages...  Resolved 10 total packages
@@ -1617,13 +1617,13 @@ This extracts all resolved packages (including transitive dependencies) from the
 diff --git a/main.go b/main.go
 +++ b/main.go
 @@ -14,6 +14,7 @@ import (
-     "dsynth/build"
-     "dsynth/builddb"
-     "dsynth/config"
-+    _ "dsynth/environment/bsd" // Register BSD backend
-     "dsynth/log"
-     "dsynth/migration"
-     "dsynth/pkg"
+     "go-synth/build"
+     "go-synth/builddb"
+     "go-synth/config"
++    _ "go-synth/environment/bsd" // Register BSD backend
+     "go-synth/log"
+     "go-synth/migration"
+     "go-synth/pkg"
 @@ -623,6 +624,9 @@ func doBuild(cfg *config.Config, portList []string, justBuild bool, testMode boo
          os.Exit(1)
      }

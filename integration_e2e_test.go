@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-// Package main_test contains end-to-end integration tests for the dsynth CLI.
+// Package main_test contains end-to-end integration tests for the go-synth CLI.
 //
 // These tests verify the complete Phase 7 integration:
 // - Init command creates directories and BuildDB
@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"dsynth/builddb"
+	"go-synth/builddb"
 	"github.com/google/uuid"
 )
 
 // ==================== Test Helper Functions ====================
 
-// execDsynth executes the dsynth CLI with given arguments
+// execDsynth executes the go-synth CLI with given arguments
 func execDsynth(t *testing.T, args []string, configDir string) (stdout string, err error) {
 	t.Helper()
 
@@ -42,7 +42,7 @@ func execDsynth(t *testing.T, args []string, configDir string) (stdout string, e
 		args = append([]string{"-C", configDir}, args...)
 	}
 
-	cmd := exec.Command("./dsynth", args...)
+	cmd := exec.Command("./go-synth", args...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
@@ -139,10 +139,10 @@ func TestE2E_InitCommand(t *testing.T) {
 	tmpDir, configDir := setupTestEnvironment(t)
 	buildBase := filepath.Join(tmpDir, "build")
 
-	// Execute: dsynth init
+	// Execute: go-synth init
 	stdout, err := execDsynth(t, []string{"-y", "init"}, configDir)
 	if err != nil {
-		t.Fatalf("dsynth init failed: %v\nOutput: %s", err, stdout)
+		t.Fatalf("go-synth init failed: %v\nOutput: %s", err, stdout)
 	}
 
 	// Verify: Output contains success indicators
@@ -184,13 +184,13 @@ func TestE2E_InitIdempotent(t *testing.T) {
 	tmpDir, configDir := setupTestEnvironment(t)
 	buildBase := filepath.Join(tmpDir, "build")
 
-	// Execute: dsynth init (first time)
+	// Execute: go-synth init (first time)
 	_, err := execDsynth(t, []string{"-y", "init"}, configDir)
 	if err != nil {
 		t.Fatalf("First init failed: %v", err)
 	}
 
-	// Execute: dsynth init (second time)
+	// Execute: go-synth init (second time)
 	stdout, err := execDsynth(t, []string{"-y", "init"}, configDir)
 	if err != nil {
 		t.Fatalf("Second init failed: %v\nOutput: %s", err, stdout)
@@ -225,7 +225,7 @@ func TestE2E_LegacyMigration(t *testing.T) {
 	}
 	createLegacyCRCFile(t, buildBase, legacyEntries)
 
-	// Execute: dsynth init (should detect and migrate)
+	// Execute: go-synth init (should detect and migrate)
 	stdout, err := execDsynth(t, []string{"-y", "init"}, configDir)
 	if err != nil {
 		t.Fatalf("Init with migration failed: %v\nOutput: %s", err, stdout)
@@ -329,7 +329,7 @@ func TestE2E_StatusCommand(t *testing.T) {
 
 	db.Close()
 
-	// Execute: dsynth status
+	// Execute: go-synth status
 	stdout, err := execDsynth(t, []string{"status"}, configDir)
 	if err != nil {
 		t.Fatalf("Status command failed: %v\nOutput: %s", err, stdout)
@@ -343,7 +343,7 @@ func TestE2E_StatusCommand(t *testing.T) {
 		t.Error("Expected total builds count")
 	}
 
-	// Execute: dsynth status <port>
+	// Execute: go-synth status <port>
 	stdout, err = execDsynth(t, []string{"status", "editors/vim"}, configDir)
 	if err != nil {
 		t.Fatalf("Port status failed: %v\nOutput: %s", err, stdout)
@@ -381,7 +381,7 @@ func TestE2E_ResetDBCommand(t *testing.T) {
 		t.Fatal("Database should exist before reset")
 	}
 
-	// Execute: dsynth reset-db
+	// Execute: go-synth reset-db
 	stdout, err := execDsynth(t, []string{"-y", "reset-db"}, configDir)
 	if err != nil {
 		t.Fatalf("Reset-db failed: %v\nOutput: %s", err, stdout)

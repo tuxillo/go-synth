@@ -5,9 +5,9 @@ package bsd
 import (
 	"bytes"
 	"context"
-	"dsynth/config"
-	"dsynth/environment"
-	"dsynth/log"
+	"go-synth/config"
+	"go-synth/environment"
+	"go-synth/log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -615,7 +615,7 @@ func createTestConfig(t *testing.T) *config.Config {
 
 	// Create unique temp directory for this test run
 	// Use t.Name() to make it identifiable in case of failures
-	tmpRoot := filepath.Join(os.TempDir(), "dsynth-test-"+t.Name())
+	tmpRoot := filepath.Join(os.TempDir(), "go-synth-test-"+t.Name())
 
 	baseDir := filepath.Join(tmpRoot, "build")
 	distfiles := filepath.Join(tmpRoot, "distfiles")

@@ -46,8 +46,8 @@ package environment
 
 import (
 	"context"
-	"dsynth/config"
-	"dsynth/log"
+	"go-synth/config"
+	"go-synth/log"
 	"fmt"
 	"io"
 	"time"

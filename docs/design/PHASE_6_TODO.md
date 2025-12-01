@@ -65,11 +65,11 @@ worker lifecycle, concurrent builds, error propagation, and mount cleanup scenar
    
    import (
        "testing"
-       "dsynth/build"
-       "dsynth/builddb"
-       "dsynth/config"
-       "dsynth/log"
-       "dsynth/pkg"
+       "go-synth/build"
+       "go-synth/builddb"
+       "go-synth/config"
+       "go-synth/log"
+       "go-synth/pkg"
    )
    
    func TestBuildContext(t *testing.T) {
@@ -200,7 +200,7 @@ Achieved excellent 93.2% coverage exceeding the 80% target.
        "path/filepath"
        "testing"
        
-       "dsynth/config"
+       "go-synth/config"
    )
    
    func TestLoadConfig(t *testing.T) {
@@ -327,8 +327,8 @@ formatting, and concurrency safety. Achieved excellent 90.3% coverage exceeding 
        "strings"
        "testing"
        
-       "dsynth/config"
-       "dsynth/log"
+       "go-synth/config"
+       "go-synth/log"
    )
    
    func TestNewLogger(t *testing.T) {
@@ -440,8 +440,8 @@ mount package and ensure the new environment package has proper test coverage.
        "os"
        "testing"
        
-       "dsynth/config"
-       "dsynth/mount"
+       "go-synth/config"
+       "go-synth/mount"
    )
    
    func TestWorkerMountSetup(t *testing.T) {

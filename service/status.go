@@ -3,7 +3,7 @@ package service
 import (
 	"fmt"
 
-	"dsynth/builddb"
+	"go-synth/builddb"
 )
 
 // GetStatus retrieves build status information from the database.

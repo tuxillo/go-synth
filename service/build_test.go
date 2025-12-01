@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/config"
-	"dsynth/pkg"
+	"go-synth/config"
+	"go-synth/pkg"
 )
 
 // TestGetBuildPlan_EmptyPortList tests GetBuildPlan with no ports specified

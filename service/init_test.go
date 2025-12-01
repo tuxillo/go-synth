@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // TestInitialize_CreatesDirectories tests that Initialize creates all required directories

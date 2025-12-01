@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 	
-	"dsynth/pkg"
+	"go-synth/pkg"
 )
 
 // TestFormatDuration tests duration formatting for display

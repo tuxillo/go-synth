@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/config"
+	"go-synth/config"
 )
 
 // TestDatabaseExists tests database file existence check

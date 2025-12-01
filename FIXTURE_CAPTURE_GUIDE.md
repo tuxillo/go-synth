@@ -273,7 +273,7 @@ go test ./pkg -run TestIntegration -v
     integration_test.go: Large graph validated: 231 packages
 --- PASS: TestIntegration_LargeGraph (0.01s)
 PASS
-ok      dsynth/pkg      0.025s
+ok      go-synth/pkg      0.025s
 ```
 
 ## Fixture Maintenance

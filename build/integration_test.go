@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"dsynth/builddb"
-	"dsynth/config"
-	_ "dsynth/environment/bsd" // Register bsd backend
-	"dsynth/log"
-	"dsynth/pkg"
+	"go-synth/builddb"
+	"go-synth/config"
+	_ "go-synth/environment/bsd" // Register bsd backend
+	"go-synth/log"
+	"go-synth/pkg"
 )
 
 // ==================== Integration Test Helpers ====================

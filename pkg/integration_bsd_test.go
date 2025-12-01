@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/config"
-	"dsynth/log"
+	"go-synth/config"
+	"go-synth/log"
 )
 
 // TestIntegrationBSD_RealPort tests against a real port in the ports tree

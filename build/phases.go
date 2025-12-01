@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"dsynth/config"
-	"dsynth/environment"
-	"dsynth/log"
-	"dsynth/pkg"
+	"go-synth/config"
+	"go-synth/environment"
+	"go-synth/log"
+	"go-synth/pkg"
 )
 
 // loggerWriter adapts log.PackageLogger to io.Writer interface

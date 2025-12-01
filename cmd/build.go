@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"dsynth/build"
-	"dsynth/builddb"
-	"dsynth/config"
-	"dsynth/log"
-	"dsynth/pkg"
+	"go-synth/build"
+	"go-synth/builddb"
+	"go-synth/config"
+	"go-synth/log"
+	"go-synth/pkg"
 
 	"github.com/spf13/cobra"
 )

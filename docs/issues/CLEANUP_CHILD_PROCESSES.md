@@ -207,7 +207,7 @@ Combine both:
 3. **VM Test**: Full end-to-end test on DragonFlyBSD
    ```bash
    make vm-build
-   (echo "y" | timeout 25 ./dsynth build -f devel/gmake) &
+   (echo "y" | timeout 25 ./go-synth build -f devel/gmake) &
    sleep 10
    kill -INT $!
    # Verify: mount | grep /build/SL should be 0
@@ -337,8 +337,8 @@ Combine both:
 **Description**: Test on DragonFlyBSD VM with real builds and SIGINT.
 
 **Test Procedure**:
-1. ✅ Build dsynth: `make vm-build`
-2. ✅ Start build: `echo "y" | timeout --signal=INT 12 ./dsynth build devel/gmake`
+1. ✅ Build go-synth: `make vm-build`
+2. ✅ Start build: `echo "y" | timeout --signal=INT 12 ./go-synth build devel/gmake`
 3. ✅ Wait for interrupt signal
 4. ✅ Verify cleanup results
 

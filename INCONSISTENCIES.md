@@ -208,7 +208,7 @@ Library: multi-file logging for build results, status, and debugging.
 
 ### 1. Logger is tightly coupled to on-disk file layout
 
-- `NewLogger` always creates eight specific files under `cfg.LogsPath` with hard-coded names and formats, mirroring the C dsynth layout.
+- `NewLogger` always creates eight specific files under `cfg.LogsPath` with hard-coded names and formats, mirroring the original dsynth layout.
 - There is no abstraction for alternative sinks (stdout/stderr, structured logging, in-memory logs) or for turning specific streams on/off; any caller must accept this full layout even in contexts where only a subset is useful.
 - This design is fine for the primary CLI tool, but makes it hard to reuse `log.Logger` in other frontends or embed it in tests/services without touching the filesystem.
 
@@ -221,7 +221,7 @@ Library: multi-file logging for build results, status, and debugging.
 ### 3. Partial integration with higher-level logging and environment
 
 - The `Logger` type is used in `build/` via `WithContext` to create `ContextLogger`, but other packages (like `environment/bsd`) still use `fmt.Fprintf` and the global `log` package for diagnostics rather than routing messages through this logging layer.
-- This results in a mixed logging story: some events go to the structured dsynth logs, while others go directly to stderr or the default logger, making it harder to get a unified view of system behavior.
+- This results in a mixed logging story: some events go to the structured go-synth logs, while others go directly to stderr or the default logger, making it harder to get a unified view of system behavior.
 
 ### 4. ContextLogger success accounting vs. BuildStats
 

@@ -79,8 +79,8 @@ Use the pkg library when you need to:
 
 ```go
 import (
-    "dsynth/config"
-    "dsynth/pkg"
+    "go-synth/config"
+    "go-synth/pkg"
 )
 ```
 
@@ -114,8 +114,8 @@ import (
     "fmt"
     "log"
     
-    "dsynth/config"
-    "dsynth/pkg"
+    "go-synth/config"
+    "go-synth/pkg"
 )
 
 func main() {
@@ -884,8 +884,8 @@ import (
     "fmt"
     "log"
     
-    "dsynth/config"
-    "dsynth/pkg"
+    "go-synth/config"
+    "go-synth/pkg"
 )
 
 func main() {
@@ -933,8 +933,8 @@ import (
     "fmt"
     "log"
     
-    "dsynth/config"
-    "dsynth/pkg"
+    "go-synth/config"
+    "go-synth/pkg"
 )
 
 func main() {
@@ -990,8 +990,8 @@ import (
     "log"
     "os"
     
-    "dsynth/config"
-    "dsynth/pkg"
+    "go-synth/config"
+    "go-synth/pkg"
 )
 
 func main() {
@@ -1054,8 +1054,8 @@ import (
     "log"
     "strings"
     
-    "dsynth/config"
-    "dsynth/pkg"
+    "go-synth/config"
+    "go-synth/pkg"
 )
 
 func main() {
@@ -1123,4 +1123,4 @@ Found an issue or have a suggestion? Please:
 
 **Document Version:** 1.0  
 **Last Updated:** 2025-11-26  
-**Maintainer:** dsynth-go team
+**Maintainer:** go-synth team

@@ -1,4 +1,4 @@
-// Package service provides reusable business logic for dsynth operations.
+// Package service provides reusable business logic for go-synth operations.
 //
 // The service layer sits between the CLI (main.go) and library packages (pkg, build, builddb, etc.),
 // providing a clean separation of concerns:
@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"sync"
 
-	"dsynth/builddb"
-	"dsynth/config"
-	"dsynth/log"
+	"go-synth/builddb"
+	"go-synth/config"
+	"go-synth/log"
 )
 
-// Service coordinates business logic across dsynth subsystems.
+// Service coordinates business logic across go-synth subsystems.
 //
 // It manages lifecycle of shared resources (logger, database) and provides
 // high-level operations for build orchestration, status queries, and maintenance.

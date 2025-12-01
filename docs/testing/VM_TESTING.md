@@ -1,6 +1,6 @@
 # VM Testing Infrastructure
 
-This document describes the DragonFlyBSD VM testing infrastructure for `dsynth-go`, designed to enable local, deterministic testing of Phase 4 mount operations that require BSD-specific system calls and root privileges.
+This document describes the DragonFlyBSD VM testing infrastructure for `go-synth`, designed to enable local, deterministic testing of Phase 4 mount operations that require BSD-specific system calls and root privileges.
 
 ## Table of Contents
 
@@ -38,7 +38,7 @@ The VM testing infrastructure provides:
 
 ## Why a VM?
 
-Phase 4 of `dsynth-go` implements a complex worker environment with 27 mount points, requiring:
+Phase 4 of `go-synth` implements a complex worker environment with 27 mount points, requiring:
 
 1. **BSD-Specific System Calls**: `nullfs`, `tmpfs`, `devfs`, `procfs` mounts
 2. **Root Privileges**: Cannot test mount/chroot without root
@@ -308,7 +308,7 @@ This saves the VM state to `vm/dfly-vm-clean.qcow2`. You can now restore to this
 | Target | Description |
 |--------|-------------|
 | `make vm-sync` | Sync project files to VM |
-| `make vm-build` | Build `dsynth` in VM |
+| `make vm-build` | Build `go-synth` in VM |
 | `make vm-test-unit` | Run unit tests |
 | `make vm-test-integration` | Run integration tests (tags=integration) |
 | `make vm-test-integration-e2e` | Run E2E integration tests (requires BSD) |
@@ -607,7 +607,7 @@ make vm-start
 1. SSH into VM: `make vm-ssh`
 2. Check usage: `df -h`
 3. Clean Go cache: `go clean -cache -testcache -modcache`
-4. Remove old build artifacts: `rm -rf /root/go-synth/dsynth`
+4. Remove old build artifacts: `rm -rf /root/go-synth/go-synth`
 5. If necessary, restore from clean snapshot: `make vm-restore`
 
 ### Slow VM Performance
@@ -947,4 +947,4 @@ If you encounter issues not covered here:
 3. Restore clean state: `make vm-restore`
 4. Consult DragonFlyBSD documentation: https://www.dragonflybsd.org/docs/
 
-For `dsynth-go` specific issues, see `DEVELOPMENT.md`.
+For `go-synth` specific issues, see `DEVELOPMENT.md`.

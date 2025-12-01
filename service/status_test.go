@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"dsynth/builddb"
-	"dsynth/config"
+	"go-synth/builddb"
+	"go-synth/config"
 )
 
 // TestGetStatus_EmptyDatabase tests status query on empty database

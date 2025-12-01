@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dsynth/builddb"
-	"dsynth/config"
-	"dsynth/log"
-	"dsynth/pkg"
+	"go-synth/builddb"
+	"go-synth/config"
+	"go-synth/log"
+	"go-synth/pkg"
 )
 
 // TestBootstrapPkg_NoPkgInGraph tests bootstrap when no ports-mgmt/pkg is present
@@ -36,6 +36,10 @@ func TestBootstrapPkg_NoPkgInGraph(t *testing.T) {
 		PackagesPath:   filepath.Join(tmpDir, "packages"),
 		RepositoryPath: filepath.Join(tmpDir, "repo"),
 		LogsPath:       logsDir,
+	}
+
+	if err := os.MkdirAll(filepath.Join(cfg.RepositoryPath, "All"), 0755); err != nil {
+		t.Fatalf("Failed to create repo All dir: %v", err)
 	}
 
 	logger, err := log.NewLogger(cfg)
@@ -85,6 +89,13 @@ func TestBootstrapPkg_CRCMatch(t *testing.T) {
 		LogsPath:       logsDir,
 	}
 
+	if err := os.MkdirAll(filepath.Join(cfg.RepositoryPath, "All"), 0755); err != nil {
+		t.Fatalf("Failed to create repo All dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.PackagesPath, "All"), 0755); err != nil {
+		t.Fatalf("Failed to create packages All dir: %v", err)
+	}
+
 	// Create fake ports-mgmt/pkg directory
 	pkgDir := filepath.Join(tmpDir, "ports-mgmt", "pkg")
 	if err := os.MkdirAll(pkgDir, 0755); err != nil {
@@ -125,6 +136,19 @@ func TestBootstrapPkg_CRCMatch(t *testing.T) {
 	registry.AddFlags(pkgPkg, pkg.PkgFPkgPkg)
 
 	packages := []*pkg.Package{pkgPkg}
+
+	pkgPkg.PkgFile = "pkg-1.0.0.pkg"
+	pkgFilePath := filepath.Join(cfg.PackagesPath, "All", pkgPkg.PkgFile)
+	if err := os.WriteFile(pkgFilePath, []byte("fake package"), 0644); err != nil {
+		t.Fatalf("Failed to create fake package file: %v", err)
+	}
+	templatePkgDir := filepath.Join(cfg.BuildBase, "Template/usr/local/sbin")
+	if err := os.MkdirAll(templatePkgDir, 0755); err != nil {
+		t.Fatalf("Failed to create template dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatePkgDir, "pkg"), []byte("fake binary"), 0755); err != nil {
+		t.Fatalf("Failed to create fake pkg binary: %v", err)
+	}
 
 	ctx := context.Background()
 	err = bootstrapPkg(ctx, packages, cfg, logger, db, registry)

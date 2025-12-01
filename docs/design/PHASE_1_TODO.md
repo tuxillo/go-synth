@@ -534,8 +534,8 @@ Add "Library Usage" section to README.
   
   import (
       "fmt"
-      "dsynth/config"
-      "dsynth/pkg"
+      "go-synth/config"
+      "go-synth/pkg"
   )
   
   func main() {

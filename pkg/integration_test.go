@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"dsynth/config"
-	"dsynth/log"
+	"go-synth/config"
+	"go-synth/log"
 )
 
 // TestIntegration_SimpleWorkflow tests the complete Parse→Resolve→TopoOrder pipeline
