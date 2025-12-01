@@ -21,6 +21,14 @@ func resolveDependencies(packages []*Package, cfg *config.Config, registry *Buil
 	// Track what we've already queued to avoid duplicates
 	queued := make(map[string]bool)
 
+	// Always inject ports-mgmt/pkg into the dependency graph
+	// Every port needs pkg during the package phase to create .pkg files,
+	// but it's not listed as a formal dependency in any port's Makefile
+	queued["ports-mgmt/pkg"] = true
+	if pkgRegistry.Find("ports-mgmt/pkg") == nil {
+		bq.Queue("ports-mgmt", "pkg", "", "x")
+	}
+
 	// Process initial package list
 	toProcess := make([]*Package, 0)
 	for _, pkg := range packages {

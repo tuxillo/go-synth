@@ -3,6 +3,8 @@ package build
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -32,9 +34,11 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 	registry *pkg.BuildStateRegistry) error {
 
 	// Step 1: Find ports-mgmt/pkg in the package graph
+	// We MUST build pkg first if it's in the dependency graph, regardless of flags
+	// because workers need /usr/local/sbin/pkg in Template to install dependencies
 	var pkgPkg *pkg.Package
 	for _, p := range packages {
-		if registry.HasFlags(p, pkg.PkgFPkgPkg) {
+		if p.PortDir == "ports-mgmt/pkg" {
 			pkgPkg = p
 			break
 		}
@@ -45,7 +49,27 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 		return nil
 	}
 
+	// Mark this package so workers will skip it later
+	registry.AddFlags(pkgPkg, pkg.PkgFPkgPkg)
+
 	logger.Info("Bootstrap phase: checking ports-mgmt/pkg...")
+
+	// Step 1.5: Check if pkg is already installed in Template
+	// If pkg binary exists in Template AND package file exists, skip bootstrap
+	templatePkg := filepath.Join(cfg.BuildBase, "Template/usr/local/sbin/pkg")
+	pkgFilePath := filepath.Join(cfg.PackagesPath, "All", pkgPkg.PkgFile)
+
+	if _, err := os.Stat(templatePkg); err == nil {
+		// pkg binary exists in Template
+		if _, err := os.Stat(pkgFilePath); err == nil {
+			// Package file also exists
+			registry.AddFlags(pkgPkg, pkg.PkgFSuccess|pkg.PkgFPackaged)
+			logger.Success("ports-mgmt/pkg (already in Template, using existing)")
+			return nil
+		}
+	}
+
+	logger.Info("Bootstrap phase: pkg not in Template or package missing, will build...")
 
 	// Step 2: Compute CRC of pkg port directory
 	portPath := filepath.Join(cfg.DPortsPath, pkgPkg.Category, pkgPkg.Name)
@@ -60,8 +84,31 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 			logger.Warn("Failed to check NeedsBuild for ports-mgmt/pkg: %v (will rebuild)", err)
 		} else if !needsBuild {
 			// CRC matches, pkg hasn't changed since last successful build
+			// But we still need to ensure it's installed in Template!
 			registry.AddFlags(pkgPkg, pkg.PkgFSuccess|pkg.PkgFPackaged)
 			logger.Success("ports-mgmt/pkg (CRC match, using cached package)")
+
+			// Check if pkg is in Template, install if missing
+			templatePkg := filepath.Join(cfg.BuildBase, "Template/usr/local/sbin/pkg")
+			if _, err := os.Stat(templatePkg); err != nil {
+				// pkg not in Template, install it
+				logger.Info("Installing cached pkg into Template...")
+				templateDir := filepath.Join(cfg.BuildBase, "Template")
+				pkgFilePath := filepath.Join(cfg.PackagesPath, "All", pkgPkg.PkgFile)
+
+				cmd := exec.CommandContext(ctx, "tar",
+					"--exclude", "+*",
+					"--exclude", "*/man/*",
+					"-xzpf", pkgFilePath,
+					"-C", templateDir)
+
+				if output, err := cmd.CombinedOutput(); err != nil {
+					return fmt.Errorf("bootstrap: failed to install cached pkg into Template: %w (output: %s)", err, string(output))
+				}
+
+				logger.Success("ports-mgmt/pkg installed into Template at /usr/local/sbin/pkg")
+			}
+
 			return nil
 		}
 	}
@@ -113,16 +160,26 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 	}
 
 	// Step 6: Execute build phases
+	// Use the SAME phases as workers to ensure consistency
 	registry.AddFlags(pkgPkg, pkg.PkgFRunning)
 
 	phases := []string{
+		"install-pkgs",
+		"check-sanity",
+		"fetch-depends",
 		"fetch",
 		"checksum",
+		"extract-depends",
 		"extract",
+		"patch-depends",
 		"patch",
+		"build-depends",
+		"lib-depends",
 		"configure",
 		"build",
+		"run-depends",
 		"stage",
+		"check-plist",
 		"package",
 	}
 
@@ -165,6 +222,40 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 	// Step 9: Mark success
 	registry.AddFlags(pkgPkg, pkg.PkgFSuccess|pkg.PkgFPackaged)
 	logger.Success("ports-mgmt/pkg (bootstrap build succeeded)")
+
+	// Step 10: Install pkg into Template directory
+	// This is CRITICAL - other ports need /usr/local/sbin/pkg to install their dependencies
+	// C dsynth does this at build.c:273-285
+	logger.Info("Installing ports-mgmt/pkg into Template...")
+
+	templateDir := filepath.Join(cfg.BuildBase, "Template")
+	pkgFilePath = filepath.Join(cfg.PackagesPath, "All", pkgPkg.PkgFile)
+
+	// Verify package file exists
+	if _, err = os.Stat(pkgFilePath); err != nil {
+		return fmt.Errorf("bootstrap: package file not found after build: %s (%w)", pkgFilePath, err)
+	}
+
+	// Verify Template directory exists
+	if _, err = os.Stat(templateDir); err != nil {
+		return fmt.Errorf("bootstrap: Template directory not found: %s (%w)", templateDir, err)
+	}
+
+	// Extract pkg package into Template using tar
+	// Exclude metadata (+* files) and man pages like C dsynth does (build.c:273)
+	// Command: tar --exclude '+*' --exclude '*/man/*' -xzpf <pkgfile> -C <template>
+	cmd := exec.CommandContext(ctx, "tar",
+		"--exclude", "+*",
+		"--exclude", "*/man/*",
+		"-xzpf", pkgFilePath,
+		"-C", templateDir)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("bootstrap: failed to install pkg into Template: %w (output: %s)", err, string(output))
+	}
+
+	logger.Success("ports-mgmt/pkg installed into Template at /usr/local/sbin/pkg")
 
 	return nil
 }

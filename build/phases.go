@@ -171,15 +171,11 @@ func installDependencyPackages(ctx context.Context, worker *Worker, p *pkg.Packa
 
 		result, err := worker.Env.Execute(ctx, execCmd)
 		if err != nil {
-			// Execution failed - log warning but don't fail build
-			logger.WriteWarning(fmt.Sprintf("Package install execution failed for %s: %v", pkgFile, err))
-			continue
+			return fmt.Errorf("failed to install dependency %s: %w", pkgFile, err)
 		}
 
 		if result.ExitCode != 0 {
-			// pkg add failed, but this might be acceptable (already installed)
-			// Output already captured by logger, just log warning
-			logger.WriteWarning(fmt.Sprintf("Package install returned exit code %d for %s", result.ExitCode, pkgFile))
+			return fmt.Errorf("failed to install dependency %s: exit code %d", pkgFile, result.ExitCode)
 		}
 	}
 

@@ -1729,6 +1729,69 @@ Implemented proper pkg bootstrap with CRC-based incremental build support:
 
 ---
 
+#### Issue #3: pkg Not Installed into Template (CRITICAL)
+**Status**: 🔴 Open - Blocks all package builds with dependencies  
+**Discovered**: 2025-11-30  
+**Priority**: P0 - Must fix before any production use  
+**Affects**: All packages with dependencies (99% of ports)
+
+**Problem**:
+While Issue #2 fixed pkg *building* first, it doesn't *install* pkg into the Template directory. Workers copy Template to their slots, so without pkg in Template, workers have no `/usr/local/sbin/pkg` binary. This causes all dependency installations to fail with "pkg: command not found", but the build continues anyway due to improper error handling.
+
+**Evidence**:
+```bash
+# Template missing pkg after bootstrap
+$ ls /build/Template/usr/local/sbin/pkg
+ls: /build/Template/usr/local/sbin/pkg: No such file or directory
+
+# Worker slots also missing pkg (copied from Template)
+$ ls /build/SL00/usr/local/sbin/pkg
+ls: /build/SL00/usr/local/sbin/pkg: No such file or directory
+
+# Builds fail but continue
+[Worker 0] print/indexinfo: Installing dependencies...
+pkg: command not found  # ← ERROR but build continues!
+[Worker 0] print/indexinfo: build phase...  # ← Shouldn't reach here
+```
+
+**Root Causes**:
+1. **Missing pkg installation**: `build/bootstrap.go` builds pkg but never extracts it into Template (C dsynth does this at build.c:273-285)
+2. **No Template check**: Doesn't verify if pkg already exists in Template before rebuilding
+3. **Silent error handling**: `build/phases.go:174-183` logs warnings on dependency install failure but continues instead of stopping
+
+**C dsynth Behavior (Expected)**:
+```c
+// build.c:273-285
+asprintf(&buf,
+    "cd %s/Template; "
+    "tar --exclude '+*' --exclude '*/man/*' "
+    "-xvzpf %s/%s > /dev/null 2>&1",
+    BuildBase, RepositoryPath, scan->pkgfile);
+rc = system(buf);
+if (rc)
+    dfatal("Command failed: %s\n", buf);  // ← FATAL on failure
+```
+
+**Impact**:
+- Workers cannot install dependencies (no pkg binary)
+- Builds fail silently and continue (wrong error handling)
+- Makes 99% of ports unbuildable
+
+**Solution Plan** (3 Steps):
+1. **Check Template first**: Before bootstrap, verify if `/build/Template/usr/local/sbin/pkg` exists and skip if present
+2. **Install pkg into Template**: After building pkg, extract package into Template with `tar --exclude '+*' --exclude '*/man/*' -xzpf`
+3. **Fix error handling**: Change `installPackages()` and `installMissingPackages()` to return errors instead of logging warnings
+
+**Related Files**:
+- `build/bootstrap.go` - Missing Template installation
+- `build/phases.go` - Wrong error handling (lines 174-183, 251-256)
+- C dsynth: `usr.bin/dsynth/build.c` (lines 220-290)
+
+**Detailed Documentation**:
+- `docs/issues/PKG_TEMPLATE_INSTALLATION.md` - Complete analysis and fix plan
+
+---
+
 ### Non-Critical Issues
 
 None currently tracked.
