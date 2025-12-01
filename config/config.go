@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 
 	"gopkg.in/ini.v1"
@@ -65,9 +66,21 @@ func SetConfig(cfg *Config) {
 
 // LoadConfig loads configuration from file
 func LoadConfig(configDir, profile string) (*Config, error) {
+	// Determine sensible defaults based on system resources
+	defaultWorkers := runtime.NumCPU()
+	// Cap at 16 workers to avoid overwhelming the system
+	// User can override via config file if they want more
+	if defaultWorkers > 16 {
+		defaultWorkers = 16
+	}
+	// Minimum of 1 worker
+	if defaultWorkers < 1 {
+		defaultWorkers = 1
+	}
+
 	cfg := &Config{
 		Profile:    profile,
-		MaxWorkers: 1,
+		MaxWorkers: defaultWorkers,
 		MaxJobs:    1,
 	}
 
@@ -78,7 +91,9 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 	}
 
 	// Try to load config file
+	configFileExists := false
 	if _, err := os.Stat(configFile); err == nil {
+		configFileExists = true
 		iniFile, err := ini.Load(configFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config file: %w", err)
@@ -120,6 +135,13 @@ func LoadConfig(configDir, profile string) (*Config, error) {
 		if globalSec != nil {
 			cfg.loadFromSection(globalSec)
 		}
+	}
+
+	// Warn if no config file was found and using defaults
+	if !configFileExists {
+		fmt.Fprintf(os.Stderr, "Warning: No config file found at %s\n", configFile)
+		fmt.Fprintf(os.Stderr, "Using defaults: %d workers (detected from CPU count)\n", cfg.MaxWorkers)
+		fmt.Fprintf(os.Stderr, "Run 'dsynth init' to create a config file, or override with config file settings.\n")
 	}
 
 	// Apply defaults for unset paths
