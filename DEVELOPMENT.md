@@ -1500,6 +1500,38 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 
 **Documentation**: This issue entry now reflects the completed fix.
 
+##### Issue #6: SIGINT during pkg bootstrap leaves SL99 mounts behind (RESOLVED)
+**Status**: 🟢 Resolved – Verified 2025-12-01  
+**Discovered**: 2025-12-01  
+**Priority**: P1 (stability)
+
+**Summary**: `bootstrapPkg` now registers its temporary environment’s cleanup via the `onCleanupReady` callback as soon as the slot 99 environment is created. The signal handler always has an active cleanup function, so interrupting pkg bootstrap triggers `env.Cleanup()` and unmounts `/build/synth/SL99` before exiting. When bootstrap finishes, the callback is cleared until worker setup registers the next cleanup function.
+
+**Fix Highlights**:
+1. **Bootstrap cleanup registration** (`build/bootstrap.go:129-177`)
+   - Immediately calls `onCleanupReady` with a closure that cleans up the bootstrap env
+   - Clears the callback after the deferred cleanup runs so workers can register their own cleanup
+2. **DoBuild wiring** (`build/build.go:269-274`)
+   - Passes `onCleanupReady` down to `bootstrapPkg`
+   - Tests updated to account for the new signature
+3. **Regression coverage**
+   - VM repro: `timeout -s INT 5 ./go-synth build print/indexinfo` leaves no SL99 mounts, and the signal handler logs “Cleaning up active build workers…”
+   - `go test ./...` now includes the modified bootstrap tests
+
+**Documentation**: This issue entry reflects the completed fix.
+
+##### Issue #7: Progress indicator hidden when Display_with_ncurses=no
+**Status**: 🟠 Open – UX mismatch  
+**Discovered**: 2025-12-01  
+**Priority**: P2 (moderate)
+
+**Problem**: Quickstart/README claim “During build, go-synth shows progress: …”, but the new console indicator only renders when `cfg.DisableUI == false` (i.e., `Display_with_ncurses=yes`). Many configs disable the ncurses mode (or run non-interactively) and therefore never see progress output, even though the docs promise it. Users report “still no status display” after enabling the progress code because they kept the default `no` value.
+
+**Plan**:
+1. Document the dependency on `Display_with_ncurses=yes` (or introduce an explicit `ShowProgress` flag) in README/QUICKSTART/DEVELOPMENT.
+2. Consider auto-enabling console progress when ncurses is disabled but stdout is a terminal (or introduce `--progress` CLI flag).
+3. Add tests ensuring progress output respects the new flag logic.
+
  
 #### Architectural/Design (Critical for Library Reuse):
 

@@ -31,7 +31,7 @@ import (
 //   - error: Any error during bootstrap, nil on success
 func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Config,
 	logger *log.Logger, buildDB *builddb.DB,
-	registry *pkg.BuildStateRegistry) error {
+	registry *pkg.BuildStateRegistry, onCleanupReady func(func())) error {
 
 	// Step 1: Find ports-mgmt/pkg in the package graph
 	// We MUST build pkg first if it's in the dependency graph, regardless of flags
@@ -122,9 +122,15 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 		return fmt.Errorf("bootstrap: failed to create environment: %w", err)
 	}
 
+	cleanupEnv := func() {
+		if err := env.Cleanup(); err != nil {
+			logger.Error(fmt.Sprintf("Bootstrap cleanup failed: %v", err))
+		}
+	}
+
 	// Use slot 99 for bootstrap worker to avoid conflicts
 	if err := env.Setup(99, cfg, logger); err != nil {
-		env.Cleanup()
+		cleanupEnv()
 		if setupErr, ok := err.(*environment.ErrSetupFailed); ok && setupErr.Op == "template-copy" {
 			templateDir := filepath.Join(cfg.BuildBase, "Template")
 			return fmt.Errorf("bootstrap: Template directory missing (%s). Run 'go-synth init' to recreate it: %w", templateDir, err)
@@ -132,11 +138,18 @@ func bootstrapPkg(ctx context.Context, packages []*pkg.Package, cfg *config.Conf
 		return fmt.Errorf("bootstrap: environment setup failed: %w", err)
 	}
 
+	if onCleanupReady != nil {
+		onCleanupReady(func() {
+			cleanupEnv()
+		})
+	}
+
 	// Ensure cleanup happens
 	defer func() {
-		if err := env.Cleanup(); err != nil {
-			logger.Error(fmt.Sprintf("Bootstrap cleanup failed: %v", err))
+		if onCleanupReady != nil {
+			onCleanupReady(nil)
 		}
+		cleanupEnv()
 	}()
 
 	worker := &Worker{

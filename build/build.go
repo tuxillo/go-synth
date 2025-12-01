@@ -268,7 +268,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Bootstrap ports-mgmt/pkg before starting workers
 	// This must succeed before any workers are created
 	logger.Info("Checking for ports-mgmt/pkg bootstrap requirement...")
-	if err := bootstrapPkg(buildCtx, buildOrder, cfg, logger, buildDB, ctx.registry); err != nil {
+	if err := bootstrapPkg(buildCtx, buildOrder, cfg, logger, buildDB, ctx.registry, onCleanupReady); err != nil {
 		cancel() // Cancel context
 		return nil, cleanup, fmt.Errorf("pkg bootstrap failed: %w", err)
 	}

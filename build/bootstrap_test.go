@@ -57,7 +57,7 @@ func TestBootstrapPkg_NoPkgInGraph(t *testing.T) {
 
 	// Should succeed with no action
 	ctx := context.Background()
-	err = bootstrapPkg(ctx, packages, cfg, logger, db, registry)
+	err = bootstrapPkg(ctx, packages, cfg, logger, db, registry, nil)
 	if err != nil {
 		t.Errorf("bootstrapPkg should succeed when no pkg present, got: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestBootstrapPkg_CRCMatch(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err = bootstrapPkg(ctx, packages, cfg, logger, db, registry)
+	err = bootstrapPkg(ctx, packages, cfg, logger, db, registry, nil)
 
 	// Should succeed without trying to build (CRC match)
 	if err != nil {
