@@ -611,11 +611,8 @@ func (ctx *BuildContext) printProgress() {
 
 	ctx.logger.Debug(progressMsg)
 
-	if !ctx.cfg.DisableUI {
-		// Carriage return so the progress indicator updates in-place.
-		// Pad to avoid leftover characters from previous updates.
-		fmt.Printf("\r%-80s", progressMsg)
-	}
+	// Always show progress on stdout (ncurses UI not yet implemented)
+	fmt.Printf("\r%-80s", progressMsg)
 }
 
 // formatDuration formats a duration for display

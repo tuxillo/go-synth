@@ -1520,17 +1520,21 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 
 **Documentation**: This issue entry reflects the completed fix.
 
-##### Issue #7: Progress indicator hidden when Display_with_ncurses=no
-**Status**: 🟠 Open – UX mismatch  
+##### Issue #7: Progress indicator hidden when Display_with_ncurses=no (RESOLVED)
+**Status**: 🟢 Resolved – Verified 2025-12-01  
 **Discovered**: 2025-12-01  
 **Priority**: P2 (moderate)
 
-**Problem**: Quickstart/README claim “During build, go-synth shows progress: …”, but the new console indicator only renders when `cfg.DisableUI == false` (i.e., `Display_with_ncurses=yes`). Many configs disable the ncurses mode (or run non-interactively) and therefore never see progress output, even though the docs promise it. Users report “still no status display” after enabling the progress code because they kept the default `no` value.
+**Summary**: The textual progress indicator no longer depends on `Display_with_ncurses`. `printProgress` always updates stdout (matching the original dsynth behavior), so builds show `Progress: …` even when the ncurses UI is disabled or when running non-interactively.
 
-**Plan**:
-1. Document the dependency on `Display_with_ncurses=yes` (or introduce an explicit `ShowProgress` flag) in README/QUICKSTART/DEVELOPMENT.
-2. Consider auto-enabling console progress when ncurses is disabled but stdout is a terminal (or introduce `--progress` CLI flag).
-3. Add tests ensuring progress output respects the new flag logic.
+**Fix Highlights**:
+1. **Always-on progress output** (`build/build.go:608-612`)
+   - Removed the `DisableUI` guard so the formatted progress line prints every time `printProgress` runs
+2. **Validation**
+   - VM test with `Display_with_ncurses=no`: build shows the progress line as expected
+   - `go test ./...` remains green
+
+**Documentation**: Quickstart/README already describe the progress output; no config caveat needed.
 
  
 #### Architectural/Design (Critical for Library Reuse):
