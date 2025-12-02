@@ -229,6 +229,11 @@ func (l *Logger) Obsolete(pkgFile string) {
 
 // Debug logs debug information
 func (l *Logger) Debug(format string, args ...any) {
+	// Skip debug logging unless explicitly enabled via -d flag or config
+	if !l.cfg.Debug {
+		return
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -398,6 +403,11 @@ func (cl *ContextLogger) Error(format string, args ...interface{}) {
 
 // Debug logs debug information with context
 func (cl *ContextLogger) Debug(format string, args ...interface{}) {
+	// Skip debug logging unless explicitly enabled via -d flag or config
+	if !cl.logger.cfg.Debug {
+		return
+	}
+
 	prefix := cl.formatPrefix()
 	cl.logger.mu.Lock()
 	defer cl.logger.mu.Unlock()

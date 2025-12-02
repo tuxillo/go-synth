@@ -205,16 +205,16 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	//  2. Wait for workers to exit their loops (respects ongoing work)
 	//  3. Cleanup worker environments (unmount, remove directories)
 	cleanup := func() {
-		fmt.Fprintf(os.Stderr, "[DEBUG] Cleanup started\n")
+		logger.Debug("Cleanup started")
 		logger.Info("Stopping build workers...")
 
 		// Cancel context to signal all workers to stop
 		if ctx.cancel != nil {
 			ctx.cancel()
-			fmt.Fprintf(os.Stderr, "[DEBUG] Context cancelled\n")
+			logger.Debug("Context cancelled")
 		}
 
-		fmt.Fprintf(os.Stderr, "[DEBUG] Waiting for workers (count=%d)...\n", len(ctx.workers))
+		logger.Debug("Waiting for workers (count=%d)...", len(ctx.workers))
 		logger.Info("Waiting for workers to finish current operations...")
 		// Wait for all worker goroutines to exit with timeout
 		// Workers will see ctx.Done() and exit gracefully
@@ -226,14 +226,14 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 		select {
 		case <-done:
-			fmt.Fprintf(os.Stderr, "[DEBUG] Workers exited gracefully\n")
+			logger.Debug("Workers exited gracefully")
 			logger.Info("All workers exited gracefully")
 		case <-time.After(5 * time.Second):
-			fmt.Fprintf(os.Stderr, "[DEBUG] Worker timeout (5s), proceeding anyway\n")
+			logger.Debug("Worker timeout (5s), proceeding anyway")
 			logger.Warn("Timeout waiting for workers to exit (5s), proceeding with cleanup anyway")
 		}
 
-		fmt.Fprintf(os.Stderr, "[DEBUG] Starting environment cleanup\n")
+		logger.Debug("Starting environment cleanup")
 		logger.Info("Cleaning up worker environments (total workers: %d)", len(ctx.workers))
 		for i, worker := range ctx.workers {
 			if worker != nil && worker.Env != nil {

@@ -217,6 +217,24 @@ Use_usrsrc=no
 - **Tmpfs_localbasesize**: Size for /usr/local in chroot
 - **Default BuildBase**: Without a config file, go-synth uses `/build/synth` as `{BuildBase}`; replace `/build/...` in docs with your configured base.
 
+## Command-Line Options
+
+- `-d` - Enable debug logging (outputs detailed diagnostics to `07_debug.log`)
+- `-f` - Force operations (rebuild even if CRC matches)
+- `-y` - Answer yes to all prompts (non-interactive mode)
+- `-p <profile>` - Use specific configuration profile
+- `-C <dir>` - Specify configuration directory (default: `/etc/dsynth`)
+- `-s <N>` - Slow start: limit initial worker count
+- `-D` - Developer mode (additional debugging output)
+- `-P` - Check plist consistency
+- `-S` - Disable ncurses UI
+- `-N <val>` - Set nice value for build processes
+
+**Debug Mode**: When `-d` is enabled, verbose debug messages are written to 
+`/build/synth/logs/07_debug.log`, including dependency resolution details, 
+worker lifecycle events, and cleanup operations. Without `-d`, the debug log 
+only contains the header, keeping output clean.
+
 ## Commands
 
 ### Build Commands
