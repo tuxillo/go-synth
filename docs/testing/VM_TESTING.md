@@ -307,8 +307,8 @@ This saves the VM state to `vm/dfly-vm-clean.qcow2`. You can now restore to this
 
 | Target | Description |
 |--------|-------------|
-| `make vm-sync` | Sync project files to VM |
-| `make vm-build` | Build `go-synth` in VM |
+| `make vm-sync` | Sync project files to VM (excludes binaries and *.db) |
+| `make vm-build` | Build `go-synth` in VM (native DragonFly binary) |
 | `make vm-test-unit` | Run unit tests |
 | `make vm-test-integration` | Run integration tests (tags=integration) |
 | `make vm-test-integration-e2e` | Run E2E integration tests (requires BSD) |
@@ -342,6 +342,10 @@ make vm-quick
 # 4. Stop VM when done
 make vm-stop
 ```
+
+**Note**: `vm-sync` automatically excludes `go-synth` binaries and `*.db` files
+to prevent cross-platform issues. Always build on the VM with `vm-build` or 
+`vm-quick` to ensure native DragonFly binaries.
 
 ### Longer Testing Session
 
