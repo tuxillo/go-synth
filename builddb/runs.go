@@ -129,6 +129,46 @@ func (db *DB) ActiveRun() (string, *RunRecord, error) {
 	return runID, rec, nil
 }
 
+// ClearActiveLocks marks all active runs (no end time) as aborted.
+// This is used by the cleanup command to clear stale build locks from
+// crashed or interrupted builds.
+func (db *DB) ClearActiveLocks() (int, error) {
+	cleared := 0
+
+	err := db.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(BucketBuildRuns))
+		if bucket == nil {
+			return &DatabaseError{Op: "get bucket", Bucket: BucketBuildRuns, Err: ErrBucketNotFound}
+		}
+
+		c := bucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var r RunRecord
+			if err := json.Unmarshal(v, &r); err != nil {
+				return err
+			}
+			if r.EndTime.IsZero() {
+				// Mark as aborted with current time
+				r.EndTime = time.Now()
+				r.Aborted = true
+
+				data, err := json.Marshal(r)
+				if err != nil {
+					return &RecordError{Op: "marshal run", UUID: string(k), Err: err}
+				}
+
+				if err := bucket.Put(k, data); err != nil {
+					return err
+				}
+				cleared++
+			}
+		}
+		return nil
+	})
+
+	return cleared, err
+}
+
 // PutRunPackage writes or updates a package record for the given run.
 func (db *DB) PutRunPackage(runID string, pkg *RunPackageRecord) error {
 	if runID == "" {

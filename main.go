@@ -399,6 +399,17 @@ func doCleanup(cfg *config.Config) {
 		fmt.Printf("\nCleaned up %d stale worker directories\n", result.WorkersCleaned)
 	}
 
+	// Clear stale build locks from crashed/interrupted builds
+	fmt.Println("\nClearing stale build locks...")
+	cleared, err := svc.Database().ClearActiveLocks()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to clear locks: %v\n", err)
+	} else if cleared > 0 {
+		fmt.Printf("Cleared %d stale build lock(s)\n", cleared)
+	} else {
+		fmt.Println("No stale build locks found")
+	}
+
 	// Also cleanup old logs (optional)
 	fmt.Println("\nCleaning up old logs...")
 	logsPath := cfg.LogsPath
