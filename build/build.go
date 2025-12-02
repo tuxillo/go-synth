@@ -115,6 +115,7 @@ type BuildContext struct {
 	startTime time.Time
 	wg        sync.WaitGroup
 
+	runID    string
 	outputMu sync.Mutex
 }
 
@@ -168,7 +169,7 @@ func ensureBuildBaseInitialized(cfg *config.Config) error {
 //  3. Execute build phases
 //  4. UpdateRecordStatus to "success" or "failed"
 //  5. Update CRC and package index (on success only)
-func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB, onCleanupReady func(func())) (*BuildStats, func(), error) {
+func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB, onCleanupReady func(func()), runID string) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
 	buildOrder := pkg.GetBuildOrder(packages, logger)
 
@@ -185,6 +186,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		buildDB:   buildDB,
 		queue:     make(chan *pkg.Package, 100),
 		startTime: time.Now(),
+		runID:     runID,
 	}
 
 	// Create cleanup function that will access ctx.workers when called
@@ -253,6 +255,8 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				ctx.stats.Skipped++
 			} else if ctx.registry.HasFlags(p, pkg.PkgFIgnored) {
 				ctx.stats.Ignored++
+				now := time.Now()
+				ctx.recordRunPackage(p, builddb.RunStatusIgnored, -1, now, now, "")
 			}
 		} else {
 			ctx.stats.Total++
@@ -270,9 +274,23 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Bootstrap ports-mgmt/pkg before starting workers
 	// This must succeed before any workers are created
 	logger.Info("Checking for ports-mgmt/pkg bootstrap requirement...")
-	if err := bootstrapPkg(buildCtx, buildOrder, cfg, logger, buildDB, ctx.registry, onCleanupReady); err != nil {
+	pkgStatus, err := bootstrapPkg(buildCtx, buildOrder, cfg, logger, buildDB, ctx.registry, onCleanupReady, ctx.runID)
+	if err != nil {
 		cancel() // Cancel context
 		return nil, cleanup, fmt.Errorf("pkg bootstrap failed: %w", err)
+	}
+	if pkgStatus != "" {
+		switch pkgStatus {
+		case builddb.RunStatusSuccess:
+			ctx.stats.Total++
+			ctx.stats.Success++
+		case builddb.RunStatusSkipped:
+			ctx.stats.Total++
+			ctx.stats.Skipped++
+		case builddb.RunStatusFailed:
+			ctx.stats.Total++
+			ctx.stats.Failed++
+		}
 	}
 
 	// Create workers
@@ -340,6 +358,8 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 					ctx.statsMu.Lock()
 					ctx.stats.Skipped++
 					ctx.statsMu.Unlock()
+					now := time.Now()
+					ctx.recordRunPackage(p, builddb.RunStatusSkipped, -1, now, now, "")
 					logger.Success(fmt.Sprintf("%s (CRC match, skipped)", p.PortDir))
 					continue
 				}
@@ -352,6 +372,8 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				ctx.statsMu.Lock()
 				ctx.stats.Skipped++
 				ctx.statsMu.Unlock()
+				now := time.Now()
+				ctx.recordRunPackage(p, builddb.RunStatusSkipped, -1, now, now, "")
 				logger.Skipped(p.PortDir)
 				continue
 			}
@@ -408,11 +430,13 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			worker.Current = p
 			worker.Status = "building"
 			worker.StartTime = time.Now()
+			startTime := worker.StartTime
 			worker.mu.Unlock()
 
 			// Mark as running
 			ctx.registry.AddFlags(p, pkg.PkgFRunning)
 
+			ctx.recordRunPackage(p, builddb.RunStatusRunning, worker.ID, startTime, time.Time{}, "")
 			ctx.logWorkerEvent(worker.ID, fmt.Sprintf("start build: %s (deps: %d)", p.PortDir, len(p.IDependOn)))
 
 			// Build the package (context will propagate to env.Execute())
@@ -434,15 +458,18 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			ctx.statsMu.Unlock()
 
 			worker.mu.Lock()
-			duration := time.Since(worker.StartTime)
+			endTime := time.Now()
+			duration := endTime.Sub(worker.StartTime)
 			worker.Current = nil
 			worker.Status = "idle"
 			worker.mu.Unlock()
 
 			if success {
+				ctx.recordRunPackage(p, builddb.RunStatusSuccess, worker.ID, startTime, endTime, "")
 				ctx.logWorkerEvent(worker.ID, fmt.Sprintf("build success: %s (%s)", p.PortDir, formatDuration(duration)))
 			} else {
 				lastPhase := ctx.registry.GetLastPhase(p)
+				ctx.recordRunPackage(p, builddb.RunStatusFailed, worker.ID, startTime, endTime, lastPhase)
 				ctx.logWorkerEvent(worker.ID, fmt.Sprintf("build failed: %s (phase: %s)", p.PortDir, lastPhase))
 			}
 
@@ -482,7 +509,6 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 
 	startTime := time.Now()
 
-	// Create initial build record with status "running"
 	buildRecord := &builddb.BuildRecord{
 		UUID:      p.BuildUUID,
 		PortDir:   p.PortDir,
@@ -491,7 +517,6 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 		StartTime: startTime,
 	}
 	if err := ctx.buildDB.SaveRecord(buildRecord); err != nil {
-		// Log warning but don't fail build (DB operations are non-fatal)
 		ctxLogger.Warn("Failed to save build record: %v", err)
 	}
 
@@ -526,7 +551,6 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 			pkgLogger.WriteFailure(duration, fmt.Sprintf("Phase %s failed: %v", phase, err))
 			ctxLogger.Failed(phase, fmt.Sprintf("%v", err))
 
-			// Update build record status to failed
 			if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "failed", time.Now()); err != nil {
 				ctxLogger.Warn("Failed to update build record status: %v", err)
 			}
@@ -552,12 +576,10 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 		ctxLogger.Warn("Failed to compute CRC: %v", err)
 	} else {
 		if err := ctx.buildDB.UpdateCRC(p.PortDir, crc); err != nil {
-			// Log warning but don't fail the build (CRC update is non-fatal)
 			ctxLogger.Warn("Failed to update CRC: %v", err)
 		}
 	}
 
-	// Update package index to point to this successful build
 	if err := ctx.buildDB.UpdatePackageIndex(p.PortDir, p.Version, p.BuildUUID); err != nil {
 		ctxLogger.Warn("Failed to update package index: %v", err)
 	}
@@ -639,6 +661,26 @@ func (ctx *BuildContext) logWorkerEvent(workerID int, message string) {
 	event := fmt.Sprintf("[worker %d] %s", workerID, message)
 	fmt.Printf("\r%-80s\n", event)
 	ctx.printProgressLocked()
+}
+
+func (ctx *BuildContext) recordRunPackage(p *pkg.Package, status string, workerID int, start, end time.Time, lastPhase string) {
+	if ctx.runID == "" {
+		return
+	}
+
+	rec := &builddb.RunPackageRecord{
+		PortDir:   p.PortDir,
+		Version:   p.Version,
+		Status:    status,
+		StartTime: start,
+		EndTime:   end,
+		WorkerID:  workerID,
+		LastPhase: lastPhase,
+	}
+
+	if err := ctx.buildDB.PutRunPackage(ctx.runID, rec); err != nil {
+		ctx.logger.Warn("Failed to record package %s for run %s: %v", p.PortDir, ctx.runID, err)
+	}
 }
 
 // formatDuration formats a duration for display

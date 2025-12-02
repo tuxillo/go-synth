@@ -16,9 +16,11 @@ import (
 
 // Bucket names for bbolt database
 const (
-	BucketBuilds   = "builds"
-	BucketPackages = "packages"
-	BucketCRCIndex = "crc_index"
+	BucketBuilds      = "builds"
+	BucketPackages    = "packages"
+	BucketCRCIndex    = "crc_index"
+	BucketBuildRuns   = "build_runs"
+	BucketRunPackages = "run_packages"
 )
 
 // DB wraps a bbolt database for build tracking and CRC indexing
@@ -73,19 +75,27 @@ func OpenDB(path string) (*DB, error) {
 
 	// Initialize required buckets in a single write transaction
 	err = bdb.Update(func(tx *bolt.Tx) error {
-		// Create builds bucket for storing BuildRecord JSON
+		// Legacy builds bucket (kept for backward compatibility)
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketBuilds)); err != nil {
 			return &DatabaseError{Op: "create bucket", Bucket: BucketBuilds, Err: err}
 		}
 
-		// Create packages bucket for tracking latest successful builds
-		// Key format: "portdir@version" -> UUID
+		// Legacy packages bucket (kept for backward compatibility)
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketPackages)); err != nil {
 			return &DatabaseError{Op: "create bucket", Bucket: BucketPackages, Err: err}
 		}
 
-		// Create crc_index bucket for fast CRC lookups
-		// Key: portdir -> binary uint32 CRC value
+		// Build run tracking bucket
+		if _, err := tx.CreateBucketIfNotExists([]byte(BucketBuildRuns)); err != nil {
+			return &DatabaseError{Op: "create bucket", Bucket: BucketBuildRuns, Err: err}
+		}
+
+		// Per-run package tracking bucket
+		if _, err := tx.CreateBucketIfNotExists([]byte(BucketRunPackages)); err != nil {
+			return &DatabaseError{Op: "create bucket", Bucket: BucketRunPackages, Err: err}
+		}
+
+		// CRC index bucket for incremental rebuilds
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketCRCIndex)); err != nil {
 			return &DatabaseError{Op: "create bucket", Bucket: BucketCRCIndex, Err: err}
 		}

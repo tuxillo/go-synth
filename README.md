@@ -81,11 +81,22 @@ sudo go-synth cleanup
 
 ## Build Database
 
-go-synth uses an embedded **bbolt** database (`~/.go-synth/builds.db`) for build tracking and CRC-based incremental builds.
+Go-synth stores all metadata in an embedded **bbolt** database (`~/.go-synth/builds.db`).
 
-### Features
+### Build Runs (NEW)
 
-- **Build History**: Tracks every build with UUID, status (running/success/failed), timestamps
+Each CLI invocation is now recorded as a **build run** with a unique UUID. For every run we store:
+
+- Start/end timestamps
+- Whether the run finished normally or aborted (Ctrl+C, fatal error, etc.)
+- Aggregated statistics (total, success, failed, skipped, ignored)
+- Per-package status records (start/end time, worker, last phase)
+
+This structure makes it possible to answer “which ports ran in build **X** and what happened?”. Future CLI commands and Phase 5 APIs will expose these run histories directly.
+
+### Incremental Build Features
+
+- **Build History**: Tracks every package attempt (legacy records kept for compatibility) with UUID, status, and timestamps
 - **Content-Based Incremental Builds**: Uses CRC32 checksums to skip unchanged packages automatically
 - **Package Versioning**: Maintains index of latest successful build for each port@version
 - **Crash-Safe**: ACID transactions ensure database integrity during failures

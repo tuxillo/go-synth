@@ -1536,6 +1536,25 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 
 **Documentation**: Quickstart/README already describe the progress output; no config caveat needed.
 
+##### Issue #8: Build tracking lacks run-level context (NEW)
+**Status**: 🔴 Open – Required for Phase 5 APIs  
+**Discovered**: 2025-12-01  
+**Priority**: P1 (architectural)
+
+**Problem**: The current BuildDB schema stores one `BuildRecord` per package (UUID keyed), with no notion of a “build run” (one `go-synth build ...` invocation). As a result, we cannot answer “which ports ran in build X?” or expose run-level stats to future APIs. Logging only per-package UUIDs also makes it hard to surface failed runs or list packages from a single CLI invocation without scanning the entire `builds` bucket.
+
+**Plan**:
+1. Introduce a **build run UUID** generated at the start of each CLI invocation. Persist it in a new `build_runs` bucket with `start_time`, `end_time`, `aborted` flag, and aggregated stats (success/failed/skipped/ignored). No redundant UUID in the value (key already encodes it).
+2. Add a `run_packages` bucket keyed by `runUUID\x00portdir@version`, storing per-package records (`status`, start/end times, worker id, last phase). This replaces the per-package UUID storage.
+3. Update `service.Build`/`build.DoBuild` to write run and package records (start entry, per-package updates, final stats). Mark runs `aborted=true` if the CLI exits due to SIGINT/other errors.
+4. Enforce single-run execution: before starting, check for any `build_runs` entry lacking `end_time`; if found, abort with a clear error (“another go-synth run is active”).
+
+**Open Questions**:
+- Whether we need a lightweight `package_index` bucket to quickly find the latest successful build per port (can be tackled after run-based storage lands).
+
+**Next Steps**:
+- Implement bucket changes + DB helpers, then update build/service layers and add CLI/API commands to list runs.
+
  
 #### Architectural/Design (Critical for Library Reuse):
 

@@ -57,10 +57,14 @@ func TestBootstrapPkg_NoPkgInGraph(t *testing.T) {
 
 	// Should succeed with no action
 	ctx := context.Background()
-	err = bootstrapPkg(ctx, packages, cfg, logger, db, registry, nil)
+	status, err := bootstrapPkg(ctx, packages, cfg, logger, db, registry, nil, "")
 	if err != nil {
 		t.Errorf("bootstrapPkg should succeed when no pkg present, got: %v", err)
 	}
+	if status != "" {
+		t.Errorf("Expected empty status when pkg not in graph, got %s", status)
+	}
+
 }
 
 // TestBootstrapPkg_CRCMatch tests skip behavior when CRC matches
@@ -151,11 +155,18 @@ func TestBootstrapPkg_CRCMatch(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err = bootstrapPkg(ctx, packages, cfg, logger, db, registry, nil)
+	status, err := bootstrapPkg(ctx, packages, cfg, logger, db, registry, nil, "")
 
 	// Should succeed without trying to build (CRC match)
 	if err != nil {
 		t.Errorf("bootstrapPkg should succeed with CRC match, got: %v", err)
+	}
+	if status != builddb.RunStatusSkipped {
+		t.Errorf("Expected skipped status, got %s", status)
+	}
+
+	if status != builddb.RunStatusSkipped {
+		t.Errorf("Expected skipped status for CRC match, got %s", status)
 	}
 
 	// Should have PkgFSuccess flag

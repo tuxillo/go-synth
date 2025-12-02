@@ -5,7 +5,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
+
 	"go-synth/build"
+	"go-synth/builddb"
 	"go-synth/migration"
 	"go-synth/pkg"
 )
@@ -28,6 +31,13 @@ import (
 // Returns BuildResult containing stats and package information, or an error if the build fails.
 func (s *Service) Build(opts BuildOptions) (*BuildResult, error) {
 	startTime := time.Now()
+
+	// Ensure no other go-synth run is active
+	if activeRunID, activeRun, err := s.db.ActiveRun(); err != nil {
+		return nil, fmt.Errorf("check active run: %w", err)
+	} else if activeRun != nil {
+		return nil, fmt.Errorf("another go-synth run (%s) started at %s is still active", activeRunID, activeRun.StartTime.Format(time.RFC3339))
+	}
 
 	// Detect and perform migration if needed
 	if err := s.detectAndMigrate(); err != nil {
@@ -61,13 +71,30 @@ func (s *Service) Build(opts BuildOptions) (*BuildResult, error) {
 		}, nil
 	}
 
+	runID := uuid.NewString()
+	if err := s.db.StartRun(runID, time.Now()); err != nil {
+		return nil, fmt.Errorf("start build run: %w", err)
+	}
+
+	runAborted := true
+	var finalStats *build.BuildStats
+	defer func() {
+		statsPayload := builddb.RunStats{}
+		if finalStats != nil {
+			statsPayload = runStatsFromBuild(finalStats)
+		}
+		if err := s.db.FinishRun(runID, statsPayload, time.Now(), runAborted); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to finalize build run %s: %v\n", runID, err)
+		}
+	}()
+
 	// Execute the build
 	// Pass a callback that will be called as soon as the cleanup function is available
 	// This ensures signal handlers can access it immediately when workers are created
 	stats, cleanup, err := build.DoBuild(packages, s.cfg, s.logger, s.db, func(cleanupFn func()) {
 		// Store cleanup function immediately when workers are created
 		s.SetActiveCleanup(cleanupFn)
-	})
+	}, runID)
 
 	// Clear the active cleanup after build completes (success or error)
 	defer s.ClearActiveCleanup()
@@ -77,9 +104,13 @@ func (s *Service) Build(opts BuildOptions) (*BuildResult, error) {
 		defer cleanup()
 	}
 
+	finalStats = stats
+
 	if err != nil {
 		return nil, fmt.Errorf("build failed: %w", err)
 	}
+
+	runAborted = false
 
 	// Return cleanup function to caller as well (for explicit control if needed)
 	return &BuildResult{
@@ -201,6 +232,20 @@ func (s *Service) GetBuildPlan(portList []string) (*BuildPlan, error) {
 		ToSkip:        toSkip,
 		NeedBuild:     needBuild,
 	}, nil
+}
+
+func runStatsFromBuild(stats *build.BuildStats) builddb.RunStats {
+	if stats == nil {
+		return builddb.RunStats{}
+	}
+
+	return builddb.RunStats{
+		Total:   stats.Total,
+		Success: stats.Success,
+		Failed:  stats.Failed,
+		Skipped: stats.Skipped,
+		Ignored: stats.Ignored,
+	}
 }
 
 // BuildPlan contains information about a planned build.
