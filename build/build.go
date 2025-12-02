@@ -266,15 +266,15 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		}
 
 		logger.Debug("Starting environment cleanup")
-		logger.Info("Cleaning up worker environments (total workers: %d)", len(ctx.workers))
+		logger.Info("Cleaning up worker environments...")
 		for i, worker := range ctx.workers {
 			if worker != nil && worker.Env != nil {
-				logger.Info("Cleaning up worker %d", i)
+				logger.Debug("Cleaning up worker %d", i)
 				if err := worker.Env.Cleanup(); err != nil {
 					logger.Warn("Failed to cleanup worker %d: %v", i, err)
 				}
 			} else {
-				logger.Warn("Worker %d is nil or has no environment", i)
+				logger.Debug("Worker %d is nil or has no environment", i)
 			}
 		}
 		logger.Info("Cleanup complete")

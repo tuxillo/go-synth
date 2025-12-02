@@ -7,8 +7,9 @@
 package bsd
 
 import (
-	"go-synth/config"
 	"fmt"
+	"go-synth/config"
+	"go-synth/log"
 	stdlog "log"
 	"os"
 	"os/exec"
@@ -41,6 +42,7 @@ import (
 type BSDEnvironment struct {
 	baseDir     string
 	cfg         *config.Config
+	logger      log.LibraryLogger // Logger for debug output
 	mounts      []mountState
 	mountErrors int
 	workerID    int

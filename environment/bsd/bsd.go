@@ -47,11 +47,11 @@ package bsd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"go-synth/config"
 	"go-synth/environment"
 	"go-synth/log"
-	"errors"
-	"fmt"
 	stdlog "log"
 	"os"
 	"os/exec"
@@ -102,6 +102,7 @@ func init() {
 //	defer env.Cleanup()
 func (e *BSDEnvironment) Setup(workerID int, cfg *config.Config, logger log.LibraryLogger) error {
 	e.cfg = cfg
+	e.logger = logger
 	e.workerID = workerID
 	e.baseDir = filepath.Join(cfg.BuildBase, fmt.Sprintf("SL%02d", workerID))
 	e.mountErrors = 0
@@ -542,7 +543,9 @@ func (e *BSDEnvironment) Cleanup() error {
 		}
 	}
 
-	stdlog.Printf("[Cleanup] Starting cleanup for environment: %s", e.baseDir)
+	if e.logger != nil {
+		e.logger.Debug("Starting cleanup for environment: %s", e.baseDir)
+	}
 
 	// Kill any active processes before unmounting
 	// This prevents "device busy" errors from stuck child processes
@@ -561,11 +564,15 @@ func (e *BSDEnvironment) Cleanup() error {
 		// Convert absolute path to relative by removing baseDir prefix
 		relPath, err := filepath.Rel(e.baseDir, target)
 		if err != nil {
-			stdlog.Printf("[Cleanup] WARNING: Failed to convert %s to relative path: %v", target, err)
+			if e.logger != nil {
+				e.logger.Debug("Failed to convert %s to relative path: %v", target, err)
+			}
 			relPath = target // Fallback to absolute path
 		}
 
-		stdlog.Printf("[Cleanup] Unmounting %s (attempt 1/%d)", target, maxRetries)
+		if e.logger != nil {
+			e.logger.Debug("Unmounting %s (attempt 1/%d)", target, maxRetries)
+		}
 
 		// Retry loop for busy mounts
 		var lastErr error
@@ -574,7 +581,9 @@ func (e *BSDEnvironment) Cleanup() error {
 		for attempt := 1; attempt <= maxRetries; attempt++ {
 			err := e.doUnmount(relPath)
 			if err == nil {
-				stdlog.Printf("[Cleanup] Successfully unmounted %s", target)
+				if e.logger != nil {
+					e.logger.Debug("Successfully unmounted %s", target)
+				}
 				unmounted = true
 				break
 			}
@@ -583,8 +592,10 @@ func (e *BSDEnvironment) Cleanup() error {
 
 			// Check if EBUSY (device busy)
 			if attempt < maxRetries {
-				stdlog.Printf("[Cleanup] Unmount failed (attempt %d/%d): %v, retrying in %ds...",
-					attempt, maxRetries, err, retryDelaySec)
+				if e.logger != nil {
+					e.logger.Debug("Unmount failed (attempt %d/%d): %v, retrying in %ds...",
+						attempt, maxRetries, err, retryDelaySec)
+				}
 				time.Sleep(retryDelaySec * time.Second)
 			}
 		}
@@ -593,33 +604,43 @@ func (e *BSDEnvironment) Cleanup() error {
 			// After all retries failed, log warning and continue
 			msg := fmt.Sprintf("%s: %v (after %d retries)", target, lastErr, maxRetries)
 			unmountFailures = append(unmountFailures, msg)
-			stdlog.Printf("[Cleanup] WARNING: Failed to unmount %s after %d retries: %v",
-				target, maxRetries, lastErr)
+			if e.logger != nil {
+				e.logger.Warn("Failed to unmount %s after %d retries: %v", target, maxRetries, lastErr)
+			}
 		}
 	}
 
 	// Check if any mounts remain
 	remaining := e.listRemainingMounts()
 	if len(remaining) > 0 {
-		stdlog.Printf("[Cleanup] WARNING: %d mount(s) still present after cleanup: %v",
-			len(remaining), remaining)
+		if e.logger != nil {
+			e.logger.Warn("%d mount(s) still present after cleanup: %v", len(remaining), remaining)
+		}
 	}
 
 	// Remove base directory (only if all unmounts succeeded)
 	if len(unmountFailures) == 0 {
-		stdlog.Printf("[Cleanup] Removing base directory: %s", e.baseDir)
+		if e.logger != nil {
+			e.logger.Debug("Removing base directory: %s", e.baseDir)
+		}
 		if err := os.RemoveAll(e.baseDir); err != nil {
-			stdlog.Printf("[Cleanup] WARNING: Failed to remove base directory %s: %v",
-				e.baseDir, err)
+			if e.logger != nil {
+				e.logger.Warn("Failed to remove base directory %s: %v", e.baseDir, err)
+			}
 		} else {
-			stdlog.Printf("[Cleanup] Successfully removed base directory: %s", e.baseDir)
+			if e.logger != nil {
+				e.logger.Debug("Successfully removed base directory: %s", e.baseDir)
+			}
 		}
 	} else {
-		stdlog.Printf("[Cleanup] Skipping base directory removal due to %d unmount failure(s)",
-			len(unmountFailures))
+		if e.logger != nil {
+			e.logger.Debug("Skipping base directory removal due to %d unmount failure(s)", len(unmountFailures))
+		}
 	}
 
-	stdlog.Printf("[Cleanup] Cleanup complete for environment: %s", e.baseDir)
+	if e.logger != nil {
+		e.logger.Debug("Cleanup complete for environment: %s", e.baseDir)
+	}
 	return nil
 }
 
