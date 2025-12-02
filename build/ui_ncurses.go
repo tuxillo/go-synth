@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"go-synth/stats"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -46,11 +48,11 @@ func (ui *NcursesUI) Start() error {
 
 	ui.app = tview.NewApplication()
 
-	// Header section (build summary)
+	// Header section (system stats)
 	ui.headerText = tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	ui.headerText.SetBorder(true).SetTitle(" go-synth Build Status ").SetTitleAlign(tview.AlignLeft)
+	ui.headerText.SetBorder(true).SetTitle(" System Stats ").SetTitleAlign(tview.AlignLeft)
 	ui.headerText.SetText("[yellow]Initializing build...[white]")
 
 	// Progress section (statistics)
@@ -204,5 +206,40 @@ func (ui *NcursesUI) LogEvent(workerID int, message string) {
 	ui.app.QueueUpdateDraw(func() {
 		ui.eventsText.SetText(eventsText)
 		ui.eventsText.ScrollToEnd()
+	})
+}
+
+// OnStatsUpdate implements stats.StatsConsumer interface
+// Called every 1 second by StatsCollector with fresh metrics
+func (ui *NcursesUI) OnStatsUpdate(info stats.TopInfo) {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+
+	if ui.app == nil || ui.stopped {
+		return
+	}
+
+	// Format stats header (2 lines)
+	line1 := fmt.Sprintf("[yellow]Workers:[white] %2d/%2d  [yellow]Load:[white] %4.2f  [yellow]Swap:[white] %2d%%  [yellow][DynMax: %d][white]",
+		info.ActiveWorkers, info.MaxWorkers, info.Load, info.SwapPct, info.DynMaxWorkers)
+
+	line2 := fmt.Sprintf("[yellow]Elapsed:[white] %s  [yellow]Rate:[white] %s pkg/hr  [yellow]Impulse:[white] %.0f",
+		stats.FormatDuration(info.Elapsed), stats.FormatRate(info.Rate), info.Impulse)
+
+	headerText := line1 + "\n" + line2
+
+	// Determine border color based on throttling
+	borderColor := tcell.ColorWhite
+	if info.DynMaxWorkers < info.MaxWorkers {
+		borderColor = tcell.ColorYellow
+		// Add throttle warning
+		reason := stats.ThrottleReason(info)
+		headerText += fmt.Sprintf("\n[yellow]⚠ Workers throttled: %s[white]", reason)
+	}
+
+	// Queue updates on the UI thread (thread-safe)
+	ui.app.QueueUpdateDraw(func() {
+		ui.headerText.SetText(headerText)
+		ui.headerText.SetBorderColor(borderColor)
 	})
 }

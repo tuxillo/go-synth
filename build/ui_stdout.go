@@ -3,11 +3,15 @@ package build
 import (
 	"fmt"
 	"sync"
+	"time"
+
+	"go-synth/stats"
 )
 
 // StdoutUI implements BuildUI using simple stdout output (current behavior)
 type StdoutUI struct {
-	mu sync.Mutex
+	mu        sync.Mutex
+	lastPrint time.Time // Last time stats were printed (throttle to every 5s)
 }
 
 // NewStdoutUI creates a new stdout-based UI
@@ -45,4 +49,31 @@ func (ui *StdoutUI) LogEvent(workerID int, message string) {
 
 	event := fmt.Sprintf("[worker %d] %s", workerID, message)
 	fmt.Printf("\r%-80s\n", event)
+}
+
+// OnStatsUpdate implements stats.StatsConsumer interface
+// Prints condensed status line every 5 seconds to reduce spam
+func (ui *StdoutUI) OnStatsUpdate(info stats.TopInfo) {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+
+	// Throttle output to every 5 seconds
+	now := time.Now()
+	if now.Sub(ui.lastPrint) < 5*time.Second {
+		return
+	}
+	ui.lastPrint = now
+
+	// Print condensed status line
+	statusLine := fmt.Sprintf("\r[%s] Load %.2f Swap %d%% Rate %s/hr Built %d Failed %d",
+		stats.FormatDuration(info.Elapsed), info.Load, info.SwapPct,
+		stats.FormatRate(info.Rate), info.Built, info.Failed)
+
+	// Add throttle warning if applicable
+	if info.DynMaxWorkers < info.MaxWorkers {
+		reason := stats.ThrottleReason(info)
+		statusLine += fmt.Sprintf(" [THROTTLED: %s]", reason)
+	}
+
+	fmt.Printf("%-100s\n", statusLine)
 }
