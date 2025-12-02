@@ -83,28 +83,31 @@ func (ui *NcursesUI) Start() error {
 	ui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyCtrlC:
-			// Stop the UI first
-			ui.app.Stop()
-			// Trigger interrupt handler if set (for cleanup)
+			// Trigger interrupt handler if set (for context cancellation)
+			// The handler will cancel the build context, causing workers to exit
+			// and DoBuild() to return, which then runs cleanup via defer
 			ui.mu.Lock()
 			handler := ui.onInterrupt
 			ui.mu.Unlock()
 			if handler != nil {
-				go handler()
+				handler() // Call synchronously to cancel context
 			}
+			// Stop the UI application asynchronously to avoid deadlock
+			// (we're currently in the event loop, so calling Stop() directly might block)
+			go ui.app.Stop()
 			return nil
 		case tcell.KeyRune:
 			switch event.Rune() {
 			case 'q', 'Q':
-				// Stop the UI first
-				ui.app.Stop()
-				// Trigger interrupt handler if set (for cleanup)
+				// Trigger interrupt handler if set (for context cancellation)
 				ui.mu.Lock()
 				handler := ui.onInterrupt
 				ui.mu.Unlock()
 				if handler != nil {
-					go handler()
+					handler() // Call synchronously to cancel context
 				}
+				// Stop the UI application asynchronously to avoid deadlock
+				go ui.app.Stop()
 				return nil
 			}
 		}

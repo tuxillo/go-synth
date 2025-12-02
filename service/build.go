@@ -92,22 +92,30 @@ func (s *Service) Build(opts BuildOptions) (*BuildResult, error) {
 	// Execute the build
 	// Pass a callback that will be called as soon as the cleanup function is available
 	// This ensures signal handlers can access it immediately when workers are created
+	s.logger.Debug("!!! Service.Build: Calling DoBuild...")
 	stats, cleanup, err := build.DoBuild(packages, s.cfg, s.logger, s.db, registry, func(cleanupFn func()) {
 		// Store cleanup function immediately when workers are created
 		s.SetActiveCleanup(cleanupFn)
 	}, runID)
+	s.logger.Debug("!!! Service.Build: DoBuild returned, err=%v", err)
 
 	// Clear the active cleanup after build completes (success or error)
 	defer s.ClearActiveCleanup()
 
 	// Ensure cleanup runs on both success and error paths
 	if cleanup != nil {
-		defer cleanup()
+		s.logger.Debug("!!! Service.Build: Deferring cleanup()")
+		defer func() {
+			s.logger.Debug("!!! Service.Build: Deferred cleanup executing NOW")
+			cleanup()
+			s.logger.Debug("!!! Service.Build: Deferred cleanup completed")
+		}()
 	}
 
 	finalStats = stats
 
 	if err != nil {
+		s.logger.Debug("!!! Service.Build: Returning error: %v", err)
 		return nil, fmt.Errorf("build failed: %w", err)
 	}
 

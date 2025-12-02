@@ -120,9 +120,11 @@ type BuildContext struct {
 	statsCollector *stats.StatsCollector  // Real-time stats collection and monitoring
 	throttler      *stats.WorkerThrottler // Dynamic worker throttling based on system load/swap
 
-	runID    string
-	outputMu sync.Mutex
-	ui       BuildUI // UI for progress and event display
+	runID     string
+	outputMu  sync.Mutex
+	ui        BuildUI // UI for progress and event display
+	cleanupMu sync.Mutex
+	cleanedUp bool // Guard to prevent duplicate cleanup
 }
 
 func ensureBuildBaseInitialized(cfg *config.Config) error {
@@ -222,20 +224,16 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Register UI as stats consumer
 	ctx.statsCollector.AddConsumer(ctx.ui)
 
-	// Set up interrupt handler for ncurses UI (Ctrl+C handling)
-	// This will be called when the cleanup function is created below
-	var setupInterruptHandler func(cleanup func())
+	// Set up interrupt handler for ncurses UI (Ctrl+C/q handling)
+	// The handler only cancels the context - cleanup will run via defer in caller
 	if ncursesUI, ok := ctx.ui.(*NcursesUI); ok {
-		setupInterruptHandler = func(cleanup func()) {
-			ncursesUI.SetInterruptHandler(func() {
-				// Cancel build context
-				if ctx.cancel != nil {
-					ctx.cancel()
-				}
-				// Run cleanup
-				cleanup()
-			})
-		}
+		ncursesUI.SetInterruptHandler(func() {
+			// Cancel build context to signal workers to stop
+			// This causes DoBuild() to return, and cleanup runs via defer
+			if ctx.cancel != nil {
+				ctx.cancel()
+			}
+		})
 	}
 
 	// Create cleanup function that will access ctx.workers when called
@@ -243,11 +241,23 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// but the closure captures the ctx pointer, so it will see the workers
 	// when cleanup is actually invoked
 	//
+	// Cleanup is idempotent - safe to call multiple times (e.g., from both
+	// quit handler and deferred cleanup).
+	//
 	// Cleanup flow:
 	//  1. Cancel context to signal workers to stop
 	//  2. Wait for workers to exit their loops (respects ongoing work)
 	//  3. Cleanup worker environments (unmount, remove directories)
 	cleanup := func() {
+		ctx.cleanupMu.Lock()
+		if ctx.cleanedUp {
+			logger.Debug("Cleanup already performed, skipping")
+			ctx.cleanupMu.Unlock()
+			return
+		}
+		ctx.cleanedUp = true
+		ctx.cleanupMu.Unlock()
+
 		logger.Debug("Cleanup started")
 		logger.Info("Stopping build workers...")
 
@@ -307,11 +317,6 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// The cleanup function captures ctx pointer, so it will see workers when they're created
 	if onCleanupReady != nil {
 		onCleanupReady(cleanup)
-	}
-
-	// Setup interrupt handler for ncurses UI now that cleanup is ready
-	if setupInterruptHandler != nil {
-		setupInterruptHandler(cleanup)
 	}
 
 	// Count all packages in the build order
@@ -431,14 +436,44 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 	// Queue packages in build order
 	go func() {
-		for _, p := range buildOrder {
+		defer func() {
+			logger.Debug("!!! Queue goroutine: defer close(ctx.queue) executing")
+			close(ctx.queue)
+			logger.Debug("!!! Queue goroutine: channel closed")
+		}()
+		logger.Debug("!!! Queue goroutine: starting, %d packages in buildOrder", len(buildOrder))
+		for i, p := range buildOrder {
+			logger.Debug("!!! Queue goroutine: processing package %d/%d: %s", i+1, len(buildOrder), p.PortDir)
+
+			// Check for cancellation before queuing each package
+			select {
+			case <-ctx.ctx.Done():
+				logger.Info("!!! Package queue stopping due to context cancellation")
+				return
+			default:
+			}
+
+			// Skip packages that are already done or ignored
+			if ctx.registry.HasAnyFlags(p, pkg.PkgFSuccess|pkg.PkgFFailed|pkg.PkgFSkipped|pkg.PkgFIgnored) {
+				logger.Debug("!!! Queue goroutine: skipping %s (already done/ignored)", p.PortDir)
+				continue
+			}
+
+			// Skip pkg-pkg (meta package marker)
+			if p.Category == "pkg" && p.Name == "pkg" {
+				logger.Debug("!!! Queue goroutine: skipping %s (pkg-pkg)", p.PortDir)
+				continue
+			}
+
 			// Skip packages that don't need building
 			if ctx.registry.HasAnyFlags(p, pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) {
+				logger.Debug("!!! Queue goroutine: skipping %s (already done/ignored)", p.PortDir)
 				continue
 			}
 
 			// Skip ports-mgmt/pkg - already built in bootstrap phase
 			if ctx.registry.HasFlags(p, pkg.PkgFPkgPkg) {
+				logger.Debug("!!! Queue goroutine: skipping %s (pkg-pkg)", p.PortDir)
 				continue
 			}
 
@@ -448,7 +483,9 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 			// out at line 337 above. No need to check again here.
 
 			// Wait for dependencies
+			logger.Debug("!!! Queue goroutine: waiting for dependencies of %s", p.PortDir)
 			if !ctx.waitForDependencies(p) {
+				logger.Debug("!!! Queue goroutine: dependency wait returned false for %s", p.PortDir)
 				// Dependency failed, mark as skipped
 				ctx.registry.AddFlags(p, pkg.PkgFSkipped)
 				ctx.statsMu.Lock()
@@ -461,27 +498,42 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				if ctx.statsCollector != nil {
 					ctx.statsCollector.RecordCompletion(stats.BuildSkipped)
 				}
+				logger.Debug("!!! Queue goroutine: continuing to next package after skip")
 				continue
 			}
 
-			ctx.queue <- p
+			logger.Debug("!!! Queue goroutine: trying to send %s to queue", p.PortDir)
+			// Try to send package to queue, but respect cancellation
+			select {
+			case ctx.queue <- p:
+				// Package queued successfully
+				logger.Debug("!!! Queue goroutine: sent %s to queue", p.PortDir)
+			case <-ctx.ctx.Done():
+				logger.Info("!!! Package queue stopping due to context cancellation (while queuing %s)", p.PortDir)
+				return
+			}
 		}
-		close(ctx.queue)
+		logger.Debug("!!! Queue goroutine: finished processing all packages")
 	}()
 
 	// Wait for all workers to finish
+	logger.Debug("!!! DoBuild: Waiting for workers to finish (ctx.wg.Wait)...")
 	ctx.wg.Wait()
+	logger.Debug("!!! DoBuild: All workers finished, wg.Wait() returned")
 
 	// Calculate duration
 	ctx.stats.Duration = time.Since(ctx.startTime)
 
 	// Stop UI after all workers finish
+	logger.Debug("!!! DoBuild: Stopping UI...")
 	if ctx.ui != nil {
 		ctx.ui.Stop()
 	}
+	logger.Debug("!!! DoBuild: UI stopped")
 
 	// Don't call cleanup here - let the caller do it
 	// This allows proper cleanup on signals
+	logger.Debug("!!! DoBuild: Returning (cleanup should run in caller's defer)")
 	return &ctx.stats, cleanup, nil
 }
 
@@ -497,12 +549,23 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 func (ctx *BuildContext) workerLoop(worker *Worker) {
 	defer ctx.wg.Done()
 
+	ctx.logger.Debug("Worker %d: entering loop", worker.ID)
+
 	for {
-		// Check for cancellation before blocking on channel
-		// This ensures workers exit promptly when signaled
+		// Check for cancellation FIRST in a non-blocking way
+		// This gives priority to context cancellation over queue receives
 		select {
 		case <-ctx.ctx.Done():
-			// Context cancelled (SIGINT, SIGTERM, etc.)
+			ctx.logger.Info("Worker %d: context cancelled, exiting immediately", worker.ID)
+			return
+		default:
+			// Context not cancelled, continue
+		}
+
+		// Now try to receive from queue with cancellation check
+		select {
+		case <-ctx.ctx.Done():
+			// Context cancelled while waiting for queue
 			ctx.logger.Info("Worker %d: stopping due to context cancellation", worker.ID)
 			return
 
@@ -637,6 +700,18 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 	}
 
 	for _, phase := range phases {
+		// Check for cancellation before starting each phase
+		select {
+		case <-ctx.ctx.Done():
+			ctxLogger.Info("Build cancelled before phase: %s", phase)
+			pkgLogger.WriteFailure(time.Since(startTime), "Build cancelled")
+			if err := ctx.buildDB.UpdateRecordStatus(p.BuildUUID, "failed", time.Now()); err != nil {
+				ctxLogger.Warn("Failed to update build record status: %v", err)
+			}
+			return false
+		default:
+		}
+
 		ctx.registry.SetLastPhase(p, phase)
 		pkgLogger.WritePhase(phase)
 		ctxLogger.Info("Starting phase: %s", phase)
@@ -685,6 +760,14 @@ func (ctx *BuildContext) buildPackage(worker *Worker, p *pkg.Package) bool {
 // waitForDependencies waits for all dependencies to complete
 func (ctx *BuildContext) waitForDependencies(p *pkg.Package) bool {
 	for {
+		// Check for cancellation first
+		select {
+		case <-ctx.ctx.Done():
+			ctx.logger.Debug("Dependency wait cancelled for %s", p.PortDir)
+			return false
+		default:
+		}
+
 		allDone := true
 		anyFailed := false
 
@@ -720,8 +803,14 @@ func (ctx *BuildContext) waitForDependencies(p *pkg.Package) bool {
 			return true
 		}
 
-		// Wait a bit before checking again
-		time.Sleep(100 * time.Millisecond)
+		// Wait a bit before checking again, but respect cancellation
+		select {
+		case <-time.After(100 * time.Millisecond):
+			// Continue loop
+		case <-ctx.ctx.Done():
+			ctx.logger.Debug("Dependency wait cancelled for %s (during sleep)", p.PortDir)
+			return false
+		}
 	}
 }
 
