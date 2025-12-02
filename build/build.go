@@ -114,6 +114,8 @@ type BuildContext struct {
 	statsMu   sync.Mutex
 	startTime time.Time
 	wg        sync.WaitGroup
+
+	outputMu sync.Mutex
 }
 
 func ensureBuildBaseInitialized(cfg *config.Config) error {
@@ -365,9 +367,9 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Calculate duration
 	ctx.stats.Duration = time.Since(ctx.startTime)
 
-	if !cfg.DisableUI {
-		fmt.Printf("\n")
-	}
+	ctx.outputMu.Lock()
+	fmt.Printf("\n")
+	ctx.outputMu.Unlock()
 
 	// Don't call cleanup here - let the caller do it
 	// This allows proper cleanup on signals
@@ -411,6 +413,8 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			// Mark as running
 			ctx.registry.AddFlags(p, pkg.PkgFRunning)
 
+			ctx.logWorkerEvent(worker.ID, fmt.Sprintf("start build: %s (deps: %d)", p.PortDir, len(p.IDependOn)))
+
 			// Build the package (context will propagate to env.Execute())
 			success := ctx.buildPackage(worker, p)
 
@@ -430,9 +434,17 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			ctx.statsMu.Unlock()
 
 			worker.mu.Lock()
+			duration := time.Since(worker.StartTime)
 			worker.Current = nil
 			worker.Status = "idle"
 			worker.mu.Unlock()
+
+			if success {
+				ctx.logWorkerEvent(worker.ID, fmt.Sprintf("build success: %s (%s)", p.PortDir, formatDuration(duration)))
+			} else {
+				lastPhase := ctx.registry.GetLastPhase(p)
+				ctx.logWorkerEvent(worker.ID, fmt.Sprintf("build failed: %s (phase: %s)", p.PortDir, lastPhase))
+			}
 
 			// Print progress
 			ctx.printProgress()
@@ -596,8 +608,14 @@ func (ctx *BuildContext) waitForDependencies(p *pkg.Package) bool {
 	}
 }
 
-// printProgress logs current build progress and, when enabled, prints to stdout
+// printProgress logs current build progress and prints to stdout
 func (ctx *BuildContext) printProgress() {
+	ctx.outputMu.Lock()
+	defer ctx.outputMu.Unlock()
+	ctx.printProgressLocked()
+}
+
+func (ctx *BuildContext) printProgressLocked() {
 	ctx.statsMu.Lock()
 	done := ctx.stats.Success + ctx.stats.Failed
 	success := ctx.stats.Success
@@ -611,8 +629,16 @@ func (ctx *BuildContext) printProgress() {
 
 	ctx.logger.Debug(progressMsg)
 
-	// Always show progress on stdout (ncurses UI not yet implemented)
 	fmt.Printf("\r%-80s", progressMsg)
+}
+
+func (ctx *BuildContext) logWorkerEvent(workerID int, message string) {
+	ctx.outputMu.Lock()
+	defer ctx.outputMu.Unlock()
+
+	event := fmt.Sprintf("[worker %d] %s", workerID, message)
+	fmt.Printf("\r%-80s\n", event)
+	ctx.printProgressLocked()
 }
 
 // formatDuration formats a duration for display
