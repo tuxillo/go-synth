@@ -64,13 +64,14 @@ vet:
 #   4. make vm-stop       # Shut down VM
 #
 # Note: vm-sync excludes go-synth binary and *.db files to ensure clean builds
-#       on the VM. Always build on the VM (vm-build) to get native binaries.
+#       on the VM. .git directory is synced to enable VCS stamping in builds.
+#       Always build on the VM (vm-build) to get native binaries.
 #
 # See docs/testing/VM_TESTING.md for complete documentation.
 
 VM_DIR=		vm
 VM_SSH=		ssh -i $(HOME)/.go-synth/vm/id_ed25519 -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost
-VM_RSYNC=	rsync -avz --delete --exclude='.git' --exclude='vm/' --exclude='go-synth' --exclude='*.db' -e "ssh -i $(HOME)/.go-synth/vm/id_ed25519 -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+VM_RSYNC=	rsync -avz --delete --exclude='vm/' --exclude='go-synth' --exclude='*.db' -e "ssh -i $(HOME)/.go-synth/vm/id_ed25519 -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 # ------------------------------------------------------------------------------
 # VM Lifecycle Management
