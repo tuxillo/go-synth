@@ -1279,6 +1279,8 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
+- ✅ 2025-12-02: Issue #9 Phase 3 design complete - BuildDB-backed monitor storage with optional file export (commit a884bf0)
+- ✅ 2025-12-02: Issue #9 Phase 2 complete - BuildDB storage decision, 3-cap throttling, data type verification (commits 5f5fbca, 2fe33cc)
 - ✅ 2025-12-02: Issue #9 architectural decisions documented - Go idioms over C patterns (commit c9ae296)
 - ✅ 2025-12-02: Issue #9 behavior analysis complete - Extracted throttling formulas from C source (commit 0feb368)
 - ✅ 2025-12-02: Issue #9 created - System stats implementation plan (27h, 7 phases) (commit f6db394)
@@ -1552,7 +1554,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - Implement bucket changes + DB helpers, then update build/service layers and add CLI/API commands to list runs.
 
 ##### Issue #9: Missing system stats monitoring (NEW)
-**Status**: 🔵 Open – In Progress (Phase 1 Complete)  
+**Status**: 🔵 Open – In Progress (Phases 1 & 2 Complete, Phase 3 Design Complete)  
 **Discovered**: 2025-12-02  
 **Priority**: P1 (high - feature parity with original dsynth)
 
@@ -1568,29 +1570,42 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 2. **UI Display**:
    - Ncurses: Stats panel in header (load, swap, rate, dynmax, totals)
    - Stdout: Periodic status lines for non-TTY environments
-3. **Monitor File**: `monitor.dat` with atomic writes and flock for external tools/web UI
+3. **Monitor Storage**: BuildDB-backed (LiveSnapshot field) with optional monitor.dat file export
 4. **Dynamic Worker Throttling**:
-   - Linear interpolation 1.5-5.0×ncpus (load), 10-40% (swap), reduce TO 25%
+   - Three-cap minimum (load, swap, memory) with slow-start ramping
+   - Linear interpolation 1.5-5.0×ncpus (load), 10-40% (swap) → reduce TO 25%
 
-**Implementation Plan**: 7-phase approach (27 hours estimated):
+**Implementation Plan**: 7-phase approach (27.5 hours estimated):
 - ✅ **Phase 1 Complete**: Source analysis (3h) - Commits f6db394, 0feb368, c9ae296
   - Analyzed 5,808 lines of C source (dsynth.h, build.c, pkglist.c, bulk.c)
   - Documented data structures (topinfo_t, runstats_t), call sites (23 locations)
-  - Extracted throttling formulas and corrected data types
+  - Extracted throttling formulas and corrected data types (rate/impulse are float64)
   - Documented architectural decisions (behavioral fidelity vs implementation mirroring)
-- 🔄 **Phase 2 Next**: Behavior extraction (3h) - Fetch upstream sources, document semantics
-- 🔲 **Phase 3**: Go implementation with StatsCollector + WorkerThrottler (7h)
-- 🔲 **Phase 4**: UI integration (ncurses panel, stdout lines) (4h)
-- 🔲 **Phase 5**: Rate/impulse calculation (3h)
-- 🔲 **Phase 6**: Monitor file writer with atomic updates (3h)
+- ✅ **Phase 2 Complete**: Behavior extraction (3h) - Commits 5f5fbca, 2fe33cc
+  - Extracted event semantics (SKIP does NOT increment rate, success/fail/ignored DO)
+  - Documented 3-cap throttling with slow-start and memory interaction
+  - Verified data types (rate/impulse are double/float64, not int)
+  - **Critical decision**: BuildDB-backed monitor storage (LiveSnapshot field, no per-second history)
+- ✅ **Phase 3 Design Complete**: Go implementation strategy (8h planned) - Commit a884bf0
+  - Defined StatsCollector + WorkerThrottler separation
+  - Documented BuildDB API additions (UpdateRunSnapshot, GetRunSnapshot, ActiveRunSnapshot)
+  - Specified consumer pattern (BuildDBWriter primary, MonitorWriter optional, UI)
+  - Designed hook integration with BuildContext
+  - **Next**: Implement code (stats/collector.go, builddb/runs.go, etc.)
+- 🔲 **Phase 4**: UI integration (ncurses panel, stdout lines, CLI monitor command) (4.5h)
+- 🔲 **Phase 5**: Rate/impulse calculation (3h, overlaps with Phase 3)
+- 🔲 **Phase 6**: Monitor persistence (3h, overlaps with Phase 3)
 - 🔲 **Phase 7**: Documentation and commit strategy (2h)
 
-**Key Architectural Decisions** (c9ae296):
-- Single-host execution only (distributed builds out of scope)
-- Go idioms over C patterns (typed enums vs bitwise flags, separated concerns)
-- StatsCollector + WorkerThrottler split (not combined like dsynth's waitbuild)
-- Observer pattern via StatsConsumer interface (not function pointers)
-- Behavioral fidelity preserved (1 Hz sampling, 60s window, throttling formula)
+**Key Architectural Decisions** (commits c9ae296, 5f5fbca, a884bf0):
+- **Single-host execution only** (distributed builds out of scope)
+- **BuildDB-backed storage** (LiveSnapshot field with 1s updates, no per-second snapshots)
+- **Go idioms over C patterns** (typed BuildStatus enum vs bitwise DLOG_* flags)
+- **StatsCollector + WorkerThrottler split** (not combined like dsynth's waitbuild)
+- **Observer pattern via StatsConsumer interface** (not function pointer linked lists)
+- **Simple RecordCompletion(status) API** (not complex 5-parameter calls)
+- **Optional monitor.dat file** (compatibility layer, BuildDB is canonical)
+- **Behavioral fidelity preserved** (1 Hz sampling, 60s window, throttling formula)
 
 **Detailed Documentation**: [docs/issues/SYSTEM_STATS_IMPLEMENTATION.md](docs/issues/SYSTEM_STATS_IMPLEMENTATION.md)
 
