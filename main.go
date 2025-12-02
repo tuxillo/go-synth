@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"go-synth/cmd"
 	"go-synth/config"
 	_ "go-synth/environment/bsd" // Register BSD backend
 	"go-synth/pkg"
@@ -121,6 +122,8 @@ func main() {
 		doFetchOnly(cfg, commandArgs)
 	case "logs":
 		doLogs(cfg, commandArgs)
+	case "monitor":
+		doMonitor(cfg, commandArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		usage()
@@ -185,6 +188,11 @@ func usage() {
 	fmt.Println("  reset-db                 Reset CRC database")
 	fmt.Println("  verify                   Verify package integrity")
 	fmt.Println("  logs [port]              View build logs")
+	fmt.Println()
+	fmt.Println("Monitoring Commands:")
+	fmt.Println("  monitor                  Watch active build stats (from BuildDB)")
+	fmt.Println("  monitor --file PATH      Watch legacy monitor.dat file")
+	fmt.Println("  monitor export PATH      Export snapshot to dsynth-format file")
 	fmt.Println()
 }
 
@@ -697,4 +705,11 @@ func doLogs(cfg *config.Config, portList []string) {
 	}
 
 	fmt.Print(string(content))
+}
+
+func doMonitor(cfg *config.Config, args []string) {
+	if err := cmd.DoMonitor(cfg, args); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
