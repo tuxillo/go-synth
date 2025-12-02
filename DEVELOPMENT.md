@@ -1279,6 +1279,7 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
+- ✅ 2025-12-02: **CRITICAL**: Pass registry to DoBuild to preserve flags (commit bfbb811)
 - ✅ 2025-12-02: Skip rebuild when package exists - Sync CRC for existing packages (commit d74ac1f)
 - ✅ 2025-12-02: Stale build lock cleanup - Added ClearActiveLocks() to cleanup command (commit 0dfca48)
 - ✅ 2025-12-02: Progress tracking fixed - Reaches 100% with SkippedPre counter (commit 2837415)
