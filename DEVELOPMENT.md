@@ -1278,20 +1278,10 @@ Rationale: Package should contain only metadata, not build-time state
 ✅ CLI commands fully operational
 
 ### Recent Milestones
-- 🎉 2025-11-28: **Phase 7 COMPLETE - MVP DELIVERED!** (7/7 core tasks, 12 hours)
-- ✅ 2025-11-28: First successful end-to-end build - print/indexinfo (1m38s, 6.3 KB package)
-- ✅ 2025-11-28: CRC-based skip validated - second build skipped as "up-to-date"
-- ✅ 2025-11-28: BuildDB tracking confirmed - 21 builds, 1 unique port, 1 CRC entry
-- ✅ 2025-11-28: Critical bugs fixed - backend registration, dependency order, template population (commits a57adf1, 74e2c1d)
-- ✅ 2025-11-28: Phase 7 Task 7 complete - E2E integration tests + bug fixes (commits 228f44e, a57adf1, d4a0f6c, 74e2c1d)
-- ✅ 2025-11-28: Phase 7 Task 6 complete - Init command with migration support (commit c9b9ada)
-- ✅ 2025-11-28: Phase 7 Task 5 complete - Configuration update for migration/database (commit 865fdce)
-- ✅ 2025-11-28: Phase 7 Task 4 complete - UUID tracking in logs (commit d54e361)
-- ✅ 2025-11-28: Phase 7 Task 3 complete - Status, reset-db, cleanup commands wired (Task 3/9)
-- ✅ 2025-11-28: Phase 7 Task 2 complete - CLI build commands wired with improved UX (Task 2/9)
-- ✅ 2025-11-28: Phase 7 Task 1 complete - Migration package (commit dbde074)
-- ✅ 2025-11-28: Migration package - Legacy CRC import with 87% coverage, 7 tests (dbde074)
-- ✅ 2025-11-28: Phase 6 complete - Testing strategy 95% done (5/6 tasks, CI/CD deferred)
+
+- ✅ 2025-12-02: Stale build lock cleanup - Added ClearActiveLocks() to cleanup command (commit 0dfca48)
+- ✅ 2025-12-02: Progress tracking fixed - Reaches 100% with SkippedPre counter (commit 2837415)
+- ✅ 2025-12-02: Package file verification - Check .pkg exists before marking up-to-date (commit b8f3f2d)
 - ✅ 2025-11-28: Critical mount cleanup bug fixed - Resolved path mismatch causing stale mounts (commit 5ceb78f)
 - ✅ 2025-11-28: Config/log tests complete - config 93.2%, log 90.3% coverage (commits 5e96733, 1c0b86c)
 - ✅ 2025-11-28: Build integration tests complete - 8 tests passing in VM (commits 543bd1e, 4334a47)
