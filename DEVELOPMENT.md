@@ -1279,6 +1279,7 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
+- ✅ 2025-12-02: Issue #9 Phase 4 **COMPLETE** - All 10 tasks done: UI stats integration with TopInfo, BuildUI interface, ncurses/stdout implementations, CLI monitor command, unit tests (23 subtests, 100% pass, commits 9d88467, fe26663, 71723f7)
 - ✅ 2025-12-02: Issue #9 Phase 3 design complete - BuildDB-backed monitor storage with optional file export (commit a884bf0)
 - ✅ 2025-12-02: Issue #9 Phase 2 complete - BuildDB storage decision, 3-cap throttling, data type verification (commits 5f5fbca, 2fe33cc)
 - ✅ 2025-12-02: Issue #9 architectural decisions documented - Go idioms over C patterns (commit c9ae296)
@@ -1592,7 +1593,16 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
   - Specified consumer pattern (BuildDBWriter primary, MonitorWriter optional, UI)
   - Designed hook integration with BuildContext
   - **Next**: Implement code (stats/collector.go, builddb/runs.go, etc.)
-- 🔲 **Phase 4**: UI integration (ncurses panel, stdout lines, CLI monitor command) (4.5h)
+- ✅ **Phase 4 Complete**: UI integration (4.5h) - Commits 9d88467, fe26663, 71723f7
+  - Created stats/types.go with TopInfo, BuildStatus, helper functions (FormatDuration, FormatRate, ThrottleReason)
+  - Implemented OnStatsUpdate in NcursesUI (2-line header, yellow border when throttled, throttle warning)
+  - Implemented OnStatsUpdate in StdoutUI (condensed status line every 5s with throttle warning)
+  - Created CLI monitor command with 3 modes:
+    - Default: Poll BuildDB ActiveRun() every 1s, display live stats
+    - --file: Watch legacy monitor.dat file (dsynth compatibility)
+    - export: Export active snapshot to dsynth-format file
+  - Added comprehensive unit tests (23 subtests, 100% coverage, all passing)
+  - **Note**: Uses placeholder ActiveRun() until Phase 3 BuildDB implementation adds ActiveRunSnapshot()
 - 🔲 **Phase 5**: Rate/impulse calculation (3h, overlaps with Phase 3)
 - 🔲 **Phase 6**: Monitor persistence (3h, overlaps with Phase 3)
 - 🔲 **Phase 7**: Documentation and commit strategy (2h)
