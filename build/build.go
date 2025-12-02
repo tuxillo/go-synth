@@ -254,8 +254,9 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		onCleanupReady(cleanup)
 	}
 
-	// Count packages that need building
+	// Count all packages in the build order
 	for _, p := range buildOrder {
+		ctx.stats.Total++
 		if ctx.registry.HasAnyFlags(p, pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) {
 			if ctx.registry.HasFlags(p, pkg.PkgFSuccess) {
 				// Already built (CRC match from MarkPackagesNeedingBuild)
@@ -265,8 +266,6 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				now := time.Now()
 				ctx.recordRunPackage(p, builddb.RunStatusIgnored, -1, now, now, "")
 			}
-		} else {
-			ctx.stats.Total++
 		}
 	}
 
@@ -287,16 +286,37 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		return nil, cleanup, fmt.Errorf("pkg bootstrap failed: %w", err)
 	}
 	if pkgStatus != "" {
+		// Note: Don't increment Total here - pkg is already counted in buildOrder loop above
+		// Also note: ports-mgmt/pkg might have been counted in SkippedPre during the initial
+		// buildOrder loop (lines 258-270) if it had PkgFSuccess flag. We need to adjust.
+		// Find if pkg was pre-counted
+		var pkgPkg *pkg.Package
+		for _, p := range buildOrder {
+			if p.PortDir == "ports-mgmt/pkg" {
+				pkgPkg = p
+				break
+			}
+		}
+		wasPreSkipped := pkgPkg != nil && ctx.registry.HasFlags(pkgPkg, pkg.PkgFSuccess)
+
 		switch pkgStatus {
 		case builddb.RunStatusSuccess:
-			ctx.stats.Total++
+			// If pkg was already counted in SkippedPre, remove that count
+			if wasPreSkipped {
+				ctx.stats.SkippedPre--
+			}
 			ctx.stats.Success++
 		case builddb.RunStatusSkipped:
 			// Bootstrap pkg was already built (CRC match or template check)
-			ctx.stats.Total++
-			ctx.stats.SkippedPre++
+			// Only increment if not already counted in the initial loop
+			if !wasPreSkipped {
+				ctx.stats.SkippedPre++
+			}
 		case builddb.RunStatusFailed:
-			ctx.stats.Total++
+			// If pkg was already counted in SkippedPre, remove that count
+			if wasPreSkipped {
+				ctx.stats.SkippedPre--
+			}
 			ctx.stats.Failed++
 		}
 	}
@@ -635,13 +655,12 @@ func (ctx *BuildContext) printProgressLocked() {
 	elapsed := time.Since(ctx.startTime)
 	ctx.statsMu.Unlock()
 
-	// Compute effective total: total packages to build minus already-built ones
-	totalToBuild := total - skippedPre
-	// Compute done: packages that completed (built or were already built)
-	done := success + failed + skippedPre
+	// Compute done: packages that completed processing
+	// (built, failed, pre-skipped, or dep-skipped)
+	done := success + failed + skippedPre + skipped
 
 	progressMsg := fmt.Sprintf("Progress: %d/%d (success: %d, failed: %d, pre-skipped: %d, dep-skipped: %d) %s elapsed",
-		done, totalToBuild, success, failed, skippedPre, skipped, formatDuration(elapsed))
+		done, total, success, failed, skippedPre, skipped, formatDuration(elapsed))
 
 	ctx.logger.Debug(progressMsg)
 
