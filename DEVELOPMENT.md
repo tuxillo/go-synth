@@ -1548,6 +1548,41 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 **Next Steps**:
 - Implement bucket changes + DB helpers, then update build/service layers and add CLI/API commands to list runs.
 
+##### Issue #9: Missing system stats monitoring (NEW)
+**Status**: 🔵 Open – Required for production parity  
+**Discovered**: 2025-12-02  
+**Priority**: P1 (high - feature parity with original dsynth)
+
+**Problem**: go-synth lacks the real-time system statistics monitoring that the original dsynth provides. Users cannot see active worker count, dynamic throttling status, package build rate (pkg/hr), impulse (instant completions), adjusted system load, swap usage, elapsed time, or build totals (queued/built/failed/ignored/skipped). Without these metrics, there's no visibility into build progress, system health, or performance bottlenecks.
+
+**Expected Features**:
+1. **Real-time metrics** (updated at 1 Hz):
+   - Load average (adjusted for page-fault waits via `vm.vmtotal.t_pw`)
+   - Swap usage percentage (via `vm.swap_info` sysctl)
+   - Package build rate (packages/hour, 60s sliding window)
+   - Impulse (instant completions in last second)
+   - Active/max workers with dynamic throttling status
+2. **UI Display**:
+   - Ncurses: Stats panel in header (load, swap, rate, dynmax, totals)
+   - Stdout: Periodic status lines for non-TTY environments
+3. **Monitor File**: `monitor.dat` with atomic writes and flock for external tools/web UI
+4. **Dynamic Worker Throttling**:
+   - Reduce to 75% when `load > 2.0 × ncpus`
+   - Reduce to 50% when `swap > 10%`
+
+**Implementation Plan**: 7-phase approach (27 hours estimated):
+1. Analyze original dsynth C source (`dsynth.h`, `build.c`, upstream `monitor.c`)
+2. Document metrics, data flow, and throttling algorithms
+3. Port to Go: `StatsCollector` service with 1 Hz sampling, ring buffer for rate calculation
+4. Integrate with UI consumers (ncurses panel, stdout lines)
+5. Implement rate/impulse calculation (60-second sliding window)
+6. Create monitor file writer with atomic updates and locking
+7. Documentation and commit strategy
+
+**Detailed Documentation**: [docs/issues/SYSTEM_STATS_IMPLEMENTATION.md](docs/issues/SYSTEM_STATS_IMPLEMENTATION.md)
+
+**Related Files**: `stats/` (new package), `build/build.go`, `build/ui_ncurses.go`, `build/ui_stdout.go`
+
  
 #### Architectural/Design (Critical for Library Reuse):
 
