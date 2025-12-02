@@ -720,6 +720,23 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 		}
 
 		if needsBuild {
+			// CRC mismatch or no CRC record, but check if package file exists first
+			// This handles cases where packages were built by another tool or
+			// the database was recreated but packages still exist
+			if pkg.PkgFile != "" {
+				pkgPath := filepath.Join(cfg.PackagesPath, "All", pkg.PkgFile)
+				if _, err := os.Stat(pkgPath); err == nil {
+					// Package file exists - skip rebuild and update CRC
+					logger.Info("  %s: up-to-date (package exists, will sync CRC)", pkg.PortDir)
+					registry.AddFlags(pkg, PkgFSuccess|PkgFPackaged)
+
+					// Update CRC to avoid checking again
+					if err := buildDB.UpdateCRC(pkg.PortDir, currentCRC); err != nil {
+						logger.Warn("  %s: failed to update CRC: %v", pkg.PortDir, err)
+					}
+					continue
+				}
+			}
 			needBuild++
 			logger.Info("  %s: needs rebuild", pkg.PortDir)
 		} else {
