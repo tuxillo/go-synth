@@ -131,7 +131,8 @@ func runBuild(cmd *cobra.Command, args []string) {
 	fmt.Printf("  Total packages: %d\n", stats.Total)
 	fmt.Printf("  Success: %d\n", stats.Success)
 	fmt.Printf("  Failed: %d\n", stats.Failed)
-	fmt.Printf("  Skipped: %d\n", stats.Skipped)
+	fmt.Printf("  Already built (skipped): %d\n", stats.SkippedPre)
+	fmt.Printf("  Dependency skipped: %d\n", stats.Skipped)
 	fmt.Printf("  Ignored: %d\n", stats.Ignored)
 	fmt.Printf("  Duration: %s\n\n", stats.Duration)
 

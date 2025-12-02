@@ -77,12 +77,13 @@ import (
 
 // BuildStats tracks build statistics
 type BuildStats struct {
-	Total    int
-	Success  int
-	Failed   int
-	Skipped  int
-	Ignored  int
-	Duration time.Duration
+	Total      int
+	Success    int
+	Failed     int
+	Skipped    int // Skipped due to dependency failures (runtime)
+	SkippedPre int // Skipped because already built (CRC match, pre-queue)
+	Ignored    int
+	Duration   time.Duration
 }
 
 // Worker represents a build worker
@@ -252,7 +253,8 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	for _, p := range buildOrder {
 		if ctx.registry.HasAnyFlags(p, pkg.PkgFSuccess|pkg.PkgFNoBuildIgnore|pkg.PkgFIgnored) {
 			if ctx.registry.HasFlags(p, pkg.PkgFSuccess) {
-				ctx.stats.Skipped++
+				// Already built (CRC match from MarkPackagesNeedingBuild)
+				ctx.stats.SkippedPre++
 			} else if ctx.registry.HasFlags(p, pkg.PkgFIgnored) {
 				ctx.stats.Ignored++
 				now := time.Now()
@@ -263,8 +265,8 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		}
 	}
 
-	logger.Info("Starting build: %d packages (%d skipped, %d ignored)",
-		ctx.stats.Total, ctx.stats.Skipped, ctx.stats.Ignored)
+	logger.Info("Starting build: %d packages (%d already built, %d ignored)",
+		ctx.stats.Total, ctx.stats.SkippedPre, ctx.stats.Ignored)
 
 	if err := ensureBuildBaseInitialized(cfg); err != nil {
 		cancel()
@@ -285,8 +287,9 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 			ctx.stats.Total++
 			ctx.stats.Success++
 		case builddb.RunStatusSkipped:
+			// Bootstrap pkg was already built (CRC match or template check)
 			ctx.stats.Total++
-			ctx.stats.Skipped++
+			ctx.stats.SkippedPre++
 		case builddb.RunStatusFailed:
 			ctx.stats.Total++
 			ctx.stats.Failed++
@@ -340,30 +343,10 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				continue
 			}
 
-			// Check if build is needed based on CRC (incremental builds)
-			portPath := filepath.Join(cfg.DPortsPath, p.Category, p.Name)
-			currentCRC, err := builddb.ComputePortCRC(portPath)
-			if err != nil {
-				// Log warning but continue with build (fail-safe)
-				logger.Error(fmt.Sprintf("Failed to compute CRC for %s: %v", p.PortDir, err))
-			} else {
-				// Check if port has changed since last successful build
-				needsBuild, err := ctx.buildDB.NeedsBuild(p.PortDir, currentCRC)
-				if err != nil {
-					// Log warning but continue with build (fail-safe)
-					logger.Error(fmt.Sprintf("Failed to check NeedsBuild for %s: %v", p.PortDir, err))
-				} else if !needsBuild {
-					// CRC matches last successful build, skip this port
-					ctx.registry.AddFlags(p, pkg.PkgFSuccess)
-					ctx.statsMu.Lock()
-					ctx.stats.Skipped++
-					ctx.statsMu.Unlock()
-					now := time.Now()
-					ctx.recordRunPackage(p, builddb.RunStatusSkipped, -1, now, now, "")
-					logger.Success(fmt.Sprintf("%s (CRC match, skipped)", p.PortDir))
-					continue
-				}
-			}
+			// Note: CRC-based incremental build check is already done in
+			// MarkPackagesNeedingBuild() before we reach here. Packages that
+			// don't need building are marked with PkgFSuccess and filtered
+			// out at line 337 above. No need to check again here.
 
 			// Wait for dependencies
 			if !ctx.waitForDependencies(p) {
@@ -639,15 +622,21 @@ func (ctx *BuildContext) printProgress() {
 
 func (ctx *BuildContext) printProgressLocked() {
 	ctx.statsMu.Lock()
-	done := ctx.stats.Success + ctx.stats.Failed
 	success := ctx.stats.Success
 	failed := ctx.stats.Failed
+	skippedPre := ctx.stats.SkippedPre
+	skipped := ctx.stats.Skipped
 	total := ctx.stats.Total
 	elapsed := time.Since(ctx.startTime)
 	ctx.statsMu.Unlock()
 
-	progressMsg := fmt.Sprintf("Progress: %d/%d (success: %d, failed: %d) %s elapsed",
-		done, total, success, failed, formatDuration(elapsed))
+	// Compute effective total: total packages to build minus already-built ones
+	totalToBuild := total - skippedPre
+	// Compute done: packages that completed (built or were already built)
+	done := success + failed + skippedPre
+
+	progressMsg := fmt.Sprintf("Progress: %d/%d (success: %d, failed: %d, pre-skipped: %d, dep-skipped: %d) %s elapsed",
+		done, totalToBuild, success, failed, skippedPre, skipped, formatDuration(elapsed))
 
 	ctx.logger.Debug(progressMsg)
 

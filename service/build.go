@@ -243,7 +243,7 @@ func runStatsFromBuild(stats *build.BuildStats) builddb.RunStats {
 		Total:   stats.Total,
 		Success: stats.Success,
 		Failed:  stats.Failed,
-		Skipped: stats.Skipped,
+		Skipped: stats.Skipped + stats.SkippedPre, // Aggregate both skip types
 		Ignored: stats.Ignored,
 	}
 }
