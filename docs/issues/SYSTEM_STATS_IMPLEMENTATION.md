@@ -548,8 +548,33 @@ adjustedLoad := loadavg[0] + float64(vmtotal.T_pw)
 
 ### Phase 3: Go Port Strategy for System Stats
 
-**Estimated Time**: 7 hours  
+**Estimated Time**: 8 hours  
 **Goal**: Implement idiomatic Go design with separated concerns
+
+**Key Architectural Decision: BuildDB-Backed Monitor Storage**
+
+Unlike dsynth's file-based `monitor.dat`, go-synth uses **BuildDB as the primary storage backend** for live build statistics:
+
+- **Single source of truth**: Each build run (UUID key) has a `LiveSnapshot` field containing JSON-encoded `TopInfo`
+- **In-place updates**: Updated every 1 second during the build (no per-second history)
+- **Durability**: Survives crashes (bbolt provides ACID guarantees)
+- **No filesystem dependencies**: Works in any environment without mount points
+- **Optional file export**: `monitor.dat` can be written for dsynth compatibility, but BuildDB is canonical
+- **Alpha-stage flexibility**: Can iterate on schema without migrations (no backward compatibility burden)
+
+**Benefits**:
+1. **Consistency**: Build state and live stats stored together in one database
+2. **Crash recovery**: `LiveSnapshot` persists; `ClearActiveLocks()` cleans up stale runs
+3. **Query API**: CLI tools read from `ActiveRunSnapshot()` instead of polling files
+4. **Thread-safe**: bbolt handles concurrent reads during builds
+5. **Testability**: Can mock BuildDB for unit tests without filesystem I/O
+
+**Consumers** (StatsCollector broadcasts to all):
+1. **BuildDBWriter** (primary) - Writes `TopInfo` to `RunRecord.LiveSnapshot` every 1s
+2. **BuildUI** - Updates ncurses/stdout display
+3. **MonitorWriter** (optional) - Writes dsynth-compatible file for external tools
+
+---
 
 #### 3a. Architecture: Separated Components (1 hour)
 
@@ -825,8 +850,8 @@ type StatsConsumer interface {
 }
 ```
 
-#### 3d. Hook Integration (1 hour)
-- **Task**: Modify `build/build.go` to create and use `StatsCollector` + `WorkerThrottler`
+#### 3d. Hook Integration (1.5 hours)
+- **Task**: Modify `build/build.go` to create and use `StatsCollector` + `WorkerThrottler` with BuildDB backend
 - **Changes**:
   ```go
   // build/build.go
@@ -837,6 +862,14 @@ type StatsConsumer interface {
   }
   
   func DoBuild(...) error {
+      // Generate run UUID
+      runID := uuid.New().String()
+      
+      // Start run in BuildDB
+      if err := buildDB.StartRun(runID, time.Now()); err != nil {
+          return fmt.Errorf("failed to start run: %w", err)
+      }
+      
       // Create stats collector
       statsCollector := stats.NewStatsCollector(buildCtx, cfg.MaxWorkers)
       defer statsCollector.Close()
@@ -850,20 +883,41 @@ type StatsConsumer interface {
           throttler: throttler,
       }
       
+      // Register BuildDB writer as PRIMARY consumer
+      builddbWriter := stats.NewBuildDBWriter(buildDB, runID)
+      ctx.stats.AddConsumer(builddbWriter)
+      
       // Register UI as consumer
       ctx.stats.AddConsumer(ctx.ui)
       
-      // Register monitor writer (if enabled)
-      if cfg.MonitorFile != "" {
-          monWriter := stats.NewMonitorWriter(cfg.MonitorFile)
-          ctx.stats.AddConsumer(monWriter)
-          defer monWriter.Close()
+      // Register file monitor writer (OPTIONAL, for dsynth compatibility)
+      if cfg.EnableMonitorFile {
+          monWriter, err := stats.NewMonitorWriter(cfg.MonitorFile)
+          if err != nil {
+              log.Printf("Warning: Failed to create monitor file: %v", err)
+          } else {
+              ctx.stats.AddConsumer(monWriter)
+              defer monWriter.Close()
+          }
       }
       
       // Initialize queue count
       ctx.stats.UpdateQueuedCount(len(packages))
       
       // ... rest of build
+      
+      // Finish run in BuildDB
+      defer func() {
+          snapshot := ctx.stats.GetSnapshot()
+          finalStats := builddb.RunStats{
+              Total:   snapshot.Built + snapshot.Failed + snapshot.Ignored + snapshot.Skipped,
+              Success: snapshot.Built,
+              Failed:  snapshot.Failed,
+              Skipped: snapshot.Skipped,
+              Ignored: snapshot.Ignored,
+          }
+          buildDB.FinishRun(runID, finalStats, time.Now(), ctx.aborted)
+      }()
   }
   
   // In buildPackage() - simplified event recording (NO bitwise flags):
@@ -910,7 +964,123 @@ type StatsConsumer interface {
 - No manual counter management in build code
 - BuildContext reads `DynMaxWorkers` from snapshot (throttler logic encapsulated)
 
-#### 3e. Monitor Writer & UI Consumers (1 hour)
+**BuildDB Integration Flow**:
+1. **Build Start**: Create run record with UUID, register BuildDB writer consumer
+2. **During Build**: StatsCollector calls `OnStatsUpdate()` every 1s → BuildDBWriter persists to `LiveSnapshot` field
+3. **Build End**: Call `FinishRun()` with final stats (success/failed/ignored counts)
+4. **Crash Recovery**: `LiveSnapshot` remains in database, `ClearActiveLocks()` marks run as aborted
+
+#### 3e. Stats Consumers (2 hours)
+
+**Design Decision**: BuildDB is the primary storage backend for live build statistics. File-based `monitor.dat` is optional for dsynth compatibility.
+
+**3e.1: BuildDB Snapshot Writer (Primary Consumer) - 1 hour**
+
+**API Additions to `builddb/runs.go`**:
+```go
+// UpdateRunSnapshot updates the live snapshot for an active build run.
+// This is called every 1 second during the build to provide real-time stats.
+// The snapshot is stored as JSON in the LiveSnapshot field of RunRecord.
+func (db *DB) UpdateRunSnapshot(runID string, snapshot TopInfo) error {
+    if runID == "" {
+        return &ValidationError{Field: "runID", Err: ErrEmptyUUID}
+    }
+    
+    return db.updateRunRecord(runID, func(rec *RunRecord) {
+        // Marshal snapshot to JSON
+        data, err := json.Marshal(snapshot)
+        if err != nil {
+            // Log error but don't fail the build
+            return
+        }
+        rec.LiveSnapshot = string(data)
+    })
+}
+
+// GetRunSnapshot fetches the current live snapshot for a build run.
+// Returns nil if no snapshot exists (build hasn't started stats collection yet).
+func (db *DB) GetRunSnapshot(runID string) (*TopInfo, error) {
+    rec, err := db.GetRun(runID)
+    if err != nil {
+        return nil, err
+    }
+    
+    if rec.LiveSnapshot == "" {
+        return nil, nil  // No snapshot yet
+    }
+    
+    var snapshot TopInfo
+    if err := json.Unmarshal([]byte(rec.LiveSnapshot), &snapshot); err != nil {
+        return nil, &RecordError{Op: "unmarshal snapshot", UUID: runID, Err: err}
+    }
+    return &snapshot, nil
+}
+
+// ActiveRunSnapshot returns the live snapshot for the currently active build run.
+// Returns (runID, snapshot, nil) if found, ("", nil, nil) if no active run.
+func (db *DB) ActiveRunSnapshot() (string, *TopInfo, error) {
+    runID, rec, err := db.ActiveRun()
+    if err != nil || rec == nil {
+        return "", nil, err
+    }
+    
+    if rec.LiveSnapshot == "" {
+        return runID, nil, nil  // Active but no snapshot yet
+    }
+    
+    var snapshot TopInfo
+    if err := json.Unmarshal([]byte(rec.LiveSnapshot), &snapshot); err != nil {
+        return "", nil, &RecordError{Op: "unmarshal snapshot", UUID: runID, Err: err}
+    }
+    return runID, &snapshot, nil
+}
+```
+
+**Schema Update to `builddb/runs.go`**:
+```go
+// RunRecord captures metadata for a go-synth build invocation.
+type RunRecord struct {
+    StartTime    time.Time `json:"start_time"`
+    EndTime      time.Time `json:"end_time"`
+    Aborted      bool      `json:"aborted"`
+    Stats        RunStats  `json:"stats"`
+    LiveSnapshot string    `json:"live_snapshot,omitempty"` // JSON-encoded TopInfo, updated every 1s during build
+}
+```
+
+**Consumer Implementation in `stats/builddb_writer.go`**:
+```go
+// BuildDBWriter implements StatsConsumer to persist live stats to BuildDB.
+type BuildDBWriter struct {
+    db    *builddb.DB
+    runID string
+}
+
+func NewBuildDBWriter(db *builddb.DB, runID string) *BuildDBWriter {
+    return &BuildDBWriter{db: db, runID: runID}
+}
+
+func (w *BuildDBWriter) OnStatsUpdate(info TopInfo) {
+    // Best-effort update - don't block build on DB errors
+    if err := w.db.UpdateRunSnapshot(w.runID, info); err != nil {
+        // Log warning but continue (stats update is non-critical)
+        log.Printf("Warning: Failed to update run snapshot: %v", err)
+    }
+}
+```
+
+**Rationale**:
+- **Single source of truth**: BuildDB owns the canonical build state
+- **Durability**: Survives process crashes (bbolt is crash-safe)
+- **No filesystem dependencies**: Works in any environment
+- **Alpha-stage flexibility**: Can iterate on schema without migrations
+- **In-place updates**: No per-second history, just current snapshot
+- **Non-blocking**: DB write failures don't interrupt builds
+
+**3e.2: File Monitor Writer (Optional Compatibility Layer) - 30 min**
+
+**Purpose**: Write dsynth-compatible `monitor.dat` for external tools.
+
 ```go
 // stats/monitor.go
 type MonitorWriter struct {
@@ -919,15 +1089,26 @@ type MonitorWriter struct {
     mu       sync.Mutex
 }
 
+func NewMonitorWriter(path string) (*MonitorWriter, error) {
+    return &MonitorWriter{
+        path:     path,
+        lockPath: path + ".lk",
+    }, nil
+}
+
 func (mw *MonitorWriter) OnStatsUpdate(info TopInfo) {
     mw.mu.Lock()
     defer mw.mu.Unlock()
     
     // Acquire flock on monitor.lk
-    lockFd := syscall.Open(mw.lockPath, os.O_CREATE|os.O_RDWR, 0644)
+    lockFd, err := syscall.Open(mw.lockPath, os.O_CREATE|os.O_RDWR, 0644)
+    if err != nil {
+        return  // Best-effort, don't fail build
+    }
+    defer syscall.Close(lockFd)
+    
     syscall.Flock(lockFd, syscall.LOCK_EX)
     defer syscall.Flock(lockFd, syscall.LOCK_UN)
-    defer syscall.Close(lockFd)
     
     // Write to temp file
     tmpPath := mw.path + ".tmp"
@@ -952,33 +1133,77 @@ Skipped=%d
     // Atomic rename
     os.Rename(tmpPath, mw.path)
 }
+
+func (mw *MonitorWriter) Close() error {
+    // Remove lock file
+    os.Remove(mw.lockPath)
+    return nil
+}
 ```
 
-**UI Consumer**: Already implemented via `BuildUI` interface - just call `ui.UpdateStats(info)`.
+**3e.3: UI Consumer (30 min)**
+
+Already implemented via `BuildUI` interface - just call `ui.UpdateStats(info)`.
+
+```go
+// build/ui.go
+type BuildUI interface {
+    // ... existing methods
+    OnStatsUpdate(info stats.TopInfo)  // Called every 1s with fresh snapshot
+}
+```
 
 #### 3f. Configuration & Testing (1 hour)
 - **Config Options**:
   ```ini
   [Global Configuration]
-  Enable_monitor=yes           # Write monitor.dat
+  # BuildDB stats always enabled (no opt-out)
+  
+  # Optional: Write dsynth-compatible monitor.dat file
+  Enable_monitor_file=no       # Default: disabled (use BuildDB)
   Monitor_file=/build/monitor.dat
-  Stats_update_freq=1          # Hz (fixed at 1, future: configurable)
+  
+  # Future: Stats update frequency (fixed at 1 Hz for now)
+  # Stats_update_freq=1
   ```
 
 - **Unit Tests**:
   - `stats/collector_test.go`: Test rate calculation with mock completions
   - `stats/metrics_test.go`: Mock sysctl calls, test adjloadavg/swap logic
   - `stats/monitor_test.go`: Verify file format matches original dsynth
+  - `stats/builddb_writer_test.go`: Verify BuildDB updates, error handling
 
 - **Integration Tests**:
-  - Build small port, verify stats update every second
+  - Build small port, verify stats update every second in BuildDB
+  - Query `ActiveRunSnapshot()` during build, verify data freshness
   - Simulate high load/swap, verify dynmax throttling
+  - Crash build mid-run, verify `LiveSnapshot` persists
+  - Call `ClearActiveLocks()`, verify aborted run state
+
+**Phase 3 Time Breakdown**:
+- 3a. Architecture (1 hour)
+- 3b. Metric Acquisition (2 hours)
+- 3c. Data Model (30 min)
+- 3d. Hook Integration (1.5 hours)
+- 3e. Stats Consumers (2 hours)
+- 3f. Configuration & Testing (1 hour)
+- **Total: 8 hours**
+
+**Phase 3 Deliverables**:
+1. `stats/collector.go` - StatsCollector with 1 Hz sampling loop
+2. `stats/types.go` - TopInfo, BuildStatus, StatsConsumer interface
+3. `stats/throttler.go` - WorkerThrottler with 3-cap algorithm
+4. `stats/metrics_bsd.go` - adjloadavg, swap percentage syscalls
+5. `stats/builddb_writer.go` - BuildDBWriter consumer (primary)
+6. `stats/monitor.go` - MonitorWriter consumer (optional compatibility)
+7. `builddb/runs.go` - Add `LiveSnapshot` field, `UpdateRunSnapshot()`, `GetRunSnapshot()`, `ActiveRunSnapshot()` APIs
+8. `build/build.go` - Integration with BuildContext, consumer registration, throttle checks
 
 ---
 
 ### Phase 4: Integrate Stats into UI/CLI Outputs
 
-**Estimated Time**: 4 hours
+**Estimated Time**: 4.5 hours
 
 #### 4.1 Define Unified TopInfo Payload (30 min)
 - ✅ **Completed in Phase 3c**: `TopInfo` struct defined
@@ -1029,20 +1254,85 @@ func (ui *StdoutUI) OnStatsUpdate(info stats.TopInfo) {
 }
 ```
 
-#### 4.4 Monitor/CLI Consumers (30 min)
-- **Monitor Writer**: Already implemented in Phase 3e
-- **CLI Consumer**: Add `go-synth status --watch` command
+#### 4.4 Monitor/CLI Consumers (1 hour)
+- **Monitor Writer**: Already implemented in Phase 3e (optional file-based layer)
+- **CLI Consumer**: Add `go-synth monitor` command to read from BuildDB
   ```go
-  // cmd/status.go
-  func watchMonitor(monitorPath string) {
+  // cmd/monitor.go
+  func doMonitor(cfg *config.Config) error {
+      db, err := builddb.Open(cfg.BuildDBPath)
+      if err != nil {
+          return fmt.Errorf("failed to open builddb: %w", err)
+      }
+      defer db.Close()
+      
+      // Watch mode - poll active run every second
+      ticker := time.NewTicker(1 * time.Second)
+      defer ticker.Stop()
+      
       for {
-          data, _ := ioutil.ReadFile(monitorPath)
-          // Parse monitor.dat and display
+          runID, snapshot, err := db.ActiveRunSnapshot()
+          if err != nil {
+              return err
+          }
+          
+          if snapshot == nil {
+              fmt.Println("No active build")
+              time.Sleep(5 * time.Second)
+              continue
+          }
+          
+          // Clear screen and display stats
+          fmt.Printf("\033[2J\033[H")  // ANSI clear screen
+          fmt.Printf("Build: %s\n", runID[:8])
+          fmt.Printf("Workers: %2d/%2d  Load: %4.2f  Swap: %2d%%  [DynMax: %d]\n",
+              snapshot.ActiveWorkers, snapshot.MaxWorkers,
+              snapshot.Load, snapshot.SwapPct, snapshot.DynMaxWorkers)
+          fmt.Printf("Elapsed: %s  Rate: %.1f pkg/hr  Impulse: %d\n",
+              formatDuration(snapshot.Elapsed), snapshot.Rate, snapshot.Impulse)
+          fmt.Printf("Queued: %d  Built: %d  Failed: %d  Ignored: %d  Skipped: %d\n",
+              snapshot.Queued, snapshot.Built, snapshot.Failed,
+              snapshot.Ignored, snapshot.Skipped)
+          
+          if snapshot.DynMaxWorkers < snapshot.MaxWorkers {
+              fmt.Printf("\n⚠️  Workers throttled due to high system load\n")
+          }
+          
+          <-ticker.C
+      }
+  }
+  ```
+
+**Optional File Monitor Support**:
+  ```go
+  // cmd/monitor.go --file mode
+  func watchMonitorFile(monitorPath string) {
+      for {
+          data, err := ioutil.ReadFile(monitorPath)
+          if err != nil {
+              fmt.Printf("Error reading monitor file: %v\n", err)
+              time.Sleep(1 * time.Second)
+              continue
+          }
+          
+          // Parse key=value format and display
           fmt.Print(string(data))
           time.Sleep(1 * time.Second)
       }
   }
   ```
+
+**CLI Interface**:
+```bash
+# Watch active build stats from BuildDB (default)
+go-synth monitor
+
+# Watch from legacy monitor.dat file (dsynth compatibility)
+go-synth monitor --file /build/monitor.dat
+
+# Export current snapshot to dsynth-compatible file
+go-synth monitor export /tmp/monitor.dat
+```
 
 #### 4.5 Dynamic Worker Feedback (30 min)
 - **Throttle Notification**: When `dynmax < max`, show warning
@@ -1616,24 +1906,29 @@ watch -n 1 cat /build/monitor.dat
 | Phase | Task | Estimated | Files Changed |
 |-------|------|-----------|---------------|
 | 1 | Source analysis | 3h | (docs only) |
-| 2 | C implementation review | 4h | (docs only) |
-| 3a | Collector architecture | 1.5h | `stats/collector.go` |
+| 2 | C implementation review | 3h | (docs only) |
+| 3a | Collector architecture | 1h | `stats/collector.go`, `stats/types.go`, `stats/throttler.go` |
 | 3b | Metric acquisition | 2h | `stats/metrics_bsd.go` |
 | 3c | Data model | 0.5h | `stats/types.go` |
-| 3d | Hook integration | 1h | `build/build.go` |
-| 3e | Monitor writer | 1h | `stats/monitor.go` |
-| 3f | Config & tests | 1h | `stats/*_test.go` |
+| 3d | Hook integration | 1.5h | `build/build.go` |
+| 3e | Stats consumers (BuildDB + file) | 2h | `stats/builddb_writer.go`, `stats/monitor.go`, `builddb/runs.go` |
+| 3f | Config & tests | 1h | `stats/*_test.go`, `config/config.go` |
 | 4.2 | Ncurses UI | 1.5h | `build/ui_ncurses.go` |
 | 4.3 | Stdout UI | 1h | `build/ui_stdout.go` |
-| 4.4 | CLI consumer | 0.5h | `cmd/status.go` |
+| 4.4 | CLI monitor command | 1h | `cmd/monitor.go` |
 | 4.5 | Throttle feedback | 0.5h | `build/ui*.go` |
 | 4.6 | UI testing | 1h | (manual) |
 | 5 | Rate/impulse (detailed) | 3h | (already in 3a) |
-| 6 | Monitor file (detailed) | 3h | (already in 3e) |
-| 7 | Docs & commits | 2h | `DEVELOPMENT.md`, etc. |
-| **Total** | | **27h** | ~10 files |
+| 6 | Monitor persistence | 3h | (already in 3e) |
+| 7 | Docs & commits | 2h | `DEVELOPMENT.md`, issue doc |
+| **Total** | | **27.5h** | ~12 files |
 
 **Note**: Phases 5 & 6 overlap with Phase 3, so total is not 34h.
+
+**Key Changes from Original dsynth**:
+- **BuildDB storage**: `RunRecord.LiveSnapshot` field stores JSON `TopInfo` (updated every 1s)
+- **File monitor optional**: `monitor.dat` is compatibility layer, not primary storage
+- **CLI reads from DB**: `go-synth monitor` queries `ActiveRunSnapshot()` API
 
 ---
 
