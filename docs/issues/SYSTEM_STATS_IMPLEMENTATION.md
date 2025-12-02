@@ -88,6 +88,28 @@ Skipped=5
 - Aggregated stats service collecting metrics from multiple hosts
 - Remote filesystem/mount orchestration or container-based workers
 
+### BuildDB-Backed Monitor Storage
+
+**Decision**: Store live monitoring data in BuildDB instead of writing `monitor.dat` files. The build run record owns a single `LiveSnapshot` field that is continuously updated during the build (no per-second history).
+
+**Rationale**:
+- **Single source of truth**: BuildDB already tracks build runs (UUID, start/end time, status, totals)
+- **Durability**: Survives crashes better than file writes; ACID transactions ensure consistency
+- **No filesystem dependencies**: Enables future REST API / remote monitoring without shared filesystems
+- **Simpler cleanup**: No orphaned monitor files to manage
+- **Alpha stage flexibility**: No legacy migration needed—design from scratch
+
+**Storage Model**:
+- Each `RunRecord` in BuildDB's `build_runs` bucket includes a `LiveSnapshot` field (JSON-encoded `stats.TopInfo`)
+- Updated in place every time stats change (1 Hz ticker or on completion events)
+- Only one snapshot per run—overwrites previous value (no historical snapshots stored)
+- Consumers poll `GetRunSnapshot(runID)` or `ActiveRunSnapshot()` for live updates
+
+**Backward Compatibility**:
+- Optional: `go-synth monitor export` can write dsynth-compatible `monitor.dat` from live snapshot
+- External tools migrate to polling BuildDB API instead of tailing file
+- Config flag `Enable_monitor_file=yes` can enable file export if needed temporarily
+
 ### Go Idioms Over C Patterns
 
 **Decision**: The Go port intentionally diverges from dsynth's C implementation patterns while preserving equivalent behavior.
@@ -128,13 +150,14 @@ Skipped=5
 - ✅ 60-second sliding window for rate calculation
 - ✅ Linear throttling formula (1.5-5.0×ncpus load, 10-40% swap)
 - ✅ Adjusted load average (`vm.vmtotal.t_pw`)
-- ✅ Monitor file format (for external tool compatibility)
+- ✅ Monitor data format/semantics (stored in BuildDB, optionally exported to file)
 - ✅ Event types (success/fail/skip/ignore semantics)
 
 **Intentionally Different**:
 - Implementation details (structs, interfaces, goroutines vs pthread)
 - Internal data organization (no global counters, no linked lists)
 - Type representations (Duration vs h/m/s, typed enums vs bitfields)
+- Storage mechanism (BuildDB per-run snapshot vs filesystem monitor.dat)
 
 ## Investigation Summary
 
