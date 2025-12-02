@@ -73,6 +73,7 @@ import (
 	"go-synth/pkg"
 
 	"github.com/google/uuid"
+	"golang.org/x/term"
 )
 
 // BuildStats tracks build statistics
@@ -118,6 +119,7 @@ type BuildContext struct {
 
 	runID    string
 	outputMu sync.Mutex
+	ui       BuildUI // UI for progress and event display
 }
 
 func ensureBuildBaseInitialized(cfg *config.Config) error {
@@ -195,6 +197,15 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		runID:     runID,
 	}
 
+	// Initialize UI based on configuration and TTY detection
+	// Use ncurses UI by default if stdout is a TTY and not disabled via -S flag
+	useNcurses := !cfg.DisableUI && term.IsTerminal(int(os.Stdout.Fd()))
+	if useNcurses {
+		ctx.ui = NewNcursesUI()
+	} else {
+		ctx.ui = NewStdoutUI()
+	}
+
 	// Create cleanup function that will access ctx.workers when called
 	// Note: ctx.workers will be populated after this function is created,
 	// but the closure captures the ctx pointer, so it will see the workers
@@ -231,6 +242,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		case <-time.After(5 * time.Second):
 			logger.Debug("Worker timeout (5s), proceeding anyway")
 			logger.Warn("Timeout waiting for workers to exit (5s), proceeding with cleanup anyway")
+		}
+
+		// Stop UI before cleaning up environments
+		if ctx.ui != nil {
+			ctx.ui.Stop()
 		}
 
 		logger.Debug("Starting environment cleanup")
@@ -355,6 +371,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		go ctx.workerLoop(ctx.workers[i])
 	}
 
+	// Start UI after workers are created
+	if err := ctx.ui.Start(); err != nil {
+		logger.Warn("Failed to start UI: %v", err)
+	}
+
 	// Queue packages in build order
 	go func() {
 		for _, p := range buildOrder {
@@ -397,9 +418,10 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Calculate duration
 	ctx.stats.Duration = time.Since(ctx.startTime)
 
-	ctx.outputMu.Lock()
-	fmt.Printf("\n")
-	ctx.outputMu.Unlock()
+	// Stop UI after all workers finish
+	if ctx.ui != nil {
+		ctx.ui.Stop()
+	}
 
 	// Don't call cleanup here - let the caller do it
 	// This allows proper cleanup on signals
@@ -638,42 +660,22 @@ func (ctx *BuildContext) waitForDependencies(p *pkg.Package) bool {
 	}
 }
 
-// printProgress logs current build progress and prints to stdout
+// printProgress updates UI with current build progress
 func (ctx *BuildContext) printProgress() {
-	ctx.outputMu.Lock()
-	defer ctx.outputMu.Unlock()
-	ctx.printProgressLocked()
-}
-
-func (ctx *BuildContext) printProgressLocked() {
 	ctx.statsMu.Lock()
-	success := ctx.stats.Success
-	failed := ctx.stats.Failed
-	skippedPre := ctx.stats.SkippedPre
-	skipped := ctx.stats.Skipped
-	total := ctx.stats.Total
+	stats := ctx.stats // Copy stats to avoid holding lock during UI update
 	elapsed := time.Since(ctx.startTime)
 	ctx.statsMu.Unlock()
 
-	// Compute done: packages that completed processing
-	// (built, failed, pre-skipped, or dep-skipped)
-	done := success + failed + skippedPre + skipped
-
-	progressMsg := fmt.Sprintf("Progress: %d/%d (success: %d, failed: %d, pre-skipped: %d, dep-skipped: %d) %s elapsed",
-		done, total, success, failed, skippedPre, skipped, formatDuration(elapsed))
-
-	ctx.logger.Debug(progressMsg)
-
-	fmt.Printf("\r%-80s", progressMsg)
+	if ctx.ui != nil {
+		ctx.ui.UpdateProgress(stats, formatDuration(elapsed))
+	}
 }
 
 func (ctx *BuildContext) logWorkerEvent(workerID int, message string) {
-	ctx.outputMu.Lock()
-	defer ctx.outputMu.Unlock()
-
-	event := fmt.Sprintf("[worker %d] %s", workerID, message)
-	fmt.Printf("\r%-80s\n", event)
-	ctx.printProgressLocked()
+	if ctx.ui != nil {
+		ctx.ui.LogEvent(workerID, message)
+	}
 }
 
 func (ctx *BuildContext) recordRunPackage(p *pkg.Package, status string, workerID int, start, end time.Time, lastPhase string) {
