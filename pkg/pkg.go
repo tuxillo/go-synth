@@ -723,6 +723,16 @@ func MarkPackagesNeedingBuild(packages []*Package, cfg *config.Config, registry 
 			needBuild++
 			logger.Info("  %s: needs rebuild", pkg.PortDir)
 		} else {
+			// CRC matches, but verify package file actually exists
+			if pkg.PkgFile != "" {
+				pkgPath := filepath.Join(cfg.PackagesPath, "All", pkg.PkgFile)
+				if _, err := os.Stat(pkgPath); os.IsNotExist(err) {
+					// Package file missing despite CRC match - rebuild needed
+					logger.Info("  %s: needs rebuild (package file missing)", pkg.PortDir)
+					needBuild++
+					continue
+				}
+			}
 			// Mark as already successful (no build needed)
 			registry.AddFlags(pkg, PkgFSuccess|PkgFPackaged)
 			logger.Info("  %s: up-to-date", pkg.PortDir)
