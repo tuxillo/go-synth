@@ -69,6 +69,73 @@ Skipped=5
 | **Elapsed** | Build duration | Start timestamp → now | 1 Hz |
 | **Totals** | Queued/Built/Failed/etc | Build state tracking | On state change |
 
+---
+
+## Architectural Decisions
+
+### Scope: Single-Host Execution Only
+
+**Decision**: This implementation targets single-host parity with original dsynth. Distributed builds (workers on different hosts) are explicitly out of scope.
+
+**Rationale**:
+- Original dsynth assumes all workers run on the same machine with shared memory/state
+- Current go-synth abstractions (Environment, BuildContext, worker management) assume local filesystem access and direct process spawning
+- Stats aggregation, logging, and cleanup logic rely on shared mutex and local state
+
+**Future Work**: Distributed runner support requires significant architectural extensions:
+- Remote execution layer for Environment abstraction
+- Network-based task queue and scheduler
+- Aggregated stats service collecting metrics from multiple hosts
+- Remote filesystem/mount orchestration or container-based workers
+
+### Go Idioms Over C Patterns
+
+**Decision**: The Go port intentionally diverges from dsynth's C implementation patterns while preserving equivalent behavior.
+
+**Divergences**:
+
+1. **No Bitwise Flags**
+   - **C Pattern**: `DLOG_SUCC | DLOG_GRN | DLOG_STDOUT` bitmask combinations, `PKGF_*` package flags
+   - **Go Approach**: Typed enums (`BuildStatus`, `PackageFlags`), explicit method calls
+   - **Rationale**: Go favors explicit types over bit manipulation; improves type safety and readability
+
+2. **Separation of Concerns**
+   - **C Pattern**: `waitbuild()` 1 Hz loop handles both stats collection AND dynamic throttling
+   - **Go Approach**: Two collaborating components:
+     - `StatsCollector`: Metrics collection, rate calculation, event ingestion
+     - `WorkerThrottler`: Consumes stats snapshot, decides `DynMaxWorkers`
+   - **Rationale**: Testability, clarity, single responsibility principle
+
+3. **Observer Pattern vs Function Pointers**
+   - **C Pattern**: Linked list of `runstats_t` with function pointer callbacks
+   - **Go Approach**: `StatsConsumer` interface with slice of subscribers
+   - **Rationale**: Go interfaces are idiomatic; no manual linked list management needed
+
+4. **Structured Events vs Message Passing**
+   - **C Pattern**: `RunStatsUpdateCompletion(work, DLOG_IGN, pkg, reason, skipbuf)` with complex parameters
+   - **Go Approach**: Simple typed methods: `RecordCompletion(status BuildStatus)`
+   - **Rationale**: StatsCollector owns counter logic internally; callers don't specify how to update
+
+5. **Data Types**
+   - **C Pattern**: Global counters (`BuildSuccessCount`), separate h/m/s integers for elapsed time
+   - **Go Approach**: All metrics in `TopInfo` struct, `time.Duration` for elapsed
+   - **Rationale**: Encapsulation, type safety, leveraging Go's standard library
+
+### Behavioral Fidelity
+
+**Preserved from dsynth**:
+- ✅ 1 Hz metric sampling frequency
+- ✅ 60-second sliding window for rate calculation
+- ✅ Linear throttling formula (1.5-5.0×ncpus load, 10-40% swap)
+- ✅ Adjusted load average (`vm.vmtotal.t_pw`)
+- ✅ Monitor file format (for external tool compatibility)
+- ✅ Event types (success/fail/skip/ignore semantics)
+
+**Intentionally Different**:
+- Implementation details (structs, interfaces, goroutines vs pthread)
+- Internal data organization (no global counters, no linked lists)
+- Type representations (Duration vs h/m/s, typed enums vs bitfields)
+
 ## Investigation Summary
 
 ### Step 1: Original dsynth Source Analysis
@@ -237,63 +304,79 @@ Impulse = buckets[currentBucket] = 4 (in last second)
 
 ---
 
-### Phase 2: Review C Implementation - Metrics & Data Flow
+### Phase 2: Review C Implementation - Behavior Extraction
 
-**Estimated Time**: 4 hours  
-**Depends On**: Phase 1d (upstream source fetch)
+**Estimated Time**: 3 hours  
+**Depends On**: Phase 1 (completed), upstream source fetch (monitor.c, curses.c, getswappct)  
+**Goal**: Extract **what** dsynth does (behavior, semantics, thresholds), not **how** (C patterns)
 
-#### 2a. Track RunStats Hooks (1 hour)
-- **Task**: Document all `runstats.*()` call contexts
-- **Deliverable**: Call graph showing init → update loop → sync → done lifecycle
-- **Focus Areas**:
-  - When is `topinfo` populated vs passed to callbacks?
-  - Threading model: is `topinfo` shared across threads?
-  - Lock requirements for stat updates
+**Important**: Focus on behavioral fidelity, not implementation mirroring. Document the observable behavior, data flow semantics, and file formats—NOT C-specific patterns like linked lists, bit flags, or global counters.
 
-#### 2b. Decode topinfo_t Population (1 hour)
-- **Task**: Analyze `waitbuild()` throttling logic in detail
+#### 2a. Behavioral Semantics (1 hour)
+- **Task**: Document the *meaning* of each metric and event type
+- **Deliverables**:
+  - What triggers a completion event (success/fail/skip/ignore)?
+  - When does active worker count change (start/complete/freeze)?
+  - How does rate/impulse relate to completion timestamps?
+- **Ignore**: C function signatures, struct layouts, pointer semantics
+- **Capture**: Event semantics, state transitions, metric relationships
+
+#### 2b. Throttling Behavior (45 min)
+- **Task**: Extract the exact throttling formula and edge cases
 - **Questions**:
-  - Exact formula for `dynmax` calculation (75% vs 50% reduction logic)
-  - Hysteresis behavior (does it ramp up gradually or jump back to max?)
-  - Edge cases (what if load drops while swap is high?)
+  - ✅ **Answered (Step 1)**: Linear interpolation 1.5-5.0×ncpus (load), 10-40% (swap), reduce TO 25%
+  - How does throttling interact with memory-based limits?
+  - Does throttling ramp up immediately when load/swap drops, or gradually?
+  - What happens if both load AND swap exceed thresholds simultaneously? (take minimum)
+- **Deliverable**: Throttling algorithm in pseudocode (language-agnostic)
 
-#### 2c. Instrumentation Functions (1 hour)
-- **Task**: Study `adjloadavg()`, `getswappct()`, watchdog scaling
-- **adjloadavg()**: Verify `vm.vmtotal.t_pw` extraction
-- **getswappct()**: Document kvm vs sysctl approach (Go should use sysctl)
-- **Watchdog**: Check if dsynth has timeout/stall detection using stats
+#### 2c. Monitor File Format (45 min)
+- **Task**: Document monitor.dat exact format from monitor.c
+- **Questions**:
+  - Line-based key=value? Binary format?
+  - Field ordering, precision (e.g., swap as 0.02 or 2?)
+  - Locking mechanism (flock on monitor.lk?)
+  - Update frequency (every tick? batched?)
+- **Deliverable**: Spec for monitor.dat that external tools can parse
 
-#### 2d. Worker Status Flow (30 min)
-- **Task**: Follow WMSG status updates from worker → build.c → runstats
-- **WMSG Types**: RUNNING, SUCCESS, FAILURE, IGNORED, SKIPPED
-- **Question**: When does `topinfo.active` increment/decrement?
+#### 2d. System Metric Acquisition (30 min)
+- **Task**: Document BSD syscalls/APIs for load and swap from getswappct() source
+- **Metrics**:
+  - Load: `getloadavg()` + `sysctlbyname("vm.vmtotal")` → extract `t_pw` field
+  - Swap: Document actual implementation (kvm_getswapinfo? vm.swap_info sysctl?)
+- **Deliverable**: Pseudocode or syscall sequence for Go equivalents
 
-#### 2e. Missing Source Recon (30 min)
-- **Task**: List all missing implementations from upstream
-- **Files Needed**:
-  - `monitor.c` - File format (line-based text? JSON?)
-  - `curses.c` - Panel layout (how many lines/columns for stats?)
-  - Any helper utilities for rate calculation
+#### 2e. Data Type Corrections (15 min)
+- **Task**: Verify actual C types from Step 1 findings
+- **Corrections** (from Step 1 analysis):
+  - Rate/Impulse: `int` (not float64)
+  - Swap: `double` 0-1.0 (convert to percentage 0-100 for display)
+  - Elapsed: separate h/m/s `int` fields (Go should use Duration, convert for display)
+- **Deliverable**: Updated metric table with correct types
 
-#### 2f. Summarize Metrics & Update Frequency (1 hour)
-- **Deliverable**: Comprehensive table with:
-  - Metric name, type, source function, update frequency, threading notes
-- **Example**:
-  | Metric | Type | Source | Frequency | Notes |
-  |--------|------|--------|-----------|-------|
-  | Load | float64 | adjloadavg() | 1 Hz | Add vm.vmtotal.t_pw |
-  | Swap | int | getswappct() | 1 Hz | Use sysctl in Go |
-  | Rate | float64 | completion events | 1 Hz | 60s sliding window |
+#### 2f. Intentional Divergence Documentation (15 min)
+- **Task**: List all planned Go divergences from C implementation
+- **Examples**:
+  - No bitwise DLOG flags → typed BuildStatus enum
+  - No global counters → TopInfo struct encapsulation
+  - Separate StatsCollector + WorkerThrottler → not mixed in one loop
+- **Deliverable**: "Divergences from C Implementation" section in this doc
 
 ---
 
 ### Phase 3: Go Port Strategy for System Stats
 
-**Estimated Time**: 6 hours
+**Estimated Time**: 7 hours  
+**Goal**: Implement idiomatic Go design with separated concerns
 
-#### 3a. Collector Architecture (1.5 hours)
+#### 3a. Architecture: Separated Components (1 hour)
+
+**Design Decision**: Split stats collection from worker throttling (unlike dsynth's combined `waitbuild()` loop).
+
+**Component 1: StatsCollector**
+- **Responsibility**: Collect metrics, track events, notify consumers
 - **Package**: `stats/` (new)
-- **Core Type**: `StatsCollector` struct
+- **Core Type**:
   ```go
   type StatsCollector struct {
       mu            sync.RWMutex
@@ -311,13 +394,16 @@ Impulse = buckets[currentBucket] = 4 (in last second)
 - **Public API**:
   ```go
   // Initialize and start 1 Hz sampling loop
-  func NewStatsCollector(ctx context.Context) *StatsCollector
+  func NewStatsCollector(ctx context.Context, maxWorkers int) *StatsCollector
 
-  // Record package completion (updates rate/impulse)
-  func (sc *StatsCollector) RecordCompletion(pkg *pkg.Package, status BuildStatus)
+  // Record package completion (updates rate/impulse, build totals)
+  func (sc *StatsCollector) RecordCompletion(status BuildStatus)
 
-  // Update worker status (active count, current package)
-  func (sc *StatsCollector) RecordWorkerUpdate(workerID int, status WorkerStatus, pkgName string)
+  // Update active worker count
+  func (sc *StatsCollector) UpdateWorkerCount(active int)
+
+  // Update build queue size
+  func (sc *StatsCollector) UpdateQueuedCount(queued int)
 
   // Get current snapshot (thread-safe read)
   func (sc *StatsCollector) GetSnapshot() TopInfo
@@ -338,11 +424,77 @@ Impulse = buckets[currentBucket] = 4 (in last second)
   func (sc *StatsCollector) sampleSystemMetrics()
 
   // Calculate rate from ring buffer
-  func (sc *StatsCollector) calculateRate() float64
+  func (sc *StatsCollector) calculateRate() int  // Returns int (packages/hour)
 
   // Notify all consumers with updated TopInfo
   func (sc *StatsCollector) notifyConsumers()
   ```
+
+**Component 2: WorkerThrottler**
+- **Responsibility**: Calculate dynamic max workers based on system health
+- **Package**: `stats/` or `build/`
+- **Core Type**:
+  ```go
+  type WorkerThrottler struct {
+      maxWorkers int
+      ncpus      int
+  }
+  ```
+
+- **Public API**:
+  ```go
+  // Create throttler with configured max workers
+  func NewWorkerThrottler(maxWorkers int) *WorkerThrottler
+
+  // Calculate dynamic limit based on current metrics
+  func (wt *WorkerThrottler) CalculateDynMax(load float64, swapPct int, memoryPressure bool) int
+  ```
+
+- **Throttling Algorithm** (pure function):
+  ```go
+  func calculateThrottle(maxWorkers, ncpus int, load float64, swapPct int) int {
+      minLoad := 1.5 * float64(ncpus)
+      maxLoad := 5.0 * float64(ncpus)
+      
+      // Load-based cap (linear interpolation)
+      loadCap := maxWorkers
+      if load >= minLoad {
+          if load >= maxLoad {
+              loadCap = maxWorkers / 4  // 75% reduction
+          } else {
+              ratio := (load - minLoad) / (maxLoad - minLoad)
+              loadCap = maxWorkers - int(float64(maxWorkers)*0.75*ratio)
+          }
+      }
+      
+      // Swap-based cap (linear interpolation)
+      swapCap := maxWorkers
+      if swapPct >= 10 {
+          if swapPct >= 40 {
+              swapCap = maxWorkers / 4  // 75% reduction
+          } else {
+              ratio := float64(swapPct-10) / 30.0
+              swapCap = maxWorkers - int(float64(maxWorkers)*0.75*ratio)
+          }
+      }
+      
+      // Return minimum of both caps
+      if loadCap < swapCap {
+          return loadCap
+      }
+      return swapCap
+  }
+  ```
+
+**Integration**:
+- StatsCollector samples metrics and calculates `DynMaxWorkers` using WorkerThrottler
+- BuildContext reads `TopInfo.DynMaxWorkers` to decide whether to start new workers
+- Separation allows independent testing of throttling logic
+
+**Rationale**:
+- **Testability**: Can unit-test throttle calculation without stats infrastructure
+- **Clarity**: Single responsibility—stats collect, throttler decides
+- **Flexibility**: Can swap throttling algorithms without touching stats collection
 
 #### 3b. Metric Acquisition (2 hours)
 
@@ -431,16 +583,21 @@ func (sc *StatsCollector) getImpulse() int {
 ```go
 // stats/types.go
 
-// TopInfo mirrors dsynth's topinfo_t
+// TopInfo contains real-time build statistics
+// Data types chosen based on Step 1 C analysis with Go adaptations:
+// - Rate: int in C (pkgrate), using int for display parity
+// - Swap: double 0-1.0 in C (dswap), using int 0-100 percentage for clarity
+// - Elapsed: h/m/s ints in C, using Duration (convert for display)
 type TopInfo struct {
     ActiveWorkers   int       // Currently building
     MaxWorkers      int       // Configured max
     DynMaxWorkers   int       // Dynamic max (throttled)
     
-    Load            float64   // Adjusted 1-min load
-    SwapPct         int       // Swap usage percentage
+    Load            float64   // Adjusted 1-min load average
+    SwapPct         int       // Swap usage percentage (0-100)
+    NoSwap          bool      // True if no swap configured
     
-    Rate            float64   // Packages/hour (60s window)
+    Rate            int       // Packages/hour (60s window)
     Impulse         int       // Instant completions/sec
     
     Elapsed         time.Duration  // Time since build start
@@ -452,40 +609,63 @@ type TopInfo struct {
     Failed          int
     Ignored         int
     Skipped         int
-    Remaining       int  // Queued - (Built + Failed + Ignored)
+    Meta            int       // Metaports
+    Remaining       int       // Calculated: Queued - (Built + Failed + Ignored)
 }
 
-// WorkerStatus for per-worker tracking
-type WorkerStatus int
+// BuildStatus replaces C's DLOG_* bitwise flags with typed enum
+type BuildStatus int
 const (
-    WorkerIdle WorkerStatus = iota
-    WorkerRunning
-    WorkerWaiting
+    BuildSuccess BuildStatus = iota  // DLOG_SUCC
+    BuildFailed                       // DLOG_FAIL
+    BuildIgnored                      // DLOG_IGN
+    BuildSkipped                      // DLOG_SKIP
 )
 
-// StatsConsumer interface for UI/monitor writer
+func (bs BuildStatus) String() string {
+    switch bs {
+    case BuildSuccess:
+        return "success"
+    case BuildFailed:
+        return "failed"
+    case BuildIgnored:
+        return "ignored"
+    case BuildSkipped:
+        return "skipped"
+    default:
+        return "unknown"
+    }
+}
+
+// StatsConsumer interface for UI/monitor writer (replaces runstats_t callbacks)
 type StatsConsumer interface {
     OnStatsUpdate(info TopInfo)
 }
 ```
 
 #### 3d. Hook Integration (1 hour)
-- **Task**: Modify `build/build.go` to create and use `StatsCollector`
+- **Task**: Modify `build/build.go` to create and use `StatsCollector` + `WorkerThrottler`
 - **Changes**:
   ```go
   // build/build.go
   type BuildContext struct {
       // ... existing fields
-      stats *stats.StatsCollector  // NEW
+      stats     *stats.StatsCollector  // NEW: Metrics collection
+      throttler *stats.WorkerThrottler  // NEW: Dynamic worker limits
   }
   
   func DoBuild(...) error {
-      statsCollector := stats.NewStatsCollector(buildCtx)
+      // Create stats collector
+      statsCollector := stats.NewStatsCollector(buildCtx, cfg.MaxWorkers)
       defer statsCollector.Close()
+      
+      // Create throttler
+      throttler := stats.NewWorkerThrottler(cfg.MaxWorkers)
       
       ctx := &BuildContext{
           // ...
-          stats: statsCollector,
+          stats:     statsCollector,
+          throttler: throttler,
       }
       
       // Register UI as consumer
@@ -498,24 +678,55 @@ type StatsConsumer interface {
           defer monWriter.Close()
       }
       
+      // Initialize queue count
+      ctx.stats.UpdateQueuedCount(len(packages))
+      
       // ... rest of build
   }
   
-  // In buildPackage():
+  // In buildPackage() - simplified event recording (NO bitwise flags):
   func (ctx *BuildContext) buildPackage(p *pkg.Package) {
-      ctx.stats.RecordWorkerUpdate(workerID, stats.WorkerRunning, p.PortDir)
+      // Worker started
+      ctx.stats.UpdateWorkerCount(ctx.activeWorkers)
       
       // ... execute build phases
       
+      // Record completion with typed enum
+      var status stats.BuildStatus
       if success {
-          ctx.stats.RecordCompletion(p, stats.BuildSuccess)
+          status = stats.BuildSuccess
+      } else if ignored {
+          status = stats.BuildIgnored
+      } else if skipped {
+          status = stats.BuildSkipped
       } else {
-          ctx.stats.RecordCompletion(p, stats.BuildFailed)
+          status = stats.BuildFailed
+      }
+      ctx.stats.RecordCompletion(status)
+      
+      // Worker finished
+      ctx.stats.UpdateWorkerCount(ctx.activeWorkers)
+  }
+  
+  // In worker assignment loop - check throttle limit:
+  func (ctx *BuildContext) assignWork() {
+      snapshot := ctx.stats.GetSnapshot()
+      
+      // Check if we can start new worker
+      if ctx.activeWorkers >= snapshot.DynMaxWorkers {
+          // Throttled - wait for worker to complete
+          continue
       }
       
-      ctx.stats.RecordWorkerUpdate(workerID, stats.WorkerIdle, "")
+      // Start worker...
   }
   ```
+
+**Key Simplifications**:
+- No complex `RecordCompletion(worker, DLOG_IGN, pkg, reason, skipbuf)` - just `RecordCompletion(BuildIgnored)`
+- StatsCollector internally updates counters based on status
+- No manual counter management in build code
+- BuildContext reads `DynMaxWorkers` from snapshot (throttler logic encapsulated)
 
 #### 3e. Monitor Writer & UI Consumers (1 hour)
 ```go
