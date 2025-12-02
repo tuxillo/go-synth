@@ -206,6 +206,22 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		ctx.ui = NewStdoutUI()
 	}
 
+	// Set up interrupt handler for ncurses UI (Ctrl+C handling)
+	// This will be called when the cleanup function is created below
+	var setupInterruptHandler func(cleanup func())
+	if ncursesUI, ok := ctx.ui.(*NcursesUI); ok {
+		setupInterruptHandler = func(cleanup func()) {
+			ncursesUI.SetInterruptHandler(func() {
+				// Cancel build context
+				if ctx.cancel != nil {
+					ctx.cancel()
+				}
+				// Run cleanup
+				cleanup()
+			})
+		}
+	}
+
 	// Create cleanup function that will access ctx.workers when called
 	// Note: ctx.workers will be populated after this function is created,
 	// but the closure captures the ctx pointer, so it will see the workers
@@ -268,6 +284,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// The cleanup function captures ctx pointer, so it will see workers when they're created
 	if onCleanupReady != nil {
 		onCleanupReady(cleanup)
+	}
+
+	// Setup interrupt handler for ncurses UI now that cleanup is ready
+	if setupInterruptHandler != nil {
+		setupInterruptHandler(cleanup)
 	}
 
 	// Count all packages in the build order

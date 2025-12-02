@@ -21,6 +21,7 @@ type NcursesUI struct {
 	maxEventLines int
 	stopChan      chan struct{}
 	stopped       bool
+	onInterrupt   func() // Callback for Ctrl+C handling
 }
 
 // NewNcursesUI creates a new ncurses-based UI
@@ -29,6 +30,13 @@ func NewNcursesUI() *NcursesUI {
 		maxEventLines: 100,
 		stopChan:      make(chan struct{}),
 	}
+}
+
+// SetInterruptHandler sets a callback to be called when Ctrl+C is pressed
+func (ui *NcursesUI) SetInterruptHandler(handler func()) {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	ui.onInterrupt = handler
 }
 
 // Start initializes the ncurses UI
@@ -73,12 +81,28 @@ func (ui *NcursesUI) Start() error {
 	ui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyCtrlC:
+			// Stop the UI first
 			ui.app.Stop()
+			// Trigger interrupt handler if set (for cleanup)
+			ui.mu.Lock()
+			handler := ui.onInterrupt
+			ui.mu.Unlock()
+			if handler != nil {
+				go handler()
+			}
 			return nil
 		case tcell.KeyRune:
 			switch event.Rune() {
 			case 'q', 'Q':
+				// Stop the UI first
 				ui.app.Stop()
+				// Trigger interrupt handler if set (for cleanup)
+				ui.mu.Lock()
+				handler := ui.onInterrupt
+				ui.mu.Unlock()
+				if handler != nil {
+					go handler()
+				}
 				return nil
 			}
 		}
@@ -130,7 +154,6 @@ func (ui *NcursesUI) UpdateProgress(stats BuildStats, elapsed string) {
 	// Update header
 	headerText := fmt.Sprintf("[yellow]Building:[white] %d/%d packages | [green]Elapsed:[white] %s",
 		done, stats.Total, elapsed)
-	ui.headerText.SetText(headerText)
 
 	// Update progress section
 	progressText := fmt.Sprintf(
@@ -143,9 +166,12 @@ func (ui *NcursesUI) UpdateProgress(stats BuildStats, elapsed string) {
 		stats.SkippedPre,
 		stats.Skipped,
 	)
-	ui.progressText.SetText(progressText)
 
-	ui.app.Draw()
+	// Queue updates on the UI thread (thread-safe)
+	ui.app.QueueUpdateDraw(func() {
+		ui.headerText.SetText(headerText)
+		ui.progressText.SetText(progressText)
+	})
 }
 
 // LogEvent logs a worker event
@@ -168,15 +194,15 @@ func (ui *NcursesUI) LogEvent(workerID int, message string) {
 		ui.eventLines = ui.eventLines[1:]
 	}
 
-	// Update the events text view
+	// Build events text
 	eventsText := ""
 	for _, line := range ui.eventLines {
 		eventsText += line + "\n"
 	}
-	ui.eventsText.SetText(eventsText)
 
-	// Scroll to bottom
-	ui.eventsText.ScrollToEnd()
-
-	ui.app.Draw()
+	// Queue updates on the UI thread (thread-safe)
+	ui.app.QueueUpdateDraw(func() {
+		ui.eventsText.SetText(eventsText)
+		ui.eventsText.ScrollToEnd()
+	})
 }
