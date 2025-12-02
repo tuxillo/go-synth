@@ -51,7 +51,8 @@ func (s *Service) Build(opts BuildOptions) (*BuildResult, error) {
 	}
 
 	// Mark packages needing build (CRC-based incremental builds)
-	needBuild, err := s.markNeedingBuild(packages, opts.Force)
+	registry := pkg.NewBuildStateRegistry()
+	needBuild, err := s.markNeedingBuildWithRegistry(packages, opts.Force, registry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check build status: %w", err)
 	}
@@ -91,7 +92,7 @@ func (s *Service) Build(opts BuildOptions) (*BuildResult, error) {
 	// Execute the build
 	// Pass a callback that will be called as soon as the cleanup function is available
 	// This ensures signal handlers can access it immediately when workers are created
-	stats, cleanup, err := build.DoBuild(packages, s.cfg, s.logger, s.db, func(cleanupFn func()) {
+	stats, cleanup, err := build.DoBuild(packages, s.cfg, s.logger, s.db, registry, func(cleanupFn func()) {
 		// Store cleanup function immediately when workers are created
 		s.SetActiveCleanup(cleanupFn)
 	}, runID)
@@ -177,7 +178,11 @@ func (s *Service) parseAndResolve(portList []string) ([]*pkg.Package, error) {
 // Returns the number of packages that need building.
 func (s *Service) markNeedingBuild(packages []*pkg.Package, force bool) (int, error) {
 	registry := pkg.NewBuildStateRegistry()
+	return s.markNeedingBuildWithRegistry(packages, force, registry)
+}
 
+// markNeedingBuildWithRegistry is like markNeedingBuild but uses the provided registry.
+func (s *Service) markNeedingBuildWithRegistry(packages []*pkg.Package, force bool, registry *pkg.BuildStateRegistry) (int, error) {
 	// If force is enabled, all packages need to be rebuilt
 	if force {
 		// Clear PkgFPackaged flag for all packages to force rebuild

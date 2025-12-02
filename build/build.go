@@ -170,7 +170,7 @@ func ensureBuildBaseInitialized(cfg *config.Config) error {
 //  3. Execute build phases
 //  4. UpdateRecordStatus to "success" or "failed"
 //  5. Update CRC and package index (on success only)
-func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB, onCleanupReady func(func()), runID string) (*BuildStats, func(), error) {
+func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, buildDB *builddb.DB, registry *pkg.BuildStateRegistry, onCleanupReady func(func()), runID string) (*BuildStats, func(), error) {
 	// Get build order (topological sort)
 	buildOrder := pkg.GetBuildOrder(packages, logger)
 
@@ -178,12 +178,17 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// When cancelled (e.g., via signal handler), workers will exit their loops
 	buildCtx, cancel := context.WithCancel(context.Background())
 
+	// Use provided registry if given, otherwise create new one
+	if registry == nil {
+		registry = pkg.NewBuildStateRegistry()
+	}
+
 	ctx := &BuildContext{
 		ctx:       buildCtx,
 		cancel:    cancel,
 		cfg:       cfg,
 		logger:    logger,
-		registry:  pkg.NewBuildStateRegistry(),
+		registry:  registry,
 		buildDB:   buildDB,
 		queue:     make(chan *pkg.Package, 100),
 		startTime: time.Now(),
