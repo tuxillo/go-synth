@@ -1122,3 +1122,220 @@ func TestConcurrentAccess(t *testing.T) {
 		}
 	})
 }
+
+// TestUpdateRunSnapshot tests updating live snapshot data
+func TestUpdateRunSnapshot(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("update_snapshot_success", func(t *testing.T) {
+		// Create a run first
+		runID := "run-snapshot-1"
+		if err := db.StartRun(runID, time.Now()); err != nil {
+			t.Fatalf("StartRun failed: %v", err)
+		}
+
+		// Update snapshot
+		snapshotJSON := `{"load":3.24,"swap_pct":2,"active":4}`
+		if err := db.UpdateRunSnapshot(runID, snapshotJSON); err != nil {
+			t.Fatalf("UpdateRunSnapshot failed: %v", err)
+		}
+
+		// Verify snapshot was stored
+		snapshot, err := db.GetRunSnapshot(runID)
+		if err != nil {
+			t.Fatalf("GetRunSnapshot failed: %v", err)
+		}
+		if snapshot != snapshotJSON {
+			t.Errorf("GetRunSnapshot() = %q, want %q", snapshot, snapshotJSON)
+		}
+	})
+
+	t.Run("update_snapshot_multiple_times", func(t *testing.T) {
+		runID := "run-snapshot-2"
+		if err := db.StartRun(runID, time.Now()); err != nil {
+			t.Fatalf("StartRun failed: %v", err)
+		}
+
+		// Update snapshot multiple times (simulating 1 Hz updates)
+		snapshots := []string{
+			`{"active":0,"built":0}`,
+			`{"active":2,"built":5}`,
+			`{"active":4,"built":12}`,
+		}
+
+		for i, snap := range snapshots {
+			if err := db.UpdateRunSnapshot(runID, snap); err != nil {
+				t.Fatalf("UpdateRunSnapshot iteration %d failed: %v", i, err)
+			}
+		}
+
+		// Should have latest snapshot only
+		snapshot, err := db.GetRunSnapshot(runID)
+		if err != nil {
+			t.Fatalf("GetRunSnapshot failed: %v", err)
+		}
+		if snapshot != snapshots[len(snapshots)-1] {
+			t.Errorf("GetRunSnapshot() = %q, want %q", snapshot, snapshots[len(snapshots)-1])
+		}
+	})
+
+	t.Run("update_snapshot_empty_runid", func(t *testing.T) {
+		err := db.UpdateRunSnapshot("", "snapshot")
+		if err == nil {
+			t.Error("UpdateRunSnapshot with empty runID should fail")
+		}
+
+		// Check error type
+		if _, ok := err.(*ValidationError); !ok {
+			t.Errorf("Expected ValidationError, got %T", err)
+		}
+	})
+
+	t.Run("update_snapshot_nonexistent_run", func(t *testing.T) {
+		err := db.UpdateRunSnapshot("nonexistent-run", "snapshot")
+		if err == nil {
+			t.Error("UpdateRunSnapshot with nonexistent run should fail")
+		}
+
+		// Check error type
+		if _, ok := err.(*RecordError); !ok {
+			t.Errorf("Expected RecordError, got %T", err)
+		}
+	})
+}
+
+// TestGetRunSnapshot tests retrieving snapshot data
+func TestGetRunSnapshot(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("get_snapshot_exists", func(t *testing.T) {
+		runID := "run-get-1"
+		if err := db.StartRun(runID, time.Now()); err != nil {
+			t.Fatalf("StartRun failed: %v", err)
+		}
+
+		snapshotJSON := `{"load":1.5}`
+		if err := db.UpdateRunSnapshot(runID, snapshotJSON); err != nil {
+			t.Fatalf("UpdateRunSnapshot failed: %v", err)
+		}
+
+		snapshot, err := db.GetRunSnapshot(runID)
+		if err != nil {
+			t.Fatalf("GetRunSnapshot failed: %v", err)
+		}
+		if snapshot != snapshotJSON {
+			t.Errorf("GetRunSnapshot() = %q, want %q", snapshot, snapshotJSON)
+		}
+	})
+
+	t.Run("get_snapshot_no_snapshot_yet", func(t *testing.T) {
+		runID := "run-get-2"
+		if err := db.StartRun(runID, time.Now()); err != nil {
+			t.Fatalf("StartRun failed: %v", err)
+		}
+
+		// No snapshot updated yet
+		snapshot, err := db.GetRunSnapshot(runID)
+		if err != nil {
+			t.Fatalf("GetRunSnapshot failed: %v", err)
+		}
+		if snapshot != "" {
+			t.Errorf("GetRunSnapshot() = %q, want empty string", snapshot)
+		}
+	})
+
+	t.Run("get_snapshot_empty_runid", func(t *testing.T) {
+		_, err := db.GetRunSnapshot("")
+		if err == nil {
+			t.Error("GetRunSnapshot with empty runID should fail")
+		}
+	})
+
+	t.Run("get_snapshot_nonexistent_run", func(t *testing.T) {
+		_, err := db.GetRunSnapshot("nonexistent-run")
+		if err == nil {
+			t.Error("GetRunSnapshot with nonexistent run should fail")
+		}
+	})
+}
+
+// TestActiveRunSnapshot tests retrieving active run snapshot
+func TestActiveRunSnapshot(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("active_run_with_snapshot", func(t *testing.T) {
+		runID := "active-run-1"
+		if err := db.StartRun(runID, time.Now()); err != nil {
+			t.Fatalf("StartRun failed: %v", err)
+		}
+
+		snapshotJSON := `{"active":2,"built":10}`
+		if err := db.UpdateRunSnapshot(runID, snapshotJSON); err != nil {
+			t.Fatalf("UpdateRunSnapshot failed: %v", err)
+		}
+
+		gotRunID, snapshot, err := db.ActiveRunSnapshot()
+		if err != nil {
+			t.Fatalf("ActiveRunSnapshot failed: %v", err)
+		}
+		if gotRunID != runID {
+			t.Errorf("ActiveRunSnapshot runID = %q, want %q", gotRunID, runID)
+		}
+		if snapshot != snapshotJSON {
+			t.Errorf("ActiveRunSnapshot snapshot = %q, want %q", snapshot, snapshotJSON)
+		}
+	})
+
+	t.Run("active_run_no_snapshot_yet", func(t *testing.T) {
+		// Clean previous run
+		db.Close()
+		db, _ = setupTestDB(t)
+		defer db.Close()
+
+		runID := "active-run-2"
+		if err := db.StartRun(runID, time.Now()); err != nil {
+			t.Fatalf("StartRun failed: %v", err)
+		}
+
+		gotRunID, snapshot, err := db.ActiveRunSnapshot()
+		if err != nil {
+			t.Fatalf("ActiveRunSnapshot failed: %v", err)
+		}
+		if gotRunID != runID {
+			t.Errorf("ActiveRunSnapshot runID = %q, want %q", gotRunID, runID)
+		}
+		if snapshot != "" {
+			t.Errorf("ActiveRunSnapshot snapshot = %q, want empty", snapshot)
+		}
+	})
+
+	t.Run("no_active_run", func(t *testing.T) {
+		// Clean previous runs
+		db.Close()
+		db, _ = setupTestDB(t)
+		defer db.Close()
+
+		// Finish all runs
+		runID := "finished-run"
+		if err := db.StartRun(runID, time.Now()); err != nil {
+			t.Fatalf("StartRun failed: %v", err)
+		}
+		if err := db.FinishRun(runID, RunStats{}, time.Now(), false); err != nil {
+			t.Fatalf("FinishRun failed: %v", err)
+		}
+
+		gotRunID, snapshot, err := db.ActiveRunSnapshot()
+		if err != nil {
+			t.Fatalf("ActiveRunSnapshot failed: %v", err)
+		}
+		if gotRunID != "" {
+			t.Errorf("ActiveRunSnapshot with no active run returned runID = %q, want empty", gotRunID)
+		}
+		if snapshot != "" {
+			t.Errorf("ActiveRunSnapshot with no active run returned snapshot = %q, want empty", snapshot)
+		}
+	})
+}

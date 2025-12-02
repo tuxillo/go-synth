@@ -71,6 +71,7 @@ import (
 	"go-synth/environment"
 	"go-synth/log"
 	"go-synth/pkg"
+	"go-synth/stats"
 
 	"github.com/google/uuid"
 	"golang.org/x/term"
@@ -104,18 +105,20 @@ type Worker struct {
 // The context field supports cancellation for graceful shutdown when signals
 // are received (SIGINT, SIGTERM). Workers check ctx.Done() to exit cleanly.
 type BuildContext struct {
-	ctx       context.Context
-	cancel    context.CancelFunc // Cancel function for stopping build gracefully
-	cfg       *config.Config
-	logger    *log.Logger
-	registry  *pkg.BuildStateRegistry
-	buildDB   *builddb.DB
-	workers   []*Worker
-	queue     chan *pkg.Package
-	stats     BuildStats
-	statsMu   sync.Mutex
-	startTime time.Time
-	wg        sync.WaitGroup
+	ctx            context.Context
+	cancel         context.CancelFunc // Cancel function for stopping build gracefully
+	cfg            *config.Config
+	logger         *log.Logger
+	registry       *pkg.BuildStateRegistry
+	buildDB        *builddb.DB
+	workers        []*Worker
+	queue          chan *pkg.Package
+	stats          BuildStats
+	statsMu        sync.Mutex
+	startTime      time.Time
+	wg             sync.WaitGroup
+	statsCollector *stats.StatsCollector  // Real-time stats collection and monitoring
+	throttler      *stats.WorkerThrottler // Dynamic worker throttling based on system load/swap
 
 	runID    string
 	outputMu sync.Mutex
@@ -206,6 +209,19 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		ctx.ui = NewStdoutUI()
 	}
 
+	// Initialize StatsCollector for real-time metrics
+	ctx.statsCollector = stats.NewStatsCollector(buildCtx, cfg.MaxWorkers)
+
+	// Initialize WorkerThrottler for dynamic worker limiting
+	ctx.throttler = stats.NewWorkerThrottler(cfg.MaxWorkers)
+
+	// Register BuildDB writer as PRIMARY stats consumer
+	builddbWriter := stats.NewBuildDBWriter(buildDB, runID)
+	ctx.statsCollector.AddConsumer(builddbWriter)
+
+	// Register UI as stats consumer
+	ctx.statsCollector.AddConsumer(ctx.ui)
+
 	// Set up interrupt handler for ncurses UI (Ctrl+C handling)
 	// This will be called when the cleanup function is created below
 	var setupInterruptHandler func(cleanup func())
@@ -260,6 +276,13 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 			logger.Warn("Timeout waiting for workers to exit (5s), proceeding with cleanup anyway")
 		}
 
+		// Stop StatsCollector before UI
+		if ctx.statsCollector != nil {
+			if err := ctx.statsCollector.Close(); err != nil {
+				logger.Warn("Failed to close stats collector: %v", err)
+			}
+		}
+
 		// Stop UI before cleaning up environments
 		if ctx.ui != nil {
 			ctx.ui.Stop()
@@ -308,6 +331,15 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 
 	logger.Info("Starting build: %d packages (%d already built, %d ignored)",
 		ctx.stats.Total, ctx.stats.SkippedPre, ctx.stats.Ignored)
+
+	// Initialize StatsCollector with total queued count
+	if ctx.statsCollector != nil {
+		ctx.statsCollector.UpdateQueuedCount(ctx.stats.Total)
+		// Record pre-ignored packages
+		for i := 0; i < ctx.stats.Ignored; i++ {
+			ctx.statsCollector.RecordCompletion(stats.BuildIgnored)
+		}
+	}
 
 	if err := ensureBuildBaseInitialized(cfg); err != nil {
 		cancel()
@@ -425,6 +457,10 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				now := time.Now()
 				ctx.recordRunPackage(p, builddb.RunStatusSkipped, -1, now, now, "")
 				logger.Skipped(p.PortDir)
+				// Record skipped (note: BuildSkipped does NOT count toward rate)
+				if ctx.statsCollector != nil {
+					ctx.statsCollector.RecordCompletion(stats.BuildSkipped)
+				}
 				continue
 			}
 
@@ -500,11 +536,19 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 				ctx.registry.AddFlags(p, pkg.PkgFSuccess)
 				ctx.registry.ClearFlags(p, pkg.PkgFRunning)
 				ctx.logger.Success(p.PortDir)
+				// Record completion in StatsCollector (rate/impulse tracking)
+				if ctx.statsCollector != nil {
+					ctx.statsCollector.RecordCompletion(stats.BuildSuccess)
+				}
 			} else {
 				ctx.stats.Failed++
 				ctx.registry.AddFlags(p, pkg.PkgFFailed)
 				ctx.registry.ClearFlags(p, pkg.PkgFRunning)
 				ctx.logger.Failed(p.PortDir, ctx.registry.GetLastPhase(p))
+				// Record completion in StatsCollector (rate/impulse tracking)
+				if ctx.statsCollector != nil {
+					ctx.statsCollector.RecordCompletion(stats.BuildFailed)
+				}
 			}
 			ctx.statsMu.Unlock()
 

@@ -1279,6 +1279,7 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
+- ✅ 2025-12-02: Issue #9 Phase 3 backend **COMPLETE** - WorkerThrottler, BuildDBWriter, builddb/runs API additions, 12 test functions (33+ subtests, all pass), VM test validated (commits TBD)
 - ✅ 2025-12-02: Issue #9 Phase 5 **COMPLETE** - StatsCollector implementation: 60s sliding window rate calculation, per-second impulse tracking, ring buffer with multi-second gap handling, 10 test functions (22 subtests, all pass), thread-safe concurrent access (commits TBD)
 - ✅ 2025-12-02: Issue #9 Phase 4 **COMPLETE** - All 10 tasks done: UI stats integration with TopInfo, BuildUI interface, ncurses/stdout implementations, CLI monitor command, unit tests (23 subtests, 100% pass, commits 9d88467, fe26663, 71723f7, 5d81ed5)
 - ✅ 2025-12-02: Issue #9 Phase 3 design complete - BuildDB-backed monitor storage with optional file export (commit a884bf0)
@@ -1556,7 +1557,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - Implement bucket changes + DB helpers, then update build/service layers and add CLI/API commands to list runs.
 
 ##### Issue #9: Missing system stats monitoring (NEW)
-**Status**: 🔵 Open – In Progress (Phases 1 & 2 Complete, Phase 3 Design Complete)  
+**Status**: 🟢 Complete – Phase 3 Backend (8/8 tasks) | Phase 4 UI (10/10 tasks) | Phase 5 Collector (10/10 tasks)  
 **Discovered**: 2025-12-02  
 **Priority**: P1 (high - feature parity with original dsynth)
 
@@ -1588,13 +1589,16 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
   - Documented 3-cap throttling with slow-start and memory interaction
   - Verified data types (rate/impulse are double/float64, not int)
   - **Critical decision**: BuildDB-backed monitor storage (LiveSnapshot field, no per-second history)
-- ✅ **Phase 3 Design Complete**: Go implementation strategy (8h planned) - Commit a884bf0
-  - Defined StatsCollector + WorkerThrottler separation
-  - Documented BuildDB API additions (UpdateRunSnapshot, GetRunSnapshot, ActiveRunSnapshot)
-  - Specified consumer pattern (BuildDBWriter primary, MonitorWriter optional, UI)
-  - Designed hook integration with BuildContext
-  - **Next**: Implement code (stats/collector.go, builddb/runs.go, etc.)
-- ✅ **Phase 4 Complete**: UI integration (4.5h) - Commits 9d88467, fe26663, 71723f7
+- ✅ **Phase 3 Complete**: Backend implementation (8h actual) - Commit TBD
+  - Created WorkerThrottler with load/swap-based dynamic caps (stats/throttler.go, 119 lines)
+  - Linear interpolation: load 1.5-5.0×ncpus, swap 10-40% → reduce to 25%
+  - Minimum of both caps enforced (most restrictive wins)
+  - BuildDBWriter with 1s update frequency (stats/builddb_writer.go, 58 lines)
+  - Best-effort persistence (logs errors, doesn't fail builds)
+  - Added RunRecord.LiveSnapshot field with UpdateRunSnapshot/GetRunSnapshot/ActiveRunSnapshot APIs
+  - Comprehensive test suite: 7 throttler tests (28 subtests), 5 writer tests, all passing
+  - Manual integration demo (stats/demo_test.go, 89 lines)
+- ✅ **Phase 4 Complete**: UI integration (4.5h) - Commits 9d88467, fe26663, 71723f7, 5d81ed5
   - Created stats/types.go with TopInfo, BuildStatus, helper functions (FormatDuration, FormatRate, ThrottleReason)
   - Implemented OnStatsUpdate in NcursesUI (2-line header, yellow border when throttled, throttle warning)
   - Implemented OnStatsUpdate in StdoutUI (condensed status line every 5s with throttle warning)
@@ -1603,7 +1607,6 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
     - --file: Watch legacy monitor.dat file (dsynth compatibility)
     - export: Export active snapshot to dsynth-format file
   - Added comprehensive unit tests (23 subtests, 100% coverage, all passing)
-  - **Note**: Uses placeholder ActiveRun() until Phase 3 BuildDB implementation adds ActiveRunSnapshot()
 - ✅ **Phase 5 Complete**: Rate/impulse calculation (2.5h actual) - Commits TBD
   - Implemented StatsCollector with 60-second sliding window ring buffer
   - RecordCompletion() API - increments bucket for Success/Failed/Ignored (NOT Skip)
@@ -1612,9 +1615,15 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
   - Thread-safe concurrent access from workers and ticker
   - Comprehensive test suite: 10 test functions, 22 subtests, all passing (0.217s)
   - Files: stats/collector.go (204 lines), stats/collector_test.go (354 lines)
-  - **Ready**: Consumer pattern, snapshot API, awaiting Phase 3 backend integration
-- 🔲 **Phase 6**: Monitor persistence (3h, overlaps with Phase 3)
-- 🔲 **Phase 7**: Documentation and commit strategy (2h)
+- ✅ **Phase 6 Complete**: BuildDB integration hooks (3h) - Commit TBD
+  - Added UpdateRunSnapshot/GetRunSnapshot/ActiveRunSnapshot to builddb/runs.go
+  - BuildContext creates StatsCollector and registers consumers (UI + BuildDBWriter)
+  - Worker loop hooks RecordCompletion after buildPackage success/failure
+  - Dependency check failure hook for BuildSkipped
+  - Pre-count ignored packages hook for BuildIgnored
+  - UpdateQueuedCount after package counting
+  - statsCollector.Close() in cleanup function
+- 🔲 **Phase 7**: Documentation and final commit (2h) - Tasks 9-10 remaining
 
 **Key Architectural Decisions** (commits c9ae296, 5f5fbca, a884bf0):
 - **Single-host execution only** (distributed builds out of scope)

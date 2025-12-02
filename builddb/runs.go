@@ -28,10 +28,11 @@ type RunStats struct {
 
 // RunRecord captures metadata for a go-synth build invocation.
 type RunRecord struct {
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-	Aborted   bool      `json:"aborted"`
-	Stats     RunStats  `json:"stats"`
+	StartTime    time.Time `json:"start_time"`
+	EndTime      time.Time `json:"end_time"`
+	Aborted      bool      `json:"aborted"`
+	Stats        RunStats  `json:"stats"`
+	LiveSnapshot string    `json:"live_snapshot,omitempty"` // JSON-encoded TopInfo, updated every 1s during build
 }
 
 // RunPackageRecord represents a port build that ran within a build run.
@@ -276,4 +277,41 @@ func (db *DB) updateRunRecord(runID string, mutate func(*RunRecord)) error {
 
 		return bucket.Put([]byte(runID), updated)
 	})
+}
+
+// UpdateRunSnapshot updates the live snapshot for an active build run.
+// This is called every 1 second during the build to provide real-time stats.
+// The snapshot is stored as JSON in the LiveSnapshot field of RunRecord.
+//
+// This is a best-effort operation - errors are returned but should not fail the build.
+func (db *DB) UpdateRunSnapshot(runID string, snapshot string) error {
+	if runID == "" {
+		return &ValidationError{Field: "runID", Err: ErrEmptyUUID}
+	}
+
+	return db.updateRunRecord(runID, func(rec *RunRecord) {
+		rec.LiveSnapshot = snapshot
+	})
+}
+
+// GetRunSnapshot fetches the current live snapshot for a build run.
+// Returns empty string if no snapshot exists (build hasn't started stats collection yet).
+func (db *DB) GetRunSnapshot(runID string) (string, error) {
+	rec, err := db.GetRun(runID)
+	if err != nil {
+		return "", err
+	}
+
+	return rec.LiveSnapshot, nil
+}
+
+// ActiveRunSnapshot returns the live snapshot for the currently active build run.
+// Returns (runID, snapshot, nil) if found, ("", "", nil) if no active run.
+func (db *DB) ActiveRunSnapshot() (string, string, error) {
+	runID, rec, err := db.ActiveRun()
+	if err != nil || rec == nil {
+		return "", "", err
+	}
+
+	return runID, rec.LiveSnapshot, nil
 }
