@@ -1414,9 +1414,14 @@ go-synth monitor export /tmp/monitor.dat
 
 ---
 
-### Phase 5: Package Rate & Impulse (Expanded)
+### Phase 5: Package Rate & Impulse (Expanded) ✅
 
-**Estimated Time**: 3 hours
+**Status**: 🟢 COMPLETE  
+**Estimated Time**: 3 hours  
+**Actual Time**: ~2.5 hours  
+**Completion Date**: 2025-12-02
+
+**Summary**: Implemented StatsCollector with 60-second sliding window rate calculation and per-second impulse tracking. Ring buffer advances every second, handling multi-second gaps gracefully. All event recording, bucket management, and consumer notification working. Comprehensive test suite with 10 test functions covering rate math, impulse tracking, bucket advancement, and thread safety.
 
 #### 5a. Define Metrics (15 min)
 - **Impulse**: Instant completions in current 1-second bucket
@@ -1600,6 +1605,52 @@ func TestImpulseTracking(t *testing.T) {
     assert.Equal(t, 5, sc.topInfo.Impulse)
 }
 ```
+
+---
+
+**Phase 5 Deliverables (Complete)**:
+
+1. ✅ **stats/collector.go** (204 lines)
+   - StatsCollector struct with 60-element ring buffer
+   - NewStatsCollector() - Creates collector, starts 1 Hz sampling loop
+   - RecordCompletion(status) - Records package completions, ignores SKIP
+   - UpdateWorkerCount()/UpdateQueuedCount() - Helper update methods
+   - GetSnapshot() - Thread-safe TopInfo copy
+   - AddConsumer() - Register stats consumers
+   - run() - 1 Hz sampling goroutine
+   - tick() - Per-second sampling logic
+   - advanceBucketLocked() - Handles multi-second gaps gracefully
+   - calculateRateLocked() - Sum buckets × 60 for pkg/hr
+
+2. ✅ **stats/collector_test.go** (354 lines)
+   - 10 test functions with 22 subtests total
+   - TestRateCalculation - Empty, burst, sustained, partial, varying (5 subtests)
+   - TestImpulseTracking - Verifies previous bucket reflection
+   - TestBucketAdvance - Rollover and clearing
+   - TestBucketAdvanceMultiSecondGap - Long pause handling
+   - TestSkippedNotCounted - SKIP doesn't increment rate
+   - TestUpdateMethods - Worker/queued count updates
+   - TestElapsedTime - Duration calculation
+   - TestRemainingCalculation - Queued - (Built + Failed + Ignored)
+   - TestConsumerNotification - Observer pattern
+   - TestConcurrentAccess - Thread safety under load
+   - All tests passing (0.217s runtime)
+
+**Implementation Notes**:
+- Ring buffer automatically wraps at index 59→0
+- Multi-second gaps (system pauses) handled by advancing N buckets
+- Impulse shows *previous* bucket (current is still accumulating)
+- Rate = sum of all 60 buckets × 60 (packages/hour)
+- BuildSkipped does NOT count toward rate (not actual work)
+- BuildSuccess/Failed/Ignored all count as completions
+- Thread-safe with RWMutex for concurrent worker access
+- Consumer notifications outside lock to avoid blocking
+
+**Integration Points** (Awaiting Phase 3 Backend Implementation):
+- Build context calls RecordCompletion() after each package
+- Build context calls UpdateWorkerCount() on worker start/stop
+- Build context registers UI/BuildDB/monitor consumers
+- Ticker runs for entire build duration, stopped at Close()
 
 ---
 

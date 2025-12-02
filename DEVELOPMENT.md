@@ -1279,7 +1279,8 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
-- ✅ 2025-12-02: Issue #9 Phase 4 **COMPLETE** - All 10 tasks done: UI stats integration with TopInfo, BuildUI interface, ncurses/stdout implementations, CLI monitor command, unit tests (23 subtests, 100% pass, commits 9d88467, fe26663, 71723f7)
+- ✅ 2025-12-02: Issue #9 Phase 5 **COMPLETE** - StatsCollector implementation: 60s sliding window rate calculation, per-second impulse tracking, ring buffer with multi-second gap handling, 10 test functions (22 subtests, all pass), thread-safe concurrent access (commits TBD)
+- ✅ 2025-12-02: Issue #9 Phase 4 **COMPLETE** - All 10 tasks done: UI stats integration with TopInfo, BuildUI interface, ncurses/stdout implementations, CLI monitor command, unit tests (23 subtests, 100% pass, commits 9d88467, fe26663, 71723f7, 5d81ed5)
 - ✅ 2025-12-02: Issue #9 Phase 3 design complete - BuildDB-backed monitor storage with optional file export (commit a884bf0)
 - ✅ 2025-12-02: Issue #9 Phase 2 complete - BuildDB storage decision, 3-cap throttling, data type verification (commits 5f5fbca, 2fe33cc)
 - ✅ 2025-12-02: Issue #9 architectural decisions documented - Go idioms over C patterns (commit c9ae296)
@@ -1603,7 +1604,15 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
     - export: Export active snapshot to dsynth-format file
   - Added comprehensive unit tests (23 subtests, 100% coverage, all passing)
   - **Note**: Uses placeholder ActiveRun() until Phase 3 BuildDB implementation adds ActiveRunSnapshot()
-- 🔲 **Phase 5**: Rate/impulse calculation (3h, overlaps with Phase 3)
+- ✅ **Phase 5 Complete**: Rate/impulse calculation (2.5h actual) - Commits TBD
+  - Implemented StatsCollector with 60-second sliding window ring buffer
+  - RecordCompletion() API - increments bucket for Success/Failed/Ignored (NOT Skip)
+  - 1 Hz sampling loop with automatic bucket advancement
+  - Handles multi-second gaps gracefully (system pauses)
+  - Thread-safe concurrent access from workers and ticker
+  - Comprehensive test suite: 10 test functions, 22 subtests, all passing (0.217s)
+  - Files: stats/collector.go (204 lines), stats/collector_test.go (354 lines)
+  - **Ready**: Consumer pattern, snapshot API, awaiting Phase 3 backend integration
 - 🔲 **Phase 6**: Monitor persistence (3h, overlaps with Phase 3)
 - 🔲 **Phase 7**: Documentation and commit strategy (2h)
 
