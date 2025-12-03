@@ -534,7 +534,14 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	allPackages := pkgRegistry.AllPackages()
 	t.Logf("Total packages to build (including dependencies): %d", len(allPackages))
 
-	// Log package statuses
+	// Mark packages needing build (CRITICAL: must be called before DoBuild)
+	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, stateRegistry, db, logger)
+	if err != nil {
+		t.Fatalf("Failed to mark packages needing build: %v", err)
+	}
+	t.Logf("Packages needing build: %d", needBuild)
+
+	// Log package statuses after marking
 	for _, p := range allPackages {
 		flags := stateRegistry.GetFlags(p)
 		t.Logf("Package %s: flags=%d", p.PortDir, flags)
