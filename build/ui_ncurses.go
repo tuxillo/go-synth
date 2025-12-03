@@ -21,7 +21,6 @@ type NcursesUI struct {
 	mu            sync.Mutex
 	eventLines    []string
 	maxEventLines int
-	stopChan      chan struct{}
 	stopped       bool
 	onInterrupt   func() // Callback for Ctrl+C handling
 }
@@ -30,7 +29,6 @@ type NcursesUI struct {
 func NewNcursesUI() *NcursesUI {
 	return &NcursesUI{
 		maxEventLines: 100,
-		stopChan:      make(chan struct{}),
 	}
 }
 
