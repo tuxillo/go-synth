@@ -530,13 +530,19 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 		t.Fatalf("Failed to resolve dependencies: %v", err)
 	}
 
-	// Get all packages including dependencies
+	// Get all packages for logging
 	allPackages := pkgRegistry.AllPackages()
 	t.Logf("Total packages to build (including dependencies): %d", len(allPackages))
+	t.Logf("Packages slice after ResolveDependencies: %d", len(packages))
+
+	// Verify packages and allPackages have the same items
+	if len(packages) != len(allPackages) {
+		t.Logf("WARNING: packages (%d) and allPackages (%d) have different lengths!", len(packages), len(allPackages))
+	}
 
 	// Mark packages needing build (CRITICAL: must be called before DoBuild)
-	// IMPORTANT: Pass allPackages, not just packages, to check dependencies too
-	needBuild, err := pkg.MarkPackagesNeedingBuild(allPackages, cfg, stateRegistry, db, logger)
+	// Use packages (head list) which contains full dependency graph through links
+	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, stateRegistry, db, logger)
 	if err != nil {
 		t.Fatalf("Failed to mark packages needing build: %v", err)
 	}
@@ -550,6 +556,8 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 
 	// Record worker directories before build starts
 	buildBase := cfg.BuildBase
+	t.Logf("Build base directory: %s", buildBase)
+	t.Logf("Looking for worker directories matching: %s", filepath.Join(buildBase, "SL*"))
 
 	// Start build in goroutine so we can cancel it
 	buildDone := make(chan struct{})
@@ -559,7 +567,8 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 
 	go func() {
 		defer close(buildDone)
-		buildStats, buildCleanup, buildErr = DoBuild(allPackages, cfg, logger, db, stateRegistry, nil, "")
+		// Use packages (head list) not allPackages, following cmd/build.go pattern
+		buildStats, buildCleanup, buildErr = DoBuild(packages, cfg, logger, db, stateRegistry, nil, "")
 	}()
 
 	// Wait for builds to start - check for worker directories
@@ -577,7 +586,19 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 		}
 
 		time.Sleep(500 * time.Millisecond)
-		workerDirs, _ := filepath.Glob(filepath.Join(buildBase, "SL.*"))
+		workerDirs, _ := filepath.Glob(filepath.Join(buildBase, "SL*"))
+		if i == 0 || i == 5 || i == 10 {
+			t.Logf("Attempt %d: checking for worker dirs, found: %d", i+1, len(workerDirs))
+			if len(workerDirs) == 0 {
+				// Debug: list what's actually in buildBase
+				entries, _ := os.ReadDir(buildBase)
+				dirNames := make([]string, len(entries))
+				for idx, e := range entries {
+					dirNames[idx] = e.Name()
+				}
+				t.Logf("  Contents of %s: %v", buildBase, dirNames)
+			}
+		}
 		if len(workerDirs) > 0 {
 			t.Logf("Found %d worker directories - workers have started", len(workerDirs))
 			workerStarted = true
@@ -593,7 +614,7 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Take snapshot of worker directories before cancellation
-	workerDirsBefore, err := filepath.Glob(filepath.Join(buildBase, "SL.*"))
+	workerDirsBefore, err := filepath.Glob(filepath.Join(buildBase, "SL*"))
 	if err != nil {
 		t.Fatalf("Failed to check for worker directories before cancellation: %v", err)
 	}
@@ -632,7 +653,7 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	}
 
 	// CRITICAL: Verify no worker directories are left mounted
-	workerDirsAfter, err := filepath.Glob(filepath.Join(buildBase, "SL.*"))
+	workerDirsAfter, err := filepath.Glob(filepath.Join(buildBase, "SL*"))
 	if err != nil {
 		t.Fatalf("Failed to check for worker directories after cancellation: %v", err)
 	}
