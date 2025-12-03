@@ -486,16 +486,20 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 		t.Skip("Requires root privileges")
 	}
 
-	// Check if ports tree exists
-	if _, err := os.Stat("/usr/ports"); os.IsNotExist(err) {
-		t.Skip("Requires /usr/ports tree")
+	// Check if ports tree exists (DragonFly uses /usr/dports, FreeBSD uses /usr/ports)
+	portsDir := "/usr/dports"
+	if _, err := os.Stat(portsDir); os.IsNotExist(err) {
+		portsDir = "/usr/ports"
+		if _, err := os.Stat(portsDir); os.IsNotExist(err) {
+			t.Skip("Requires /usr/dports or /usr/ports tree")
+		}
 	}
 
 	db, cfg, logger, cleanup := setupTestBuild(t)
 	t.Cleanup(cleanup)
 
 	// Use real ports directory instead of test directory
-	cfg.DPortsPath = "/usr/ports"
+	cfg.DPortsPath = portsDir
 
 	// Use multiple workers to test concurrent cancellation
 	cfg.MaxWorkers = 3
