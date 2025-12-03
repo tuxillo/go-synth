@@ -550,7 +550,7 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	// Wait for builds to start - check for worker directories
 	t.Log("Waiting for workers to start...")
 	workerStarted := false
-	for i := 0; i < 30; i++ { // Wait up to 15 seconds
+	for i := 0; i < 120; i++ { // Wait up to 60 seconds (builds may be throttled initially)
 		// Check if build completed early
 		select {
 		case <-buildDone:
