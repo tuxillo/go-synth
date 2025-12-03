@@ -500,6 +500,7 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 
 	// Use real ports directory instead of test directory
 	cfg.DPortsPath = portsDir
+	cfg.DistFilesPath = "/usr/distfiles" // Use system distfiles directory
 
 	// Use multiple workers to test concurrent cancellation
 	cfg.MaxWorkers = 3
