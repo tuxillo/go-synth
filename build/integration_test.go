@@ -492,42 +492,15 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	cfg.MaxWorkers = 3
 	cfg.Debug = true
 
-	// Create test ports with artificial delay to ensure builds are in progress
-	// when we cancel. We use a sleep in the install phase.
-	for i := 1; i <= 4; i++ {
+	// Create many test ports so some will still be queued when we cancel.
+	// With 3 workers and 12 ports, at least 9 ports will be queued initially.
+	numPorts := 12
+	portSpecs := make([]string, numPorts)
+
+	for i := 1; i <= numPorts; i++ {
 		portName := fmt.Sprintf("testport-cancel-%d", i)
-		portDir := createTestPort(t, cfg.DPortsPath, "misc", portName)
-
-		// Modify Makefile to add a sleep in the install phase
-		makefilePath := filepath.Join(portDir, "Makefile")
-		makefileContent := fmt.Sprintf(`# Test port: misc/%s
-PORTNAME=	%s
-PORTVERSION=	1.0.0
-CATEGORIES=	misc
-
-MAINTAINER=	test@example.com
-COMMENT=	Test port for cancellation tests
-
-NO_BUILD=	yes
-
-do-install:
-	@${ECHO} "Installing test port"
-	@/bin/sleep 5
-	@${ECHO} "Installation complete"
-
-.include <bsd.port.mk>
-`, portName, portName)
-
-		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0644); err != nil {
-			t.Fatalf("Failed to modify Makefile: %v", err)
-		}
-	}
-
-	portSpecs := []string{
-		"misc/testport-cancel-1",
-		"misc/testport-cancel-2",
-		"misc/testport-cancel-3",
-		"misc/testport-cancel-4",
+		portSpecs[i-1] = fmt.Sprintf("misc/%s", portName)
+		createTestPort(t, cfg.DPortsPath, "misc", portName)
 	}
 
 	// Parse all ports
@@ -592,8 +565,9 @@ do-install:
 		t.Fatal("Workers did not start within 10 seconds")
 	}
 
-	// Let builds progress for a moment to ensure they're mid-execution
-	time.Sleep(1 * time.Second)
+	// Let builds progress briefly - with 12 ports and 3 workers,
+	// some builds will be in progress and others queued
+	time.Sleep(200 * time.Millisecond)
 
 	// Take snapshot of worker directories before cancellation
 	workerDirsBefore, err := filepath.Glob(filepath.Join(buildBase, "SL*"))
