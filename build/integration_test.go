@@ -535,7 +535,8 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	t.Logf("Total packages to build (including dependencies): %d", len(allPackages))
 
 	// Mark packages needing build (CRITICAL: must be called before DoBuild)
-	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, stateRegistry, db, logger)
+	// IMPORTANT: Pass allPackages, not just packages, to check dependencies too
+	needBuild, err := pkg.MarkPackagesNeedingBuild(allPackages, cfg, stateRegistry, db, logger)
 	if err != nil {
 		t.Fatalf("Failed to mark packages needing build: %v", err)
 	}
