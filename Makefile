@@ -186,6 +186,14 @@ vm-test-integration-e2e: vm-build
 	@echo "==> Running E2E integration tests in VM (requires BSD)..."
 	@$(VM_SSH) 'cd /root/go-synth && go test -v -tags=integration ./integration_e2e_test.go'
 
+vm-test-build-integration: vm-build
+	@echo "==> Running build integration tests in VM (requires root + /usr/ports)..."
+	@$(VM_SSH) 'cd /root/go-synth && go test -v ./build/ -run "TestIntegration"'
+
+vm-test-build-cancellation: vm-build
+	@echo "==> Running build cancellation test in VM (requires root + /usr/ports)..."
+	@$(VM_SSH) 'cd /root/go-synth && go test -v ./build/ -run "TestIntegration_BuildCancellation"'
+
 vm-test-phase4: vm-build
 	@echo "==> Running Phase 4 tests in VM (requires root + mount)..."
 	@$(VM_SSH) 'cd /root/go-synth && doas go test -v ./internal/worker/...'
@@ -229,15 +237,17 @@ vm-help:
 	@echo "  vm-clean-phases  Remove temporary phase ISOs"
 	@echo ""
 	@echo "TESTING:"
-	@echo "  vm-sync                Sync project files to VM"
-	@echo "  vm-build               Build go-synth in VM"
-	@echo "  vm-test-unit           Run unit tests"
-	@echo "  vm-test-integration    Run integration tests (tags=integration)"
-	@echo "  vm-test-integration-e2e Run E2E integration tests (requires BSD)"
-	@echo "  vm-test-phase4         Run Phase 4 tests (mount, chroot)"
-	@echo "  vm-test-e2e            Run end-to-end tests (tags=e2e)"
-	@echo "  vm-test-all            Run all tests (unit + integration + phase4)"
-	@echo "  vm-quick               Quick cycle: sync + Phase 4 tests"
+	@echo "  vm-sync                     Sync project files to VM"
+	@echo "  vm-build                    Build go-synth in VM"
+	@echo "  vm-test-unit                Run unit tests"
+	@echo "  vm-test-integration         Run integration tests (tags=integration)"
+	@echo "  vm-test-integration-e2e     Run E2E integration tests (requires BSD)"
+	@echo "  vm-test-build-integration   Run build integration tests (requires root)"
+	@echo "  vm-test-build-cancellation  Run build cancellation test (requires root + ports)"
+	@echo "  vm-test-phase4              Run Phase 4 tests (mount, chroot)"
+	@echo "  vm-test-e2e                 Run end-to-end tests (tags=e2e)"
+	@echo "  vm-test-all                 Run all tests (unit + integration + phase4)"
+	@echo "  vm-quick                    Quick cycle: sync + Phase 4 tests"
 	@echo ""
 	@echo "HELP:"
 	@echo "  vm-help          Show this help"
@@ -248,4 +258,5 @@ vm-help:
 .PHONY: vm-check-prereqs vm-setup vm-auto-install vm-install vm-snapshot
 .PHONY: vm-start vm-stop vm-destroy vm-restore vm-clean-phases
 .PHONY: vm-ssh vm-status vm-sync vm-build vm-test-unit vm-test-integration
-.PHONY: vm-test-integration-e2e vm-test-phase4 vm-test-e2e vm-test-all vm-quick vm-help
+.PHONY: vm-test-integration-e2e vm-test-build-integration vm-test-build-cancellation
+.PHONY: vm-test-phase4 vm-test-e2e vm-test-all vm-quick vm-help
