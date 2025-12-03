@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -532,10 +533,19 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	var buildStats *BuildStats
 	var buildErr error
 	var buildCleanup func()
+	var cleanupMu sync.Mutex
+
+	cleanupReady := func(c func()) {
+		cleanupMu.Lock()
+		defer cleanupMu.Unlock()
+		buildCleanup = c
+	}
 
 	go func() {
 		defer close(buildDone)
-		buildStats, buildCleanup, buildErr = DoBuild(packages, cfg, logger, db, stateRegistry, nil, "")
+		var cleanup func()
+		buildStats, cleanup, buildErr = DoBuild(packages, cfg, logger, db, stateRegistry, cleanupReady, "")
+		cleanupReady(cleanup)
 	}()
 
 	// Wait for workers to start - check for worker directories
@@ -579,8 +589,23 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	// Cancel the build by calling cleanup (which triggers context cancellation)
 	t.Log("Cancelling build...")
 	cancelTime := time.Now()
-	if buildCleanup != nil {
-		buildCleanup()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		cleanupMu.Lock()
+		cleanupFunc := buildCleanup
+		cleanupMu.Unlock()
+
+		if cleanupFunc != nil {
+			cleanupFunc()
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("Cleanup function not available within 5 seconds")
+		}
+
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	// Wait for build to finish (with timeout)
