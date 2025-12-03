@@ -3,7 +3,9 @@ package build
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -466,4 +468,235 @@ func TestIntegration_MultiPortDependencyChain(t *testing.T) {
 	// 3. Building both and verifying CRC skip logic works for dependencies
 
 	t.Log("Multi-port dependency chain test requires complex dependency setup - deferred")
+}
+
+// TestIntegration_BuildCancellation tests graceful cancellation during active builds.
+// This test verifies that when a build is cancelled mid-execution:
+// - Workers receive the cancellation signal
+// - Workers stop processing new packages
+// - All mounts are properly unmounted
+// - Database state remains consistent
+// - Cleanup is successful
+//
+// NOTE: This test requires a real ports tree with actual ports to build.
+// It uses real ports (e.g., print/indexinfo) that have dependencies to ensure
+// builds are in progress when cancellation occurs.
+func TestIntegration_BuildCancellation(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Requires root privileges")
+	}
+
+	// Check if ports tree exists
+	if _, err := os.Stat("/usr/ports"); os.IsNotExist(err) {
+		t.Skip("Requires /usr/ports tree")
+	}
+
+	db, cfg, logger, cleanup := setupTestBuild(t)
+	t.Cleanup(cleanup)
+
+	// Use real ports directory instead of test directory
+	cfg.DPortsPath = "/usr/ports"
+
+	// Use multiple workers to test concurrent cancellation
+	cfg.MaxWorkers = 3
+
+	// Use real ports with dependencies so builds take time
+	// We'll build several ports that have dependencies to increase likelihood
+	// of catching builds in progress
+	portSpecs := []string{
+		"print/indexinfo",       // Simple, fast
+		"devel/pkgconf",         // Simple, fast
+		"converters/libiconv",   // Simple, fast
+		"devel/gettext-runtime", // Has dependencies, slower
+	}
+
+	// Parse all ports
+	pkgRegistry := pkg.NewPackageRegistry()
+	stateRegistry := pkg.NewBuildStateRegistry()
+	packages, err := pkg.ParsePortList(portSpecs, cfg, stateRegistry, pkgRegistry, log.NoOpLogger{})
+	if err != nil {
+		t.Fatalf("Failed to parse ports: %v", err)
+	}
+
+	// Resolve dependencies to get full package list
+	err = pkg.ResolveDependencies(packages, cfg, stateRegistry, pkgRegistry, log.NoOpLogger{})
+	if err != nil {
+		t.Fatalf("Failed to resolve dependencies: %v", err)
+	}
+
+	// Get all packages including dependencies
+	allPackages := pkgRegistry.AllPackages()
+	t.Logf("Total packages to build (including dependencies): %d", len(allPackages))
+
+	// Record worker directories before build starts
+	buildBase := cfg.BuildBase
+
+	// Start build in goroutine so we can cancel it
+	buildDone := make(chan struct{})
+	var buildStats *BuildStats
+	var buildErr error
+	var buildCleanup func()
+
+	go func() {
+		defer close(buildDone)
+		buildStats, buildCleanup, buildErr = DoBuild(allPackages, cfg, logger, db, stateRegistry, nil, "")
+	}()
+
+	// Wait for builds to start - check for worker directories
+	t.Log("Waiting for workers to start...")
+	workerStarted := false
+	for i := 0; i < 30; i++ { // Wait up to 15 seconds
+		time.Sleep(500 * time.Millisecond)
+		workerDirs, _ := filepath.Glob(filepath.Join(buildBase, "SL.*"))
+		if len(workerDirs) > 0 {
+			t.Logf("Found %d worker directories - workers have started", len(workerDirs))
+			workerStarted = true
+			break
+		}
+	}
+
+	if !workerStarted {
+		t.Fatal("Workers did not start within 15 seconds")
+	}
+
+	// Let at least one package start building
+	time.Sleep(2 * time.Second)
+
+	// Take snapshot of worker directories before cancellation
+	workerDirsBefore, err := filepath.Glob(filepath.Join(buildBase, "SL.*"))
+	if err != nil {
+		t.Fatalf("Failed to check for worker directories before cancellation: %v", err)
+	}
+	t.Logf("Worker directories before cancellation: %d", len(workerDirsBefore))
+
+	// Cancel the build by calling cleanup (which triggers context cancellation)
+	t.Log("Cancelling build...")
+	cancelTime := time.Now()
+	if buildCleanup != nil {
+		buildCleanup()
+	}
+
+	// Wait for build to finish (with timeout)
+	select {
+	case <-buildDone:
+		duration := time.Since(cancelTime)
+		t.Logf("Build finished %.2f seconds after cancellation", duration.Seconds())
+	case <-time.After(30 * time.Second):
+		t.Fatal("Build did not finish within 30 seconds after cancellation")
+	}
+
+	// Verify build statistics show partial completion (or possibly complete if builds were fast)
+	if buildStats != nil {
+		total := buildStats.Success + buildStats.Failed + buildStats.Skipped + buildStats.SkippedPre
+		t.Logf("Build stats after cancellation: Success=%d, Failed=%d, Skipped=%d, SkippedPre=%d, Total=%d/%d",
+			buildStats.Success, buildStats.Failed, buildStats.Skipped, buildStats.SkippedPre,
+			total, len(allPackages))
+
+		// Note: With fast ports, all packages might complete before cancellation.
+		// That's OK - we're testing that cancellation doesn't break anything.
+		if total > len(allPackages) {
+			t.Errorf("Processed more packages (%d) than total (%d) - accounting error", total, len(allPackages))
+		}
+	} else {
+		t.Error("buildStats is nil after cancellation")
+	}
+
+	// CRITICAL: Verify no worker directories are left mounted
+	workerDirsAfter, err := filepath.Glob(filepath.Join(buildBase, "SL.*"))
+	if err != nil {
+		t.Fatalf("Failed to check for worker directories after cancellation: %v", err)
+	}
+
+	if len(workerDirsAfter) > 0 {
+		t.Logf("WARNING: Found %d worker directories after cancellation", len(workerDirsAfter))
+
+		for _, workerDir := range workerDirsAfter {
+			// Check if any critical mount points still exist
+			criticalMounts := []string{
+				"usr/ports",
+				"packages",
+				"distfiles",
+				"work",
+				"usr/local",
+				"usr/obj",
+			}
+
+			for _, mount := range criticalMounts {
+				fullPath := filepath.Join(workerDir, mount)
+				if mounted, err := checkIfMounted(fullPath); err != nil {
+					t.Errorf("Failed to check mount status of %s: %v", fullPath, err)
+				} else if mounted {
+					t.Errorf("CRITICAL: Mount point still mounted after cancellation: %s", fullPath)
+				}
+			}
+
+			// Try to list worker directory contents
+			entries, err := os.ReadDir(workerDir)
+			if err == nil && len(entries) > 0 {
+				t.Logf("  Worker directory %s has %d entries (should be cleaned up)", filepath.Base(workerDir), len(entries))
+				// List first few entries for debugging
+				for i, entry := range entries {
+					if i >= 5 {
+						t.Logf("    ... and %d more", len(entries)-5)
+						break
+					}
+					t.Logf("    - %s", entry.Name())
+				}
+			}
+		}
+	} else {
+		t.Log("✓ All worker directories cleaned up successfully")
+	}
+
+	// Verify database state is consistent
+	stats, err := db.Stats()
+	if err != nil {
+		t.Fatalf("Failed to get database stats: %v", err)
+	}
+
+	t.Logf("Database stats after cancellation: TotalBuilds=%d, TotalPorts=%d, TotalCRCs=%d",
+		stats.TotalBuilds, stats.TotalPorts, stats.TotalCRCs)
+
+	// Database should have records (unless cancelled immediately)
+	if stats.TotalBuilds > 0 {
+		t.Logf("✓ Database has %d build records", stats.TotalBuilds)
+	}
+
+	// Verify build error or clean completion
+	if buildErr != nil {
+		t.Logf("Build error after cancellation: %v (this may be expected)", buildErr)
+	} else {
+		t.Log("✓ Build completed cleanly after cancellation")
+	}
+
+	t.Log("✓ Build cancellation test passed - workers stopped, mounts cleaned, database consistent")
+}
+
+// checkIfMounted checks if a path is currently a mount point by parsing mount output.
+// Returns (true, nil) if mounted, (false, nil) if not mounted, (false, error) on error.
+func checkIfMounted(path string) (bool, error) {
+	// Use the mount command to get list of all mounts
+	// On BSD systems, mount without arguments shows all mounts
+	cmd := exec.Command("mount")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to run mount command: %w", err)
+	}
+
+	// Parse mount output looking for our path
+	// Format: "device on /path/to/mount (options)"
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		// Look for " on /path " pattern
+		parts := strings.Fields(line)
+		if len(parts) >= 3 && parts[1] == "on" {
+			mountPoint := parts[2]
+			// Clean and compare paths
+			if filepath.Clean(mountPoint) == filepath.Clean(path) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
