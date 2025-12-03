@@ -18,8 +18,16 @@ type FetchStats struct {
 	Failed  int
 }
 
+// fetchFunc is a function type for fetching package distfiles
+type fetchFunc func(*pkg.Package, *config.Config) bool
+
 // DoFetchOnly executes fetch-only mode (download distfiles without building)
 func DoFetchOnly(packages []*pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry, logger log.LibraryLogger) (*FetchStats, error) {
+	return doFetchOnlyWithFetcher(packages, cfg, registry, logger, fetchPackageDistfiles)
+}
+
+// doFetchOnlyWithFetcher allows injection of fetch function for testing
+func doFetchOnlyWithFetcher(packages []*pkg.Package, cfg *config.Config, registry *pkg.BuildStateRegistry, logger log.LibraryLogger, fetcher fetchFunc) (*FetchStats, error) {
 	stats := &FetchStats{}
 	var statsMu sync.Mutex
 
@@ -48,7 +56,7 @@ func DoFetchOnly(packages []*pkg.Package, cfg *config.Config, registry *pkg.Buil
 			defer wg.Done()
 
 			for p := range queue {
-				success := fetchPackageDistfiles(p, cfg)
+				success := fetcher(p, cfg)
 
 				statsMu.Lock()
 				if success {
