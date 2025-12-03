@@ -945,6 +945,11 @@ GET /api/v1/builds
 
 **Coverage targets met**: All critical packages exceed 85% coverage goal
 
+### 🆕 Recent Update (2025-12-03)
+- `TestIntegration_BuildCancellation` now runs against the real `/usr/dports` tree and waits for `/usr/bin/make` output before triggering cleanup.
+- Cancelling after observing real make(1) logs ensures worker shutdown exercises actual mount/unmount paths instead of synthetic NO_BUILD fixtures.
+- VM prerequisites: `/usr/dports` (or `/usr/ports`) plus `/usr/distfiles`; skips automatically if those resources are absent.
+
 ### 📋 Task Breakdown (5/6 complete)
 
 - [x] 1. Add Build Package Tests (2h) - ✅ Complete (2025-11-28, commits 543bd1e, 4334a47)

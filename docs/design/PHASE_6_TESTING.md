@@ -10,6 +10,7 @@
 
 ## Integration Tests
 - Start a build for 1–3 small ports; poll until completion; assert records and stats.
+- Cancellation test uses real `/usr/dports` ports (indexinfo, pkgconf, libiconv, gettext-runtime), waits for `/usr/bin/make` output, then cancels to verify worker cleanup while builds are in-flight.
 
 ## Fixtures
 - Minimal test ports or mocked command execution.

@@ -1,6 +1,7 @@
 package build
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -493,15 +494,34 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	cfg.MaxWorkers = 3
 	cfg.Debug = true
 
-	// Create many test ports so some will still be queued when we cancel.
-	// With 3 workers and 12 ports, at least 9 ports will be queued initially.
-	numPorts := 12
-	portSpecs := make([]string, numPorts)
+	// Use the real ports tree to exercise actual make builds
+	portsDir := "/usr/dports"
+	if _, err := os.Stat(portsDir); os.IsNotExist(err) {
+		portsDir = "/usr/ports"
+		if _, err := os.Stat(portsDir); os.IsNotExist(err) {
+			t.Skip("Requires /usr/dports or /usr/ports tree")
+		}
+	}
+	cfg.DPortsPath = portsDir
 
-	for i := 1; i <= numPorts; i++ {
-		portName := fmt.Sprintf("testport-cancel-%d", i)
-		portSpecs[i-1] = fmt.Sprintf("misc/%s", portName)
-		createTestPort(t, cfg.DPortsPath, "misc", portName)
+	distFiles := "/usr/distfiles"
+	if _, err := os.Stat(distFiles); err != nil {
+		t.Skip("Requires /usr/distfiles for real port builds")
+	}
+	cfg.DistFilesPath = distFiles
+
+	if cfg.OptionsPath == "" {
+		cfg.OptionsPath = filepath.Join(cfg.BuildBase, "options")
+	}
+	if err := os.MkdirAll(cfg.OptionsPath, 0755); err != nil {
+		t.Fatalf("Failed to create options directory: %v", err)
+	}
+
+	portSpecs := []string{
+		"print/indexinfo",
+		"devel/pkgconf",
+		"converters/libiconv",
+		"devel/gettext-runtime",
 	}
 
 	// Parse all ports
@@ -524,6 +544,26 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 		t.Fatalf("Failed to mark packages needing build: %v", err)
 	}
 	t.Logf("Packages needing build: %d", needBuild)
+
+	allPackages := pkgRegistry.AllPackages()
+	logFiles := make([]string, 0, len(allPackages))
+	for _, p := range allPackages {
+		logPath := filepath.Join(cfg.LogsPath, strings.ReplaceAll(p.PortDir, "/", "___")+".log")
+		logFiles = append(logFiles, logPath)
+	}
+
+	hasMakeOutput := func() bool {
+		for _, logFile := range logFiles {
+			data, err := os.ReadFile(logFile)
+			if err != nil {
+				continue
+			}
+			if bytes.Contains(data, []byte("/usr/bin/make")) {
+				return true
+			}
+		}
+		return false
+	}
 
 	buildBase := cfg.BuildBase
 	t.Logf("Build base directory: %s", buildBase)
@@ -575,9 +615,33 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 		t.Fatal("Workers did not start within 10 seconds")
 	}
 
-	// Let builds progress briefly - with 12 ports and 3 workers,
-	// some builds will be in progress and others queued
-	time.Sleep(200 * time.Millisecond)
+	// Wait until real make(1) output appears in at least one package log
+	t.Log("Waiting for /usr/bin/make output in package logs...")
+	makeObserved := false
+	waitDeadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(waitDeadline) {
+		select {
+		case <-buildDone:
+			if buildErr != nil {
+				t.Fatalf("Build failed before make output observed: %v", buildErr)
+			}
+			t.Fatalf("Build completed before make output was observed")
+		default:
+		}
+
+		if hasMakeOutput() {
+			makeObserved = true
+			break
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if !makeObserved {
+		t.Fatal("Timed out waiting for /usr/bin/make output in package logs")
+	}
+
+	t.Log("Detected /usr/bin/make invocation; cancelling build")
 
 	// Take snapshot of worker directories before cancellation
 	workerDirsBefore, err := filepath.Glob(filepath.Join(buildBase, "SL*"))
