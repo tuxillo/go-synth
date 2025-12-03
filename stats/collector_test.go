@@ -77,7 +77,7 @@ func TestRateCalculation(t *testing.T) {
 // TestImpulseTracking verifies impulse reflects previous bucket
 func TestImpulseTracking(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Record 5 completions in current bucket
@@ -127,7 +127,7 @@ func TestImpulseTracking(t *testing.T) {
 // TestBucketAdvance verifies bucket rollover and clearing
 func TestBucketAdvance(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Fill some buckets
@@ -160,7 +160,7 @@ func TestBucketAdvance(t *testing.T) {
 // TestBucketAdvanceMultiSecondGap verifies handling of long pauses
 func TestBucketAdvanceMultiSecondGap(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Fill all buckets
@@ -198,7 +198,7 @@ func TestBucketAdvanceMultiSecondGap(t *testing.T) {
 // TestSkippedNotCounted verifies SKIP status doesn't increment rate
 func TestSkippedNotCounted(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Record various statuses
@@ -236,7 +236,7 @@ func TestSkippedNotCounted(t *testing.T) {
 // TestUpdateMethods verifies helper update methods
 func TestUpdateMethods(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 8)
+	sc := NewStatsCollector(ctx, 8, nil)
 	defer sc.Close()
 
 	// Update worker count
@@ -262,7 +262,7 @@ func TestUpdateMethods(t *testing.T) {
 // TestElapsedTime verifies elapsed time calculation
 func TestElapsedTime(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Wait a bit
@@ -280,7 +280,7 @@ func TestElapsedTime(t *testing.T) {
 // TestRemainingCalculation verifies remaining count calculation
 func TestRemainingCalculation(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Set queued count
@@ -311,7 +311,7 @@ func TestRemainingCalculation(t *testing.T) {
 // TestConsumerNotification verifies consumers receive updates
 func TestConsumerNotification(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Mock consumer
@@ -336,7 +336,7 @@ func TestConsumerNotification(t *testing.T) {
 // TestConcurrentAccess verifies thread safety
 func TestConcurrentAccess(t *testing.T) {
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	done := make(chan bool)

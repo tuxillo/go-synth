@@ -22,7 +22,7 @@ func TestStatsCollectorDemo(t *testing.T) {
 	fmt.Println("Simulating a build with 4 workers building 50 packages...\n")
 
 	ctx := context.Background()
-	sc := NewStatsCollector(ctx, 4)
+	sc := NewStatsCollector(ctx, 4, nil)
 	defer sc.Close()
 
 	// Set initial queue

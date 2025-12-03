@@ -209,11 +209,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		ctx.ui = NewStdoutUI()
 	}
 
-	// Initialize StatsCollector for real-time metrics
-	ctx.statsCollector = stats.NewStatsCollector(buildCtx, cfg.MaxWorkers)
-
 	// Initialize WorkerThrottler for dynamic worker limiting
 	ctx.throttler = stats.NewWorkerThrottler(cfg.MaxWorkers, cfg.DisableThrottle)
+
+	// Initialize StatsCollector for real-time metrics (pass throttler for DynMaxWorkers calculation)
+	ctx.statsCollector = stats.NewStatsCollector(buildCtx, cfg.MaxWorkers, ctx.throttler)
 
 	// Register BuildDB writer as PRIMARY stats consumer
 	builddbWriter := stats.NewBuildDBWriter(buildDB, runID)

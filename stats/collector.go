@@ -14,14 +14,15 @@ import (
 // Thread-safe for concurrent access from build workers and sampling goroutine.
 type StatsCollector struct {
 	mu            sync.RWMutex
-	topInfo       TopInfo         // Current snapshot
-	rateBuckets   [60]int         // Ring buffer: 1-second buckets for rate calculation
-	currentBucket int             // Current bucket index (0-59)
-	bucketStart   time.Time       // Start time of current bucket
-	startTime     time.Time       // Build start timestamp
-	ticker        *time.Ticker    // 1 Hz sampling ticker
-	consumers     []StatsConsumer // Registered consumers (UI, monitor, etc.)
-	ctx           context.Context // Cancellation context
+	topInfo       TopInfo          // Current snapshot
+	rateBuckets   [60]int          // Ring buffer: 1-second buckets for rate calculation
+	currentBucket int              // Current bucket index (0-59)
+	bucketStart   time.Time        // Start time of current bucket
+	startTime     time.Time        // Build start timestamp
+	ticker        *time.Ticker     // 1 Hz sampling ticker
+	consumers     []StatsConsumer  // Registered consumers (UI, monitor, etc.)
+	throttler     *WorkerThrottler // Worker throttler for DynMaxWorkers calculation
+	ctx           context.Context  // Cancellation context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup // Wait for goroutine to finish
 }
@@ -30,18 +31,21 @@ type StatsCollector struct {
 // The collector runs until Close() is called or the context is cancelled.
 //
 // maxWorkers is the configured maximum number of build workers.
-func NewStatsCollector(ctx context.Context, maxWorkers int) *StatsCollector {
+// throttler is optional; if provided, DynMaxWorkers will be calculated on each tick.
+func NewStatsCollector(ctx context.Context, maxWorkers int, throttler *WorkerThrottler) *StatsCollector {
 	collectorCtx, cancel := context.WithCancel(ctx)
 	now := time.Now()
 
 	sc := &StatsCollector{
 		topInfo: TopInfo{
-			MaxWorkers: maxWorkers,
-			StartTime:  now,
+			MaxWorkers:    maxWorkers,
+			DynMaxWorkers: maxWorkers, // Default to maxWorkers until throttler updates it
+			StartTime:     now,
 		},
 		bucketStart: now,
 		startTime:   now,
 		ticker:      time.NewTicker(1 * time.Second),
+		throttler:   throttler,
 		ctx:         collectorCtx,
 		cancel:      cancel,
 	}
@@ -157,6 +161,11 @@ func (sc *StatsCollector) tick() {
 
 	// Calculate remaining
 	sc.topInfo.Remaining = sc.topInfo.Queued - (sc.topInfo.Built + sc.topInfo.Failed + sc.topInfo.Ignored)
+
+	// Calculate dynamic worker limit based on system metrics (if throttler provided)
+	if sc.throttler != nil {
+		sc.topInfo.DynMaxWorkers = sc.throttler.CalculateDynMax(sc.topInfo.Load, sc.topInfo.SwapPct)
+	}
 
 	// Copy snapshot for consumers (outside lock)
 	snapshot := sc.topInfo
