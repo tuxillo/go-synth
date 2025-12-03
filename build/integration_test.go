@@ -504,6 +504,7 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 
 	// Use multiple workers to test concurrent cancellation
 	cfg.MaxWorkers = 3
+	cfg.Debug = true // Enable debug output to see what's blocking workers
 
 	// Use real ports with dependencies so builds take time
 	// We'll build several ports that have dependencies to increase likelihood
@@ -532,6 +533,12 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	// Get all packages including dependencies
 	allPackages := pkgRegistry.AllPackages()
 	t.Logf("Total packages to build (including dependencies): %d", len(allPackages))
+
+	// Log package statuses
+	for _, p := range allPackages {
+		flags := stateRegistry.GetFlags(p)
+		t.Logf("Package %s: flags=%d", p.PortDir, flags)
+	}
 
 	// Record worker directories before build starts
 	buildBase := cfg.BuildBase
