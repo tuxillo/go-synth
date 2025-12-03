@@ -532,6 +532,27 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	allPackages := pkgRegistry.AllPackages()
 	t.Logf("Total packages to build (including dependencies): %d", len(allPackages))
 
+	// Pre-mark ports-mgmt/pkg as built so bootstrap phase succeeds without needing to fetch/build
+	// This allows the test to reach the worker phase where we test cancellation
+	pkgOrigin := "ports-mgmt/pkg"
+	pkgVersion := "1.21.3"
+	pkgUUID := "test-pkg-bootstrap-uuid"
+	pkgRecord := &builddb.BuildRecord{
+		UUID:      pkgUUID,
+		PortDir:   pkgOrigin,
+		Version:   pkgVersion,
+		Status:    "success",
+		StartTime: time.Now().Add(-1 * time.Hour),
+		EndTime:   time.Now().Add(-55 * time.Minute),
+	}
+	if err := db.SaveRecord(pkgRecord); err != nil {
+		t.Fatalf("Failed to save fake pkg build record: %v", err)
+	}
+	if err := db.UpdatePackageIndex(pkgOrigin, pkgVersion, pkgUUID); err != nil {
+		t.Fatalf("Failed to update package index for pkg: %v", err)
+	}
+	t.Log("Pre-marked ports-mgmt/pkg as built to skip bootstrap phase")
+
 	// Record worker directories before build starts
 	buildBase := cfg.BuildBase
 
