@@ -1279,7 +1279,6 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
-- ✅ 2025-12-03: Ncurses quit handling hardened – context cancellation now stops queue/phase loops, cleanup guarded to run once, SIGINT/q exit within seconds (commit TBD)
 - ✅ 2025-12-02: Issue #9 Phase 3 backend **COMPLETE** - WorkerThrottler, BuildDBWriter, builddb/runs API additions, 12 test functions (33+ subtests, all pass), VM test validated (commits TBD)
 - ✅ 2025-12-02: Issue #9 Phase 5 **COMPLETE** - StatsCollector implementation: 60s sliding window rate calculation, per-second impulse tracking, ring buffer with multi-second gap handling, 10 test functions (22 subtests, all pass), thread-safe concurrent access (commits TBD)
 - ✅ 2025-12-02: Issue #9 Phase 4 **COMPLETE** - All 10 tasks done: UI stats integration with TopInfo, BuildUI interface, ncurses/stdout implementations, CLI monitor command, unit tests (23 subtests, 100% pass, commits 9d88467, fe26663, 71723f7, 5d81ed5)
