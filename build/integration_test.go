@@ -482,6 +482,9 @@ func TestIntegration_MultiPortDependencyChain(t *testing.T) {
 // It uses real ports (e.g., print/indexinfo) that have dependencies to ensure
 // builds are in progress when cancellation occurs.
 func TestIntegration_BuildCancellation(t *testing.T) {
+	t.Skip("TODO: Requires full build environment with network, distfiles, and pkg bootstrap. " +
+		"See channel_test.go for comprehensive cancellation unit tests.")
+
 	if os.Getuid() != 0 {
 		t.Skip("Requires root privileges")
 	}
