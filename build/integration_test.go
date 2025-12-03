@@ -478,42 +478,56 @@ func TestIntegration_MultiPortDependencyChain(t *testing.T) {
 // - Database state remains consistent
 // - Cleanup is successful
 //
-// NOTE: This test requires a real ports tree with actual ports to build.
-// It uses real ports (e.g., print/indexinfo) that have dependencies to ensure
-// builds are in progress when cancellation occurs.
+// NOTE: This test uses simple test ports with NO_BUILD=yes to avoid slow compilation.
+// The builds are slowed down artificially using a sleep command in the install phase.
 func TestIntegration_BuildCancellation(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("Requires root privileges")
 	}
 
-	// Check if ports tree exists (DragonFly uses /usr/dports, FreeBSD uses /usr/ports)
-	portsDir := "/usr/dports"
-	if _, err := os.Stat(portsDir); os.IsNotExist(err) {
-		portsDir = "/usr/ports"
-		if _, err := os.Stat(portsDir); os.IsNotExist(err) {
-			t.Skip("Requires /usr/dports or /usr/ports tree")
-		}
-	}
-
 	db, cfg, logger, cleanup := setupTestBuild(t)
 	t.Cleanup(cleanup)
 
-	// Use real ports directory instead of test directory
-	cfg.DPortsPath = portsDir
-	cfg.DistFilesPath = "/usr/distfiles" // Use system distfiles directory
-
 	// Use multiple workers to test concurrent cancellation
 	cfg.MaxWorkers = 3
-	cfg.Debug = true // Enable debug output to see what's blocking workers
+	cfg.Debug = true
 
-	// Use real ports with dependencies so builds take time
-	// We'll build several ports that have dependencies to increase likelihood
-	// of catching builds in progress
+	// Create test ports with artificial delay to ensure builds are in progress
+	// when we cancel. We use a sleep in the install phase.
+	for i := 1; i <= 4; i++ {
+		portName := fmt.Sprintf("testport-cancel-%d", i)
+		portDir := createTestPort(t, cfg.DPortsPath, "misc", portName)
+
+		// Modify Makefile to add a sleep in the install phase
+		makefilePath := filepath.Join(portDir, "Makefile")
+		makefileContent := fmt.Sprintf(`# Test port: misc/%s
+PORTNAME=	%s
+PORTVERSION=	1.0.0
+CATEGORIES=	misc
+
+MAINTAINER=	test@example.com
+COMMENT=	Test port for cancellation tests
+
+NO_BUILD=	yes
+
+do-install:
+	@${ECHO} "Installing test port"
+	@/bin/sleep 5
+	@${ECHO} "Installation complete"
+
+.include <bsd.port.mk>
+`, portName, portName)
+
+		if err := os.WriteFile(makefilePath, []byte(makefileContent), 0644); err != nil {
+			t.Fatalf("Failed to modify Makefile: %v", err)
+		}
+	}
+
 	portSpecs := []string{
-		"print/indexinfo",       // Simple, fast
-		"devel/pkgconf",         // Simple, fast
-		"converters/libiconv",   // Simple, fast
-		"devel/gettext-runtime", // Has dependencies, slower
+		"misc/testport-cancel-1",
+		"misc/testport-cancel-2",
+		"misc/testport-cancel-3",
+		"misc/testport-cancel-4",
 	}
 
 	// Parse all ports
@@ -524,40 +538,21 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 		t.Fatalf("Failed to parse ports: %v", err)
 	}
 
-	// Resolve dependencies to get full package list
+	// Resolve dependencies
 	err = pkg.ResolveDependencies(packages, cfg, stateRegistry, pkgRegistry, log.NoOpLogger{})
 	if err != nil {
 		t.Fatalf("Failed to resolve dependencies: %v", err)
 	}
 
-	// Get all packages for logging
-	allPackages := pkgRegistry.AllPackages()
-	t.Logf("Total packages to build (including dependencies): %d", len(allPackages))
-	t.Logf("Packages slice after ResolveDependencies: %d", len(packages))
-
-	// Verify packages and allPackages have the same items
-	if len(packages) != len(allPackages) {
-		t.Logf("WARNING: packages (%d) and allPackages (%d) have different lengths!", len(packages), len(allPackages))
-	}
-
-	// Mark packages needing build (CRITICAL: must be called before DoBuild)
-	// Use packages (head list) which contains full dependency graph through links
+	// Mark packages needing build
 	needBuild, err := pkg.MarkPackagesNeedingBuild(packages, cfg, stateRegistry, db, logger)
 	if err != nil {
 		t.Fatalf("Failed to mark packages needing build: %v", err)
 	}
 	t.Logf("Packages needing build: %d", needBuild)
 
-	// Log package statuses after marking
-	for _, p := range allPackages {
-		flags := stateRegistry.GetFlags(p)
-		t.Logf("Package %s: flags=%d", p.PortDir, flags)
-	}
-
-	// Record worker directories before build starts
 	buildBase := cfg.BuildBase
 	t.Logf("Build base directory: %s", buildBase)
-	t.Logf("Looking for worker directories matching: %s", filepath.Join(buildBase, "SL*"))
 
 	// Start build in goroutine so we can cancel it
 	buildDone := make(chan struct{})
@@ -567,38 +562,25 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 
 	go func() {
 		defer close(buildDone)
-		// Use packages (head list) not allPackages, following cmd/build.go pattern
 		buildStats, buildCleanup, buildErr = DoBuild(packages, cfg, logger, db, stateRegistry, nil, "")
 	}()
 
-	// Wait for builds to start - check for worker directories
+	// Wait for workers to start - check for worker directories
 	t.Log("Waiting for workers to start...")
 	workerStarted := false
-	for i := 0; i < 120; i++ { // Wait up to 60 seconds (builds may be throttled initially)
+	for i := 0; i < 20; i++ { // Wait up to 10 seconds
 		// Check if build completed early
 		select {
 		case <-buildDone:
 			if buildErr != nil {
 				t.Fatalf("Build failed before workers started: %v", buildErr)
 			}
-			t.Fatalf("Build completed before workers started (all packages may have been up-to-date)")
+			t.Fatalf("Build completed before workers started")
 		default:
 		}
 
 		time.Sleep(500 * time.Millisecond)
 		workerDirs, _ := filepath.Glob(filepath.Join(buildBase, "SL*"))
-		if i == 0 || i == 5 || i == 10 {
-			t.Logf("Attempt %d: checking for worker dirs, found: %d", i+1, len(workerDirs))
-			if len(workerDirs) == 0 {
-				// Debug: list what's actually in buildBase
-				entries, _ := os.ReadDir(buildBase)
-				dirNames := make([]string, len(entries))
-				for idx, e := range entries {
-					dirNames[idx] = e.Name()
-				}
-				t.Logf("  Contents of %s: %v", buildBase, dirNames)
-			}
-		}
 		if len(workerDirs) > 0 {
 			t.Logf("Found %d worker directories - workers have started", len(workerDirs))
 			workerStarted = true
@@ -607,11 +589,11 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	}
 
 	if !workerStarted {
-		t.Fatal("Workers did not start within 15 seconds")
+		t.Fatal("Workers did not start within 10 seconds")
 	}
 
-	// Let at least one package start building
-	time.Sleep(2 * time.Second)
+	// Let builds progress for a moment to ensure they're mid-execution
+	time.Sleep(1 * time.Second)
 
 	// Take snapshot of worker directories before cancellation
 	workerDirsBefore, err := filepath.Glob(filepath.Join(buildBase, "SL*"))
@@ -632,21 +614,21 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	case <-buildDone:
 		duration := time.Since(cancelTime)
 		t.Logf("Build finished %.2f seconds after cancellation", duration.Seconds())
-	case <-time.After(30 * time.Second):
-		t.Fatal("Build did not finish within 30 seconds after cancellation")
+	case <-time.After(10 * time.Second):
+		t.Fatal("Build did not finish within 10 seconds after cancellation")
 	}
 
-	// Verify build statistics show partial completion (or possibly complete if builds were fast)
+	// Verify build statistics show partial completion
 	if buildStats != nil {
 		total := buildStats.Success + buildStats.Failed + buildStats.Skipped + buildStats.SkippedPre
 		t.Logf("Build stats after cancellation: Success=%d, Failed=%d, Skipped=%d, SkippedPre=%d, Total=%d/%d",
 			buildStats.Success, buildStats.Failed, buildStats.Skipped, buildStats.SkippedPre,
-			total, len(allPackages))
+			total, needBuild)
 
-		// Note: With fast ports, all packages might complete before cancellation.
-		// That's OK - we're testing that cancellation doesn't break anything.
-		if total > len(allPackages) {
-			t.Errorf("Processed more packages (%d) than total (%d) - accounting error", total, len(allPackages))
+		// With cancellation, we expect partial completion (< needBuild)
+		// Unless builds were very fast and completed before cancel
+		if total > needBuild {
+			t.Errorf("Processed more packages (%d) than needed (%d) - accounting error", total, needBuild)
 		}
 	} else {
 		t.Error("buildStats is nil after cancellation")
@@ -685,14 +667,6 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 			entries, err := os.ReadDir(workerDir)
 			if err == nil && len(entries) > 0 {
 				t.Logf("  Worker directory %s has %d entries (should be cleaned up)", filepath.Base(workerDir), len(entries))
-				// List first few entries for debugging
-				for i, entry := range entries {
-					if i >= 5 {
-						t.Logf("    ... and %d more", len(entries)-5)
-						break
-					}
-					t.Logf("    - %s", entry.Name())
-				}
 			}
 		}
 	} else {
@@ -707,11 +681,6 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 
 	t.Logf("Database stats after cancellation: TotalBuilds=%d, TotalPorts=%d, TotalCRCs=%d",
 		stats.TotalBuilds, stats.TotalPorts, stats.TotalCRCs)
-
-	// Database should have records (unless cancelled immediately)
-	if stats.TotalBuilds > 0 {
-		t.Logf("✓ Database has %d build records", stats.TotalBuilds)
-	}
 
 	// Verify build error or clean completion
 	if buildErr != nil {
