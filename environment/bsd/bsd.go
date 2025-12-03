@@ -1,3 +1,5 @@
+//go:build dragonfly || freebsd
+
 // Package bsd implements the Environment interface for FreeBSD and DragonFlyBSD
 // using chroot isolation with nullfs/tmpfs mounts.
 //

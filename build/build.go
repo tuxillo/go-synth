@@ -228,11 +228,22 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	if ncursesUI, ok := ctx.ui.(*NcursesUI); ok {
 		setupInterruptHandler = func(cleanup func()) {
 			ncursesUI.SetInterruptHandler(func() {
-				// Cancel build context
+				// Display interruption message in UI
+				ncursesUI.LogEvent(0, "[INTERRUPT] Ctrl+C detected - stopping build and cleaning up...")
+
+				// Give the message a moment to render
+				time.Sleep(200 * time.Millisecond)
+
+				// Stop the UI now so cleanup messages go to terminal
+				ncursesUI.Stop()
+
+				// Cancel build context to signal workers to stop
 				if ctx.cancel != nil {
 					ctx.cancel()
 				}
-				// Run cleanup
+
+				// Run cleanup (wait for workers, cleanup environments)
+				// Note: We've already stopped the UI above, so cleanup won't call ui.Stop() again
 				cleanup()
 			})
 		}

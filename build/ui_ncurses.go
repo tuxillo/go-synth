@@ -14,6 +14,7 @@ import (
 // NcursesUI implements BuildUI using tview/tcell for a rich TUI
 type NcursesUI struct {
 	app           *tview.Application
+	screen        tcell.Screen // Optional injected screen (for testing)
 	headerText    *tview.TextView
 	progressText  *tview.TextView
 	eventsText    *tview.TextView
@@ -32,6 +33,14 @@ func NewNcursesUI() *NcursesUI {
 	}
 }
 
+// SetScreen injects a custom tcell.Screen for testing purposes
+// Must be called before Start()
+func (ui *NcursesUI) SetScreen(screen tcell.Screen) {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	ui.screen = screen
+}
+
 // SetInterruptHandler sets a callback to be called when Ctrl+C is pressed
 func (ui *NcursesUI) SetInterruptHandler(handler func()) {
 	ui.mu.Lock()
@@ -45,6 +54,11 @@ func (ui *NcursesUI) Start() error {
 	defer ui.mu.Unlock()
 
 	ui.app = tview.NewApplication()
+
+	// If a custom screen was injected (for testing), use it
+	if ui.screen != nil {
+		ui.app.SetScreen(ui.screen)
+	}
 
 	// Header section (system stats)
 	ui.headerText = tview.NewTextView().
@@ -81,21 +95,29 @@ func (ui *NcursesUI) Start() error {
 	ui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyCtrlC:
-			// Stop the UI first
-			ui.app.Stop()
 			// Trigger interrupt handler if set (for cleanup)
 			ui.mu.Lock()
 			handler := ui.onInterrupt
 			ui.mu.Unlock()
 			if handler != nil {
+				// Use goroutine so handler runs async and doesn't block event loop
+				// The handler will eventually call cleanup() which stops the UI
 				go handler()
 			}
 			return nil
 		case tcell.KeyRune:
+			// Handle both 'q'/'Q' and Ctrl+C (rune 3)
 			switch event.Rune() {
+			case 3: // Ctrl+C as ETX (End of Text) ASCII code
+				// Trigger interrupt handler if set (for cleanup)
+				ui.mu.Lock()
+				handler := ui.onInterrupt
+				ui.mu.Unlock()
+				if handler != nil {
+					go handler()
+				}
+				return nil
 			case 'q', 'Q':
-				// Stop the UI first
-				ui.app.Stop()
 				// Trigger interrupt handler if set (for cleanup)
 				ui.mu.Lock()
 				handler := ui.onInterrupt

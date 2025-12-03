@@ -1,3 +1,5 @@
+//go:build dragonfly || freebsd
+
 // Package bsd implements the Environment interface for FreeBSD/DragonFly BSD
 // using chroot isolation with nullfs, tmpfs, devfs, and procfs mounts.
 //
@@ -16,8 +18,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -303,68 +303,66 @@ func (e *BSDEnvironment) doUnmount(rpath string) error {
 	return nil
 }
 
-// killActiveProcesses forcefully terminates all tracked child processes.
+// killActiveProcesses forcefully terminates ALL processes running in the chroot.
 //
-// This method is called during cleanup to ensure no processes remain
-// that could prevent filesystem unmounting. It uses a two-phase approach:
+// NEW IMPLEMENTATION (2025-12-03): Uses /proc enumeration instead of PID tracking.
 //
-//  1. SIGTERM phase: Send SIGTERM to all process groups, wait 2 seconds
-//  2. SIGKILL phase: Send SIGKILL to any remaining process groups
+// This method solves the "cc1plus survival" problem where child/grandchild processes
+// escaped our PID tracking and continued running after cleanup. The root cause was:
 //
-// Process groups are killed using negative PIDs (-pid), which sends the
-// signal to the entire process group. This ensures child processes (make,
-// compiler, linker) are all terminated together.
+//   - OLD: Tracked only direct children (chroot PIDs)
+//   - OLD: Sent signals to process groups (-pid)
+//   - OLD: Failed when process groups dissolved before cleanup
+//   - NEW: Enumerates ALL processes via /proc at cleanup time
+//   - NEW: Discovers orphaned, reparented, and background processes
+//   - NEW: Matches dsynth C behavior (procctl-based reaping)
 //
-// The method is thread-safe and can be called concurrently with Execute().
+// Why /proc enumeration instead of procctl(PROC_REAP_ACQUIRE)?
 //
-// Signal behavior:
-//   - SIGTERM (15): Polite termination request, allows cleanup
-//   - SIGKILL (9): Forceful termination, cannot be caught
-//   - Negative PID: Kills entire process group (parent + children)
+//   - Dsynth C: Forks separate worker PROCESSES, each becomes reaper
+//   - Go-synth: Uses worker GOROUTINES in single process
+//   - procctl(PROC_REAP_ACQUIRE) only works once per process
+//   - procctl would kill ALL workers' processes simultaneously
+//   - /proc enumeration allows per-worker cleanup (by chrootPath)
+//
+// Strategy:
+//
+//  1. Enumerate /proc to find ALL PIDs on system
+//  2. Filter for processes inside our chroot (e.baseDir)
+//  3. Send SIGTERM, immediately send SIGKILL (no sleep during shutdown)
+//  4. Report any survivors
+//
+// This is more reliable than PID tracking because it discovers:
+//   - Background processes spawned by make
+//   - Daemon processes started during build
+//   - Orphaned/reparented processes (like cc1plus 580870)
+//   - Processes created after cleanup started
+//
+// Thread safety:
+//   - Safe to call concurrently (each worker has separate e.baseDir)
+//   - No shared state (reads /proc on demand)
+//
+// References:
+//   - .original-c-source/build.c:2868 (phaseReapAll)
+//   - Issue: cc1plus survival after Ctrl+C (2025-12-03)
 //
 // Example:
 //
 //	e.killActiveProcesses()
-//	// All tracked processes and their children are now terminated
+//	// All processes in /build/SL01 are now terminated
 func (e *BSDEnvironment) killActiveProcesses() {
-	e.pidMu.Lock()
-	pids := make([]int, len(e.activePIDs))
-	copy(pids, e.activePIDs)
-	e.pidMu.Unlock()
-
-	if len(pids) == 0 {
+	if e.baseDir == "" {
+		// Environment not set up, nothing to kill
 		return
 	}
 
-	stdlog.Printf("[Cleanup] Killing %d active process(es) before unmount", len(pids))
-
-	// Phase 1: Send SIGTERM to all process groups
-	for _, pid := range pids {
-		// Kill process group (negative PID)
-		// This sends signal to the entire process tree
-		if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
-			stdlog.Printf("[Cleanup] WARNING: Failed to SIGTERM process group %d: %v", pid, err)
-		} else {
-			stdlog.Printf("[Cleanup] Sent SIGTERM to process group %d", pid)
-		}
+	// Use /proc enumeration to find ALL processes in this chroot
+	// This replaces the old PID tracking approach
+	if err := killProcessesInChroot(e.baseDir); err != nil {
+		stdlog.Printf("[Cleanup] WARNING: Process killing incomplete for %s: %v", e.baseDir, err)
 	}
 
-	// Wait for processes to terminate gracefully
-	time.Sleep(2 * time.Second)
-
-	// Phase 2: Send SIGKILL to any remaining process groups
-	for _, pid := range pids {
-		if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
-			// ESRCH (no such process) is expected if process already exited
-			if err != syscall.ESRCH {
-				stdlog.Printf("[Cleanup] WARNING: Failed to SIGKILL process group %d: %v", pid, err)
-			}
-		} else {
-			stdlog.Printf("[Cleanup] Sent SIGKILL to process group %d", pid)
-		}
-	}
-
-	// Clear the PID list (all processes should be dead now)
+	// Clear the PID list (no longer used, but kept for compatibility)
 	e.pidMu.Lock()
 	e.activePIDs = nil
 	e.pidMu.Unlock()
