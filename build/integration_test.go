@@ -550,6 +550,16 @@ func TestIntegration_BuildCancellation(t *testing.T) {
 	t.Log("Waiting for workers to start...")
 	workerStarted := false
 	for i := 0; i < 30; i++ { // Wait up to 15 seconds
+		// Check if build completed early
+		select {
+		case <-buildDone:
+			if buildErr != nil {
+				t.Fatalf("Build failed before workers started: %v", buildErr)
+			}
+			t.Fatalf("Build completed before workers started (all packages may have been up-to-date)")
+		default:
+		}
+
 		time.Sleep(500 * time.Millisecond)
 		workerDirs, _ := filepath.Glob(filepath.Join(buildBase, "SL.*"))
 		if len(workerDirs) > 0 {
