@@ -35,12 +35,13 @@ type Config struct {
 	UseVKernel   bool
 	UsePKGDepend bool
 
-	Debug      bool
-	Force      bool
-	YesAll     bool
-	DevMode    bool
-	CheckPlist bool
-	DisableUI  bool
+	Debug           bool
+	Force           bool
+	YesAll          bool
+	DevMode         bool
+	CheckPlist      bool
+	DisableUI       bool
+	DisableThrottle bool // Disable worker throttling based on system load/swap
 
 	// Migration settings
 	Migration struct {
@@ -261,6 +262,9 @@ func (cfg *Config) loadFromSection(sec *ini.Section) {
 	}
 	if key := sec.Key("Display_with_ncurses"); key != nil {
 		cfg.DisableUI = !parseBool(key.String())
+	}
+	if key := sec.Key("Disable_throttle"); key != nil {
+		cfg.DisableThrottle = parseBool(key.String())
 	}
 	if key := sec.Key("leverage_prebuilt"); key != nil {
 		// TODO: Implement if needed

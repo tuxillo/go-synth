@@ -13,14 +13,17 @@ import "runtime"
 type WorkerThrottler struct {
 	maxWorkers int
 	ncpus      int
+	disabled   bool // When true, always return maxWorkers
 }
 
 // NewWorkerThrottler creates a throttler with the configured max workers.
 // The ncpus value is determined automatically via runtime.NumCPU().
-func NewWorkerThrottler(maxWorkers int) *WorkerThrottler {
+// If disabled is true, throttling is bypassed and maxWorkers is always returned.
+func NewWorkerThrottler(maxWorkers int, disabled bool) *WorkerThrottler {
 	return &WorkerThrottler{
 		maxWorkers: maxWorkers,
 		ncpus:      runtime.NumCPU(),
+		disabled:   disabled,
 	}
 }
 
@@ -36,7 +39,21 @@ func NewWorkerThrottler(maxWorkers int) *WorkerThrottler {
 //   - Swap > 40%: Hard cap at 25% of maxWorkers
 //
 // Returns the minimum of load-cap and swap-cap (most restrictive).
+//
+// Auto-disable: If both load and swap are zero (metrics not available),
+// returns maxWorkers to avoid false throttling until metrics are implemented.
 func (wt *WorkerThrottler) CalculateDynMax(load float64, swapPct int) int {
+	// Explicit disable via config flag
+	if wt.disabled {
+		return wt.maxWorkers
+	}
+
+	// Auto-disable when metrics are unavailable (both zero)
+	// This prevents false throttling until system metrics collection is implemented
+	if load == 0.0 && swapPct == 0 {
+		return wt.maxWorkers
+	}
+
 	// Calculate load-based cap
 	loadCap := wt.calculateLoadCap(load)
 

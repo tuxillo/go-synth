@@ -7,7 +7,7 @@ import (
 
 // TestWorkerThrottler_NoThrottling verifies no throttling below thresholds
 func TestWorkerThrottler_NoThrottling(t *testing.T) {
-	wt := NewWorkerThrottler(8)
+	wt := NewWorkerThrottler(8, false)
 
 	tests := []struct {
 		name    string
@@ -33,7 +33,7 @@ func TestWorkerThrottler_NoThrottling(t *testing.T) {
 
 // TestWorkerThrottler_LoadThrottling tests load-based throttling
 func TestWorkerThrottler_LoadThrottling(t *testing.T) {
-	wt := NewWorkerThrottler(8)
+	wt := NewWorkerThrottler(8, false)
 	ncpus := float64(runtime.NumCPU())
 
 	tests := []struct {
@@ -61,7 +61,7 @@ func TestWorkerThrottler_LoadThrottling(t *testing.T) {
 
 // TestWorkerThrottler_SwapThrottling tests swap-based throttling
 func TestWorkerThrottler_SwapThrottling(t *testing.T) {
-	wt := NewWorkerThrottler(8)
+	wt := NewWorkerThrottler(8, false)
 
 	tests := []struct {
 		name    string
@@ -88,7 +88,7 @@ func TestWorkerThrottler_SwapThrottling(t *testing.T) {
 
 // TestWorkerThrottler_CombinedThrottling tests both caps simultaneously
 func TestWorkerThrottler_CombinedThrottling(t *testing.T) {
-	wt := NewWorkerThrottler(8)
+	wt := NewWorkerThrottler(8, false)
 	ncpus := float64(runtime.NumCPU())
 
 	tests := []struct {
@@ -135,7 +135,7 @@ func TestWorkerThrottler_CombinedThrottling(t *testing.T) {
 
 // TestWorkerThrottler_MinimumWorkers ensures at least 1 worker is always allowed
 func TestWorkerThrottler_MinimumWorkers(t *testing.T) {
-	wt := NewWorkerThrottler(1)
+	wt := NewWorkerThrottler(1, false)
 
 	// Even with extreme load/swap, should return at least 1
 	got := wt.CalculateDynMax(1000, 100)
@@ -146,7 +146,7 @@ func TestWorkerThrottler_MinimumWorkers(t *testing.T) {
 
 // TestWorkerThrottler_LargeWorkerCount tests throttling with many workers
 func TestWorkerThrottler_LargeWorkerCount(t *testing.T) {
-	wt := NewWorkerThrottler(64)
+	wt := NewWorkerThrottler(64, false)
 	ncpus := float64(runtime.NumCPU())
 
 	// High load should reduce to 25%
@@ -166,7 +166,7 @@ func TestWorkerThrottler_LargeWorkerCount(t *testing.T) {
 
 // TestWorkerThrottler_LinearInterpolation verifies smooth scaling
 func TestWorkerThrottler_LinearInterpolation(t *testing.T) {
-	wt := NewWorkerThrottler(100)
+	wt := NewWorkerThrottler(100, false)
 	ncpus := float64(runtime.NumCPU())
 
 	// At exact midpoint of load range (3.25×ncpus between 1.5-5.0)
@@ -187,5 +187,52 @@ func TestWorkerThrottler_LinearInterpolation(t *testing.T) {
 	// Should be around 62-63 (midpoint between 100 and 25)
 	if got < expectedMid-1 || got > expectedMid+1 {
 		t.Errorf("CalculateDynMax(0, mid swap) = %d, expected ~%d (±1)", got, expectedMid)
+	}
+}
+
+// TestWorkerThrottler_Disabled verifies throttling is bypassed when disabled
+func TestWorkerThrottler_Disabled(t *testing.T) {
+	wt := NewWorkerThrottler(16, true) // disabled=true
+
+	tests := []struct {
+		name    string
+		load    float64
+		swapPct int
+		want    int
+	}{
+		{"zero metrics", 0, 0, 16},
+		{"high load", 100.0, 0, 16},      // Would normally throttle heavily
+		{"high swap", 0, 80, 16},         // Would normally throttle heavily
+		{"both high", 100.0, 80, 16},     // Would normally throttle to minimum
+		{"extreme", 1000.0, 100, 16},     // Extreme values still return max
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wt.CalculateDynMax(tt.load, tt.swapPct)
+			if got != tt.want {
+				t.Errorf("Disabled throttler: CalculateDynMax(%v, %d) = %d, want %d (should always return maxWorkers)", 
+					tt.load, tt.swapPct, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWorkerThrottler_AutoDisableOnZeroMetrics verifies auto-disable when metrics unavailable
+func TestWorkerThrottler_AutoDisableOnZeroMetrics(t *testing.T) {
+	wt := NewWorkerThrottler(8, false) // enabled but metrics are zero
+
+	// When both load and swap are zero, should auto-disable
+	got := wt.CalculateDynMax(0.0, 0)
+	want := 8
+	if got != want {
+		t.Errorf("CalculateDynMax(0.0, 0) with unavailable metrics = %d, want %d (auto-disable)", got, want)
+	}
+
+	// But if only one is zero, normal throttling applies
+	// High swap with zero load should still throttle
+	got = wt.CalculateDynMax(0.0, 50)
+	if got >= 8 {
+		t.Errorf("CalculateDynMax(0.0, 50) = %d, expected throttling with high swap even when load is zero", got)
 	}
 }
