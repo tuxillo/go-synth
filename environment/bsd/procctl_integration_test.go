@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"go-synth/config"
 	"go-synth/environment"
 	"go-synth/log"
 	"os"
