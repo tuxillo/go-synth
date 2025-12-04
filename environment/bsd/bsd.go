@@ -388,6 +388,10 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 	if exeErr != nil {
 		// Fallback to system path if we can't determine our own path
 		selfPath = "go-synth"
+		fmt.Fprintf(os.Stderr, "Warning: failed to get executable path, using 'go-synth': %v\n", exeErr)
+	} else {
+		// Debug: log the path we're using
+		fmt.Fprintf(os.Stderr, "DEBUG: Using executable path: %s\n", selfPath)
 	}
 
 	// Build worker helper arguments
@@ -443,6 +447,9 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 	// Start the process (don't wait yet)
 	if err := execCmd.Start(); err != nil {
 		// Failed to start the process
+		// Debug: log the full command that failed
+		fmt.Fprintf(os.Stderr, "ERROR: Failed to start worker helper: %v\n", err)
+		fmt.Fprintf(os.Stderr, "  Command: %s %v\n", selfPath, args)
 		return &environment.ExecResult{ExitCode: -1, Duration: 0}, &environment.ErrExecutionFailed{
 			Op:      "start",
 			Command: cmd.Command,
@@ -504,6 +511,8 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 			// Command ran but returned non-zero exit code
 			// This is SUCCESS from Execute's perspective (err=nil)
 			result.ExitCode = exitErr.ExitCode()
+			// Debug: log worker helper exit
+			fmt.Fprintf(os.Stderr, "DEBUG: Worker helper exited with code %d\n", result.ExitCode)
 			return result, nil
 		}
 
