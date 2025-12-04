@@ -223,11 +223,28 @@ vm-test-all: vm-build
 	@$(VM_SSH) 'cd /root/go-synth && go test -v ./... && go test -v -tags=integration ./... && doas go test -v ./internal/worker/...'
 
 vm-quick: vm-sync
-	@echo "==> Quick test cycle (sync + Phase 4 tests)..."
-	@$(VM_SSH) 'cd /root/go-synth && make build && doas go test -v ./internal/worker/...'
+	@echo "═══ Quick Test Cycle: Sync + Phase 4 ═══"
+	$(MAKE) vm-test-phase4
 
 # ------------------------------------------------------------------------------
-# VM Help
+# Fixture Capture
+# ------------------------------------------------------------------------------
+
+vm-capture-fixtures: vm-sync
+	@echo "═══ Capturing BSD Sysctl Fixtures ═══"
+	ssh -p 2222 root@localhost 'cd /root/go-synth && ./scripts/capture-bsd-fixtures.sh'
+	@echo ""
+	@echo "Syncing fixtures back to host..."
+	mkdir -p stats/testdata/fixtures
+	scp -P 2222 root@localhost:/root/go-synth/stats/testdata/fixtures/* stats/testdata/fixtures/
+	@echo ""
+	@echo "✓ Fixtures captured and synced to stats/testdata/fixtures/"
+	@ls -lh stats/testdata/fixtures/
+
+vm-test-fixtures:
+	@echo "═══ Running Fixture Tests ═══"
+	ssh -p 2222 root@localhost 'cd /root/go-synth && go test -v ./stats/ -run "Fixture"'
+
 # ------------------------------------------------------------------------------
 
 vm-help:
@@ -269,6 +286,10 @@ vm-help:
 	@echo "  vm-test-all                 Run all tests (unit + integration + phase4)"
 	@echo "  vm-quick                    Quick cycle: sync + Phase 4 tests"
 	@echo ""
+	@echo "FIXTURES:"
+	@echo "  vm-capture-fixtures         Capture BSD sysctl data for testing"
+	@echo "  vm-test-fixtures            Run fixture-based tests in VM"
+	@echo ""
 	@echo "HELP:"
 	@echo "  vm-help          Show this help"
 	@echo ""
@@ -278,6 +299,7 @@ vm-help:
 .PHONY: vm-check-prereqs vm-setup vm-auto-install vm-install vm-snapshot
 .PHONY: vm-start vm-stop vm-destroy vm-restore vm-clean-phases
 .PHONY: vm-ssh vm-status vm-sync vm-build vm-test-unit vm-test-integration
+.PHONY: vm-capture-fixtures vm-test-fixtures
 .PHONY: vm-test-integration-e2e vm-test-build-integration vm-test-build-cancellation
 .PHONY: vm-test-phase4 vm-test-procctl vm-test-procctl-reaping vm-test-procfind vm-test-orphans
 .PHONY: vm-test-e2e vm-test-all vm-quick vm-help
