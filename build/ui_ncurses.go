@@ -63,14 +63,16 @@ func (ui *NcursesUI) Start() error {
 	// Header section (system stats)
 	ui.headerText = tview.NewTextView().
 		SetDynamicColors(true).
-		SetTextAlign(tview.AlignLeft)
+		SetTextAlign(tview.AlignLeft).
+		SetWordWrap(true)
 	ui.headerText.SetBorder(true).SetTitle(" System Stats ").SetTitleAlign(tview.AlignLeft)
 	ui.headerText.SetText("[yellow]Initializing build...[white]")
 
 	// Progress section (statistics)
 	ui.progressText = tview.NewTextView().
 		SetDynamicColors(true).
-		SetTextAlign(tview.AlignLeft)
+		SetTextAlign(tview.AlignLeft).
+		SetWordWrap(true)
 	ui.progressText.SetBorder(true).SetTitle(" Progress ").SetTitleAlign(tview.AlignLeft)
 	ui.progressText.SetText("Waiting for build to start...")
 
@@ -78,18 +80,19 @@ func (ui *NcursesUI) Start() error {
 	ui.eventsText = tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
+		SetWordWrap(true).
 		SetChangedFunc(func() {
 			ui.app.Draw()
 		})
 	ui.eventsText.SetBorder(true).SetTitle(" Worker Events ").SetTitleAlign(tview.AlignLeft)
 	ui.eventsText.SetText("No events yet...")
 
-	// Layout: header (3 rows) + progress (5 rows) + events (rest)
+	// Layout: header (4 rows fixed) + progress (6 rows fixed) + events (flexible)
 	ui.layout = tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(ui.headerText, 3, 0, false).
-		AddItem(ui.progressText, 5, 0, false).
-		AddItem(ui.eventsText, 0, 1, false)
+		AddItem(ui.headerText, 4, 0, false).
+		AddItem(ui.progressText, 6, 0, false).
+		AddItem(ui.eventsText, 0, 1, true)
 
 	// Set up key bindings
 	ui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
