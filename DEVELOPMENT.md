@@ -1284,6 +1284,7 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
+- ✅ 2025-12-04: Worker helper procctl implementation complete - Self-invoking reaper with PROC_REAP_ACQUIRE for automatic descendant cleanup, UI fixes (layout, exit handling), critical syscall constant fix (commits 67fd365, 8939616, cd7b6ac, 8162134, c4efbf1)
 - ✅ 2025-12-02: Issue #9 Phase 3 backend **COMPLETE** - WorkerThrottler, BuildDBWriter, builddb/runs API additions, 12 test functions (33+ subtests, all pass), VM test validated (commits TBD)
 - ✅ 2025-12-02: Issue #9 Phase 5 **COMPLETE** - StatsCollector implementation: 60s sliding window rate calculation, per-second impulse tracking, ring buffer with multi-second gap handling, 10 test functions (22 subtests, all pass), thread-safe concurrent access (commits TBD)
 - ✅ 2025-12-02: Issue #9 Phase 4 **COMPLETE** - All 10 tasks done: UI stats integration with TopInfo, BuildUI interface, ncurses/stdout implementations, CLI monitor command, unit tests (23 subtests, 100% pass, commits 9d88467, fe26663, 71723f7, 5d81ed5)
