@@ -144,10 +144,18 @@ func (sc *StatsCollector) run() {
 func (sc *StatsCollector) tick() {
 	now := time.Now()
 
+	// Sample system metrics (load, swap) before acquiring lock
+	load, _ := getAdjustedLoad() // Ignore errors, default to 0
+	swap, _ := getSwapUsage()    // Ignore errors, default to 0
+
 	sc.mu.Lock()
 
 	// Advance to next bucket
 	sc.advanceBucketLocked(now)
+
+	// Update system metrics
+	sc.topInfo.Load = load
+	sc.topInfo.SwapPct = swap
 
 	// Calculate elapsed time
 	sc.topInfo.Elapsed = now.Sub(sc.startTime)
