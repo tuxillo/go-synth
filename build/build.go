@@ -203,10 +203,21 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	// Initialize UI based on configuration and TTY detection
 	// Use ncurses UI by default if stdout is a TTY and not disabled via -S flag
 	useNcurses := !cfg.DisableUI && term.IsTerminal(int(os.Stdout.Fd()))
+	if cfg.Debug {
+		logger.Info("UI selection: DisableUI=%v, IsTerminal=%v, useNcurses=%v",
+			cfg.DisableUI, term.IsTerminal(int(os.Stdout.Fd())), useNcurses)
+	}
 	if useNcurses {
 		ctx.ui = NewNcursesUI()
+		if cfg.Debug {
+			logger.Info("Created NcursesUI")
+		}
 	} else {
 		ctx.ui = NewStdoutUI()
+		if cfg.Debug {
+			logger.Info("Created StdoutUI (DisableUI=%v, IsTerminal=%v)",
+				cfg.DisableUI, term.IsTerminal(int(os.Stdout.Fd())))
+		}
 	}
 
 	// Initialize WorkerThrottler for dynamic worker limiting
@@ -436,8 +447,13 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	}
 
 	// Start UI after workers are created
+	if cfg.Debug {
+		logger.Info("Starting UI...")
+	}
 	if err := ctx.ui.Start(); err != nil {
 		logger.Warn("Failed to start UI: %v", err)
+	} else if cfg.Debug {
+		logger.Info("UI started successfully")
 	}
 
 	// Queue packages in build order
