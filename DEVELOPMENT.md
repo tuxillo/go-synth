@@ -1284,7 +1284,8 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
-- ✅ 2025-12-04: Active worker count tracking complete - Implemented increment/decrement hooks in workerLoop, fixed stats showing zero workers (commit 24b42a6)
+- ✅ 2025-12-04: System metrics sampling implemented - Created metrics_bsd.go/metrics_stub.go, integrated into StatsCollector.tick() (commit 4f46ba3)
+- ✅ 2025-12-04: Active worker count tracking complete - Implemented increment/decrement hooks in workerLoop, fixed stats showing zero workers (commits 24b42a6, e3e030b)
 - ✅ 2025-12-04: Worker helper procctl implementation complete - Self-invoking reaper with PROC_REAP_ACQUIRE for automatic descendant cleanup, UI fixes (layout, exit handling), critical syscall constant fix (commits 67fd365, 8939616, cd7b6ac, 8162134, c4efbf1)
 - ✅ 2025-12-02: Issue #9 Phase 3 backend **COMPLETE** - WorkerThrottler, BuildDBWriter, builddb/runs API additions, 12 test functions (33+ subtests, all pass), VM test validated (commits TBD)
 - ✅ 2025-12-02: Issue #9 Phase 5 **COMPLETE** - StatsCollector implementation: 60s sliding window rate calculation, per-second impulse tracking, ring buffer with multi-second gap handling, 10 test functions (22 subtests, all pass), thread-safe concurrent access (commits TBD)
