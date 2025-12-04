@@ -35,10 +35,10 @@ const (
 	P_PID = 0 // Process ID
 
 	// PROC_REAP_* commands for procctl(2)
-	PROC_REAP_ACQUIRE = 2 // Acquire reaper status
-	PROC_REAP_RELEASE = 3 // Release reaper status
-	PROC_REAP_STATUS  = 4 // Get reaper status (older DragonFly)
-	PROC_REAP_KILL    = 5 // Kill all descendants (DragonFly >= 6.0.5)
+	PROC_REAP_ACQUIRE = 0x0001 // Acquire reaper status
+	PROC_REAP_RELEASE = 0x0002 // Release reaper status
+	PROC_REAP_STATUS  = 0x0003 // Get reaper status (older DragonFly)
+	PROC_REAP_KILL    = 0x0004 // Kill all descendants (DragonFly >= 6.0.5)
 )
 
 // reaperStatus matches struct reaper_status from DragonFly BSD.
