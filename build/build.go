@@ -248,13 +248,11 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				// Stop the UI now so cleanup messages go to terminal
 				ncursesUI.Stop()
 
-				// Cancel build context to signal workers to stop
-				if ctx.cancel != nil {
-					ctx.cancel()
-				}
+				// Print initial interrupt message to terminal
+				fmt.Fprintf(os.Stderr, "\nBuild interrupted, cleaning up...\n")
 
 				// Run cleanup (wait for workers, cleanup environments)
-				// Note: We've already stopped the UI above, so cleanup won't call ui.Stop() again
+				// Note: cleanup() now uses logger.InfoTerminal() which prints to terminal
 				cleanup()
 
 				// Exit after cleanup completes
@@ -276,7 +274,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 	//  3. Cleanup worker environments (unmount, remove directories)
 	cleanup := func() {
 		logger.Debug("Cleanup started")
-		logger.Info("Stopping build workers...")
+		logger.InfoTerminal("Stopping build workers...")
 
 		// Cancel context to signal all workers to stop
 		if ctx.cancel != nil {
@@ -285,7 +283,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		}
 
 		logger.Debug("Waiting for workers (count=%d)...", len(ctx.workers))
-		logger.Info("Waiting for workers to finish current operations...")
+		logger.InfoTerminal("Waiting for workers to finish current operations...")
 		// Wait for all worker goroutines to exit with timeout
 		// Workers will see ctx.Done() and exit gracefully
 		done := make(chan struct{})
@@ -297,7 +295,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		select {
 		case <-done:
 			logger.Debug("Workers exited gracefully")
-			logger.Info("All workers exited gracefully")
+			logger.InfoTerminal("All workers exited gracefully")
 		case <-time.After(5 * time.Second):
 			logger.Debug("Worker timeout (5s), proceeding anyway")
 			logger.Warn("Timeout waiting for workers to exit (5s), proceeding with cleanup anyway")
@@ -316,7 +314,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 		}
 
 		logger.Debug("Starting environment cleanup")
-		logger.Info("Cleaning up worker environments...")
+		logger.InfoTerminal("Cleaning up worker environments...")
 		for i, worker := range ctx.workers {
 			if worker != nil && worker.Env != nil {
 				logger.Debug("Cleaning up worker %d", i)
@@ -327,7 +325,7 @@ func DoBuild(packages []*pkg.Package, cfg *config.Config, logger *log.Logger, bu
 				logger.Debug("Worker %d is nil or has no environment", i)
 			}
 		}
-		logger.Info("Cleanup complete")
+		logger.InfoTerminal("Cleanup complete")
 	}
 
 	// Notify caller that cleanup function is ready

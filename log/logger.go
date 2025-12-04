@@ -286,6 +286,25 @@ func (l *Logger) Info(format string, args ...any) {
 	l.resultsFile.Sync()
 }
 
+// InfoTerminal logs an informational message to both files and terminal (stderr).
+// This is useful for important messages that should be visible to users during
+// interactive operations (e.g., cleanup progress after Ctrl+C).
+func (l *Logger) InfoTerminal(format string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	timestamp := time.Now().Format("15:04:05")
+	msg := fmt.Sprintf(format, args...)
+	logMsg := fmt.Sprintf("[%s] INFO: %s\n", timestamp, msg)
+
+	// Write to log file
+	l.resultsFile.WriteString(logMsg)
+	l.resultsFile.Sync()
+
+	// Also write to terminal (stderr for visibility even when stdout is redirected)
+	fmt.Fprintf(os.Stderr, "%s\n", msg)
+}
+
 // WriteSummary writes a summary to the results log
 func (l *Logger) WriteSummary(total, success, failed, skipped, ignored int, duration time.Duration) {
 	l.mu.Lock()
