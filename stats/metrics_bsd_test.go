@@ -38,22 +38,22 @@ func TestGetSwapUsage(t *testing.T) {
 
 func TestLoadavgParsing(t *testing.T) {
 	var la loadavg
-	la.load[0] = 2048
-	la.load[1] = 4096
-	la.load[2] = 6144
-	la.scale = 2048
+	la.Load[0] = 2048
+	la.Load[1] = 4096
+	la.Load[2] = 6144
+	la.Scale = 2048
 
-	load1 := float64(la.load[0]) / fscale
+	load1 := float64(la.Load[0]) / fscale
 	if load1 != 1.0 {
 		t.Errorf("Expected load 1.0, got %f", load1)
 	}
 
-	load5 := float64(la.load[1]) / fscale
+	load5 := float64(la.Load[1]) / fscale
 	if load5 != 2.0 {
 		t.Errorf("Expected load 2.0, got %f", load5)
 	}
 
-	load15 := float64(la.load[2]) / fscale
+	load15 := float64(la.Load[2]) / fscale
 	if load15 != 3.0 {
 		t.Errorf("Expected load 3.0, got %f", load15)
 	}
@@ -61,9 +61,9 @@ func TestLoadavgParsing(t *testing.T) {
 
 func TestVmtotalParsing(t *testing.T) {
 	var vmt vmtotal
-	vmt.t_pw = 5
+	vmt.T_pw = 5
 
-	tpw := float64(vmt.t_pw)
+	tpw := float64(vmt.T_pw)
 	if tpw != 5.0 {
 		t.Errorf("Expected t_pw 5.0, got %f", tpw)
 	}
@@ -71,17 +71,17 @@ func TestVmtotalParsing(t *testing.T) {
 
 func TestXswdevParsing(t *testing.T) {
 	var xs xswdev
-	xs.nblks = 1000
-	xs.used = 250
+	xs.Nblks = 1000
+	xs.Used = 250
 
-	if xs.nblks != 1000 {
-		t.Errorf("Expected nblks 1000, got %d", xs.nblks)
+	if xs.Nblks != 1000 {
+		t.Errorf("Expected nblks 1000, got %d", xs.Nblks)
 	}
-	if xs.used != 250 {
-		t.Errorf("Expected used 250, got %d", xs.used)
+	if xs.Used != 250 {
+		t.Errorf("Expected used 250, got %d", xs.Used)
 	}
 
-	pct := int((float64(xs.used) / float64(xs.nblks)) * 100.0)
+	pct := int((float64(xs.Used) / float64(xs.Nblks)) * 100.0)
 	if pct != 25 {
 		t.Errorf("Expected 25%% usage, got %d%%", pct)
 	}
@@ -168,10 +168,10 @@ func TestStructSizes(t *testing.T) {
 
 func TestBinaryEncoding(t *testing.T) {
 	var la loadavg
-	la.load[0] = 2048
-	la.load[1] = 4096
-	la.load[2] = 6144
-	la.scale = 2048
+	la.Load[0] = 2048
+	la.Load[1] = 4096
+	la.Load[2] = 6144
+	la.Scale = 2048
 
 	buf := make([]byte, unsafe.Sizeof(la))
 	reader := newBytesReader(buf)

@@ -15,33 +15,33 @@ const (
 )
 
 type loadavg struct {
-	load  [3]uint32
-	scale int32
+	Load  [3]uint32
+	Scale int32
 }
 
 type vmtotal struct {
-	t_rq     int16
-	t_dw     int16
-	t_pw     int16
-	t_sl     int16
-	t_sw     int16
-	t_vm     uint32
-	t_avm    uint32
-	t_rm     uint32
-	t_arm    uint32
-	t_vmshr  uint32
-	t_avmshr uint32
-	t_rmshr  uint32
-	t_armshr uint32
-	t_free   uint32
+	T_rq     int16
+	T_dw     int16
+	T_pw     int16
+	T_sl     int16
+	T_sw     int16
+	T_vm     uint32
+	T_avm    uint32
+	T_rm     uint32
+	T_arm    uint32
+	T_vmshr  uint32
+	T_avmshr uint32
+	T_rmshr  uint32
+	T_armshr uint32
+	T_free   uint32
 }
 
 type xswdev struct {
-	version uint32
-	dev     uint64
-	flags   int32
-	nblks   int32
-	used    int32
+	Version uint32
+	Dev     uint64
+	Flags   int32
+	Nblks   int32
+	Used    int32
 }
 
 func getAdjustedLoad() (float64, error) {
@@ -59,7 +59,7 @@ func getAdjustedLoad() (float64, error) {
 		return 0.0, fmt.Errorf("parse vm.loadavg: %w", err)
 	}
 
-	load1min := float64(la.load[0]) / fscale
+	load1min := float64(la.Load[0]) / fscale
 
 	rawVmtotal, err := unix.SysctlRaw("vm.vmtotal")
 	if err != nil {
@@ -75,7 +75,7 @@ func getAdjustedLoad() (float64, error) {
 		return load1min, nil
 	}
 
-	return load1min + float64(vmt.t_pw), nil
+	return load1min + float64(vmt.T_pw), nil
 }
 
 func getSwapUsage() (int, error) {
@@ -105,8 +105,8 @@ func getSwapUsage() (int, error) {
 			continue
 		}
 
-		totalBlks += xs.nblks
-		usedBlks += xs.used
+		totalBlks += xs.Nblks
+		usedBlks += xs.Used
 	}
 
 	if totalBlks == 0 {
