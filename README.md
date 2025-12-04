@@ -162,6 +162,78 @@ go-synth db crc editors/vim
 
 **Current Implementation**: Phase 3 complete - all core features working
 
+## Real-Time Monitoring
+
+go-synth provides comprehensive real-time monitoring of builds with system metrics and progress tracking.
+
+### Live Statistics Display
+
+During builds, go-synth displays live metrics every second:
+
+**Text Mode (stdout)**:
+```
+Workers:  4 / 8    Load: 3.24  Swap:  2%    [DynMax: 6]
+Elapsed: 00:15:43  Rate: 24.3 pkg/hr  Impulse: 3
+Progress: 38/142 (S:35 F:2 I:0 Skipped:5)
+```
+
+**Throttle Warnings**:
+When system resources are constrained, go-synth automatically throttles workers:
+```
+⚠ WARNING: Workers throttled due to high load (DynMax: 4/8)
+⚠ WARNING: Workers throttled due to swap usage (DynMax: 3/8)
+```
+
+### Key Metrics
+
+| Metric | Description | Update Frequency |
+|--------|-------------|------------------|
+| **Workers** | Active/Total worker count | Real-time |
+| **DynMax** | Dynamic max workers (throttled) | 1 Hz |
+| **Load** | Adjusted 1-min load avg | 1 Hz |
+| **Swap** | Swap usage percentage | 1 Hz |
+| **Rate** | Packages/hour (60s window) | 1 Hz |
+| **Impulse** | Instant completions/sec | 1 Hz |
+| **Elapsed** | Build duration | Real-time |
+
+### Dynamic Worker Throttling
+
+go-synth automatically reduces active workers when system resources are constrained:
+
+- **Load-based**: Linear throttling from 1.5-5.0× CPU count
+- **Swap-based**: Linear throttling from 10-40% swap usage
+- **Minimum enforcement**: Uses most restrictive limit
+- **Auto-recovery**: Workers increase when conditions improve
+
+**Throttling Formula**:
+```
+Load throttle: linear interpolation 1.5-5.0×ncpus → reduce to 25% workers
+Swap throttle: linear interpolation 10-40% usage → reduce to 25% workers
+Final: min(load_cap, swap_cap)
+```
+
+### Monitor Command
+
+Query live build statistics from BuildDB:
+
+```bash
+# Poll active build every 1s
+go-synth monitor
+
+# Export snapshot to file (dsynth compatibility)
+go-synth monitor export /tmp/monitor.dat
+```
+
+### System Metrics (BSD-specific)
+
+go-synth uses native BSD sysctls for accurate system metrics:
+
+- **Load Average**: `vm.loadavg` + `vm.vmtotal.t_pw` (page-fault waits)
+- **Swap Usage**: `vm.swap_info` (aggregated across all devices)
+- **No cgo required**: Pure Go implementation via `golang.org/x/sys/unix`
+
+**Graceful Degradation**: Metrics errors are logged but don't fail builds.
+
 ---
 
 ## Configuration

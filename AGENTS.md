@@ -90,6 +90,7 @@ gh pr create --repo otheruser/somerepo
 | `environment/` | ✅ Build isolation abstraction (Setup, Execute, Cleanup) with BSD backend - **Phase 4 Complete** | `environment/*.go`, `environment/bsd/*.go` |
 | `mount/` | ⚠️ Deprecated - Filesystem operations (use `environment/` instead) | `mount/mount.go` |
 | `log/` | Multi-file logging system (8 different log types) | `log/*.go` |
+| `stats/` | ✅ Real-time monitoring with system metrics (load/swap), rate calculation, worker throttling - **Complete** | `stats/*.go` |
 | `util/` | Helper utilities and common functions | `util/util.go` |
 | `cmd/` | Additional command implementations | `cmd/build.go` |
 
@@ -102,6 +103,9 @@ gh pr create --repo otheruser/somerepo
 - **`environment.Environment`** - Interface for build isolation (BSD, mock, future backends)
 - **`environment.ExecCommand`** - Command execution specification with context support
 - **`environment.ExecResult`** - Command execution result with exit code and duration
+- **`stats.TopInfo`** - Real-time build statistics snapshot
+- **`stats.StatsCollector`** - Collects metrics with 60s sliding window for rate calculation
+- **`stats.WorkerThrottler`** - Dynamic worker limit based on load/swap
 
 ## Development Commands
 

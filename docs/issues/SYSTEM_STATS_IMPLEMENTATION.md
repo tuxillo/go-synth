@@ -20,10 +20,10 @@ go-synth currently lacks the real-time system statistics monitoring that the ori
 - Elapsed build time
 - Build totals (queued, built, failed, ignored, skipped)
 
-Without these metrics, users have no visibility into build progress, system health, or performance bottlenecks. The original dsynth provides this via:
+Without these metrics, users have no visibility into build progress, system health, or performance bottlenecks. go-synth provides this via:
 1. Ncurses UI (live updating top panel)
 2. Stdout text output (periodic status lines)
-3. `monitor.dat` file (external monitoring/web UI consumption)
+3. BuildDB storage (live snapshots for CLI/API queries)
 
 ## Expected Behavior
 
@@ -41,21 +41,10 @@ Queued: 142  Built: 38  Failed: 2  Ignored: 0  Skipped: 5
 [00:15:43] Load 3.24/4.00 Swap 2% Rate 24.3/hr Built 38 Failed 2
 ```
 
-**Monitor File (`monitor.dat`)**:
-```
-Load=3.24
-Swap=2
-Workers=4/4
-DynMax=4
-Rate=24.3
-Impulse=3
-Elapsed=943
-Queued=142
-Built=38
-Failed=2
-Ignored=0
-Skipped=5
-```
+**BuildDB Storage (go-synth monitor)**:
+- Live snapshots stored in `RunRecord.LiveSnapshot` field
+- CLI query: `go-synth monitor` polls BuildDB every 1s
+- REST API (future): `GET /api/v1/builds/:id/stats`
 
 ### Key Metrics Defined
 
@@ -89,15 +78,15 @@ Skipped=5
 - Aggregated stats service collecting metrics from multiple hosts
 - Remote filesystem/mount orchestration or container-based workers
 
-### BuildDB-Backed Monitor Storage
+### BuildDB-Backed Stats Storage
 
-**Decision**: Store live monitoring data in BuildDB instead of writing `monitor.dat` files. The build run record owns a single `LiveSnapshot` field that is continuously updated during the build (no per-second history).
+**Decision**: Store live monitoring data in BuildDB. The build run record owns a single `LiveSnapshot` field that is continuously updated during the build (no per-second history).
 
 **Rationale**:
 - **Single source of truth**: BuildDB already tracks build runs (UUID, start/end time, status, totals)
 - **Durability**: Survives crashes better than file writes; ACID transactions ensure consistency
 - **No filesystem dependencies**: Enables future REST API / remote monitoring without shared filesystems
-- **Simpler cleanup**: No orphaned monitor files to manage
+- **Query interface**: CLI and future REST API query BuildDB directly for live stats
 - **Alpha stage flexibility**: No legacy migration needed—design from scratch
 
 **Storage Model**:
@@ -106,10 +95,10 @@ Skipped=5
 - Only one snapshot per run—overwrites previous value (no historical snapshots stored)
 - Consumers poll `GetRunSnapshot(runID)` or `ActiveRunSnapshot()` for live updates
 
-**Backward Compatibility**:
-- Optional: `go-synth monitor export` can write dsynth-compatible `monitor.dat` from live snapshot
-- External tools migrate to polling BuildDB API instead of tailing file
-- Config flag `Enable_monitor_file=yes` can enable file export if needed temporarily
+**External Tool Integration**:
+- CLI: `go-synth monitor` polls BuildDB for live stats
+- Future REST API: `GET /api/v1/builds/:id/stats` endpoint
+- BuildDB is the canonical data source for all monitoring
 
 ### Go Idioms Over C Patterns
 
@@ -151,14 +140,14 @@ Skipped=5
 - ✅ 60-second sliding window for rate calculation
 - ✅ Linear throttling formula (1.5-5.0×ncpus load, 10-40% swap)
 - ✅ Adjusted load average (`vm.vmtotal.t_pw`)
-- ✅ Monitor data format/semantics (stored in BuildDB, optionally exported to file)
+- ✅ Stats data semantics (stored in BuildDB as JSON snapshots)
 - ✅ Event types (success/fail/skip/ignore semantics)
 
 **Intentionally Different**:
 - Implementation details (structs, interfaces, goroutines vs pthread)
 - Internal data organization (no global counters, no linked lists)
 - Type representations (Duration vs h/m/s, typed enums vs bitfields)
-- Storage mechanism (BuildDB per-run snapshot vs filesystem monitor.dat)
+- Storage mechanism (BuildDB snapshots vs C dsynth file-based approach)
 
 ## Investigation Summary
 
@@ -208,10 +197,10 @@ typedef struct runstats {
 ```
 
 **Call Sites**:
-- `runstats.init()` - Initialize stats system (ncurses setup or monitor file)
+- `runstats.init()` - Initialize stats system (ncurses setup or storage initialization)
 - `runstats.updateTop(&topinfo)` - Update top panel/status line (1 Hz)
 - `runstats.update(worker, portdir)` - Worker status change (WMSG events)
-- `runstats.sync()` - Flush monitor file atomically
+- `runstats.sync()` - Persist stats atomically
 - `runstats.done()` - Cleanup (ncurses teardown)
 
 #### Dynamic Worker Throttling (build.c)
@@ -1332,10 +1321,10 @@ func (ui *StdoutUI) OnStatsUpdate(info stats.TopInfo) {
    - Condensed status line every 5s (throttled to reduce noise)
    - Throttle warning appended when applicable
 
-6. ✅ **cmd/monitor.go** (265 lines) - CLI monitor command with 3 operational modes:
-   - Default: Poll BuildDB ActiveRun() every 1s, display live stats
-   - --file PATH: Watch legacy monitor.dat file
-   - export PATH: Export snapshot to dsynth-compatible file
+6. ✅ **cmd/monitor.go** (265 lines) - CLI monitor command:
+   - Polls BuildDB ActiveRun() every 1s
+   - Displays live stats in text format
+   - No file-based modes (BuildDB is canonical storage)
 
 7. ✅ **main.go** - Added monitor command to switch case, imported cmd package, updated usage()
 
@@ -1348,7 +1337,7 @@ func (ui *StdoutUI) OnStatsUpdate(info stats.TopInfo) {
 - UI components use placeholder ActiveRun() until Phase 3 adds ActiveRunSnapshot()
 - BuildUI interface extended without breaking existing implementations
 - Stats display throttled appropriately (5s for stdout to reduce noise)
-- All three monitor modes implemented (DB poll, file watch, export)
+- Monitor command reads from BuildDB (no file-based modes)
 
 ---
 
@@ -1404,32 +1393,12 @@ func (ui *StdoutUI) OnStatsUpdate(info stats.TopInfo) {
 **Optional File Monitor Support**:
   ```go
   // cmd/monitor.go --file mode
-  func watchMonitorFile(monitorPath string) {
-      for {
-          data, err := ioutil.ReadFile(monitorPath)
-          if err != nil {
-              fmt.Printf("Error reading monitor file: %v\n", err)
-              time.Sleep(1 * time.Second)
-              continue
-          }
-          
-          // Parse key=value format and display
-          fmt.Print(string(data))
-          time.Sleep(1 * time.Second)
-      }
-  }
   ```
 
 **CLI Interface**:
 ```bash
-# Watch active build stats from BuildDB (default)
+# Watch active build stats from BuildDB
 go-synth monitor
-
-# Watch from legacy monitor.dat file (dsynth compatibility)
-go-synth monitor --file /build/monitor.dat
-
-# Export current snapshot to dsynth-compatible file
-go-synth monitor export /tmp/monitor.dat
 ```
 
 #### 4.5 Dynamic Worker Feedback (30 min)
@@ -1697,180 +1666,24 @@ func TestImpulseTracking(t *testing.T) {
 
 ---
 
-### Phase 6: Monitor File & Lock (Expanded)
+### Phase 6: File-Based Monitoring (NOT IMPLEMENTED)
 
-**Estimated Time**: 3 hours
+**Status**: ⏸️ DEFERRED - BuildDB is canonical storage
 
-#### 6a. Understand Original Semantics (30 min)
-- **Action**: Fetch and analyze `usr.bin/dsynth/monitor.c` from upstream
-- **Questions to Answer**:
-  1. File format: Plain text (key=value) or binary?
-  2. Update frequency: Every tick (1 Hz) or batched?
-  3. Lock mechanism: flock on separate `.lk` file or inline?
-  4. Atomicity: Temp file + rename or direct write?
-  5. Consumers: What tools read monitor.dat? (web UI, CLI, scripts)
+**Decision**: File-based monitoring (monitor.dat) is NOT being implemented. BuildDB provides all necessary stats storage and querying capabilities.
 
-**Expected Format** (based on observation):
-```
-Load=3.24
-Swap=2
-Workers=4/4
-DynMax=4
-Rate=24.3
-Impulse=3
-Elapsed=943
-Queued=142
-Built=38
-Failed=2
-Ignored=0
-Skipped=5
-```
+**Rationale**:
+- BuildDB `RunRecord.LiveSnapshot` field stores all stats data
+- CLI `go-synth monitor` reads from BuildDB
+- Future REST API will query BuildDB directly
+- No need for file-based intermediate format
+- Simpler architecture, fewer moving parts
+- No file locking or atomicity concerns
 
-#### 6b. Recreate in Go (1 hour)
-```go
-// stats/monitor.go
-
-type MonitorWriter struct {
-    path        string
-    lockPath    string  // e.g., /build/monitor.lk
-    lastSync    time.Time
-    syncInterval time.Duration  // e.g., 2s (don't write every tick)
-}
-
-func NewMonitorWriter(path string) *MonitorWriter {
-    return &MonitorWriter{
-        path:         path,
-        lockPath:     path + ".lk",
-        syncInterval: 2 * time.Second,
-    }
-}
-
-func (mw *MonitorWriter) OnStatsUpdate(info stats.TopInfo) {
-    // Throttle writes (don't spam disk every 1s)
-    if time.Since(mw.lastSync) < mw.syncInterval {
-        return
-    }
-    mw.lastSync = time.Now()
-    
-    if err := mw.writeMonitorFile(info); err != nil {
-        log.Printf("Failed to write monitor file: %v", err)
-    }
-}
-
-func (mw *MonitorWriter) writeMonitorFile(info stats.TopInfo) error {
-    // Acquire exclusive lock
-    lockFile, err := os.OpenFile(mw.lockPath, os.O_CREATE|os.O_RDWR, 0644)
-    if err != nil {
-        return fmt.Errorf("open lock file: %w", err)
-    }
-    defer lockFile.Close()
-    
-    if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
-        return fmt.Errorf("flock: %w", err)
-    }
-    defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
-    
-    // Write to temp file
-    tmpPath := mw.path + ".tmp"
-    content := mw.formatMonitorData(info)
-    if err := ioutil.WriteFile(tmpPath, []byte(content), 0644); err != nil {
-        return fmt.Errorf("write temp file: %w", err)
-    }
-    
-    // Atomic rename
-    if err := os.Rename(tmpPath, mw.path); err != nil {
-        return fmt.Errorf("atomic rename: %w", err)
-    }
-    
-    return nil
-}
-
-func (mw *MonitorWriter) formatMonitorData(info stats.TopInfo) string {
-    // Match original dsynth format exactly
-    return fmt.Sprintf(`Load=%.2f
-Swap=%d
-Workers=%d/%d
-DynMax=%d
-Rate=%.1f
-Impulse=%d
-Elapsed=%d
-Queued=%d
-Built=%d
-Failed=%d
-Ignored=%d
-Skipped=%d
-`,
-        info.Load, info.SwapPct,
-        info.ActiveWorkers, info.MaxWorkers,
-        info.DynMaxWorkers,
-        info.Rate, info.Impulse,
-        int(info.Elapsed.Seconds()),
-        info.Queued, info.Built, info.Failed,
-        info.Ignored, info.Skipped)
-}
-```
-
-#### 6c. Hooks for Consumers (30 min)
-- **Integration**: Already handled in Phase 3d
-- **External Tools**:
-  - Web UI: Poll monitor.dat every 1-2 seconds
-  - CLI: `go-synth status --watch` reads and displays
-  - Scripts: `tail -f monitor.dat`, `watch cat monitor.dat`
-
-#### 6d. Update Lifecycle (15 min)
-- **Frequency**: Write every 2 seconds (reduce disk I/O)
-- **Trigger**: `OnStatsUpdate()` called by `StatsCollector.tick()`
-- **Cleanup**: Remove monitor.dat and monitor.lk on build completion
-
-#### 6e. Testing Strategy (30 min)
-```go
-// stats/monitor_test.go
-
-func TestMonitorFileFormat(t *testing.T) {
-    tmpDir := t.TempDir()
-    mw := NewMonitorWriter(filepath.Join(tmpDir, "monitor.dat"))
-    
-    info := stats.TopInfo{
-        Load: 3.24, SwapPct: 2,
-        ActiveWorkers: 4, MaxWorkers: 4, DynMaxWorkers: 4,
-        Rate: 24.3, Impulse: 3, Elapsed: 943 * time.Second,
-        Queued: 142, Built: 38, Failed: 2, Ignored: 0, Skipped: 5,
-    }
-    
-    mw.OnStatsUpdate(info)
-    
-    // Read file and verify format
-    data, err := ioutil.ReadFile(mw.path)
-    require.NoError(t, err)
-    
-    lines := strings.Split(string(data), "\n")
-    assert.Contains(t, lines[0], "Load=3.24")
-    assert.Contains(t, lines[1], "Swap=2")
-    assert.Contains(t, lines[4], "Rate=24.3")
-}
-
-func TestMonitorAtomicity(t *testing.T) {
-    // Test that concurrent reads never see partial writes
-    // Simulate: writer updates every 100ms, reader polls every 50ms
-    // Verify: reader always sees complete, valid data
-}
-```
-
-#### 6f. Future Enhancements (deferred)
-- **JSON Mode**: Add `Monitor_format=json` config option
-  ```json
-  {
-    "load": 3.24,
-    "swap_pct": 2,
-    "workers": {"active": 4, "max": 4, "dynmax": 4},
-    "rate": 24.3,
-    "impulse": 3,
-    "elapsed": 943,
-    "totals": {"queued": 142, "built": 38, "failed": 2}
-  }
-  ```
-- **WebSocket Push**: Instead of polling file, push updates via WebSocket
-- **Historical Metrics**: Store time-series data in builddb for graphing
+**Alternative for External Tools**:
+- Use `go-synth monitor` CLI command
+- Query BuildDB directly via Go API
+- Future: REST API endpoints for stats queries
 
 ---
 
@@ -1890,21 +1703,17 @@ func TestMonitorAtomicity(t *testing.T) {
    - `metrics_bsd.go` with `getAdjustedLoad()`, `getSwapUsage()`
    - Tests: `metrics_test.go`
 
-3. **stats: Add monitor file writer** (Phase 6)
-   - `monitor.go` with atomic writes and flock
-   - Tests: `monitor_test.go`
-
-4. **build: Integrate StatsCollector with BuildContext** (Phase 3d)
+3. **build: Integrate StatsCollector with BuildContext** (Phase 3d)
    - Modify `build/build.go` to create collector
    - Hook `RecordCompletion()` and `RecordWorkerUpdate()` calls
    - Register UI as consumer
 
-5. **ui: Add stats display to ncurses and stdout UIs** (Phase 4)
+4. **ui: Add stats display to ncurses and stdout UIs** (Phase 4)
    - Update `build/ui_ncurses.go` header panel
    - Update `build/ui_stdout.go` periodic status line
    - Add throttling warnings
 
-6. **docs: Document system stats implementation** (Phase 7c)
+5. **docs: Document system stats implementation** (Phase 7c)
    - Update `DEVELOPMENT.md` (Phase 3 complete)
    - Update `README.md` (add stats features)
    - Update `AGENTS.md` (new stats package)
@@ -1952,10 +1761,9 @@ Co-authored-by: Claude 3.7 Sonnet <claude-3.7-sonnet@anthropic.com>
        - System load (adjusted for I/O waits) and swap usage
        - Package build rate (pkg/hr) and instant completions
        - Dynamic worker throttling based on system health
-       - Monitor file (`monitor.dat`) for external tools/web UI
+       - BuildDB-backed live stats (query with `go-synth monitor`)
      ```
-   - Add example `monitor.dat` output
-   - Document `go-synth status --watch` command
+   - Document `go-synth monitor` command
 
 3. **`AGENTS.md`**:
    - Add `stats/` package to "Core Components" table:
@@ -1977,10 +1785,10 @@ Co-authored-by: Claude 3.7 Sonnet <claude-3.7-sonnet@anthropic.com>
 - [ ] Unit tests pass: `go test ./stats/...`
 - [ ] Integration tests pass: `go test ./...`
 - [ ] Manual VM test: Build devel/gmake, verify stats update every 1s
-- [ ] Monitor file test: Verify `monitor.dat` format matches original
+- [ ] BuildDB test: Verify LiveSnapshot updates in database
 - [ ] Throttling test: Simulate high load/swap, verify dynmax reduction
 - [ ] UI test: Ncurses shows stats, stdout prints periodic lines
-- [ ] Lock test: No corruption with concurrent reads of monitor.dat
+- [ ] Monitor CLI test: `go-synth monitor` displays live stats
 
 #### 7e. Review & Validation (15 min)
 ```bash
@@ -1997,8 +1805,8 @@ go mod tidy
 make build
 sudo ./go-synth build devel/gmake
 
-# Watch monitor file
-watch -n 1 cat /build/monitor.dat
+# Watch live stats
+go-synth monitor
 ```
 
 #### 7f. Commit Sequencing (done incrementally)
@@ -2026,19 +1834,18 @@ watch -n 1 cat /build/monitor.dat
 - ✅ Load adjusted with `vm.vmtotal.t_pw` (page-fault waits)
 - ✅ Swap percentage queried via sysctl
 - ✅ Dynamic worker throttling matches original dsynth behavior
-- ✅ Monitor file written atomically with flock
+- ✅ BuildDB snapshots persist stats atomically
 - ✅ Ncurses UI shows stats in header panel
 - ✅ Stdout UI prints periodic status lines
-- ✅ External tools can read `monitor.dat` without corruption
+- ✅ CLI monitor command queries BuildDB for live stats
 
 ### Performance Requirements
 - Stats collection adds <1% CPU overhead
-- Monitor file writes don't block build workers
-- Lock contention on monitor.lk is negligible
+- BuildDB writes don't block build workers (best-effort)
 - UI updates are smooth (no flicker/lag)
 
 ### Compatibility Requirements
-- `monitor.dat` format matches original dsynth (external tools work)
+- Stats semantics match original dsynth (throttling, rate calc)
 - Ncurses layout similar to original (familiar to users)
 - Stdout output concise and readable
 
@@ -2046,7 +1853,7 @@ watch -n 1 cat /build/monitor.dat
 - Unit test coverage >80% for stats package
 - Integration tests validate end-to-end stats flow
 - VM tests confirm BSD-specific syscalls work correctly
-- Manual testing verifies UI display and monitor file
+- Manual testing verifies UI display and CLI monitor
 
 ---
 
@@ -2068,7 +1875,7 @@ watch -n 1 cat /build/monitor.dat
 | 4.5 | Throttle feedback | ✅ COMPLETE | 0.5h | `build/ui*.go` |
 | 4.6 | UI testing | ✅ COMPLETE | 1h | (manual VM test) |
 | 5 | Rate/impulse (detailed) | ✅ COMPLETE | 2.5h | `stats/collector.go`, `stats/collector_test.go` |
-| 6 | Monitor persistence (file) | ⏳ DEFERRED | - | `stats/monitor.go` (BuildDB primary) |
+| 6 | File-based monitoring | ⏸️ NOT IMPLEMENTED | - | (BuildDB is canonical) |
 | 7 | Docs & commits | 🔲 TODO | 2h | `DEVELOPMENT.md`, issue doc |
 | **Total** | | **23.5h / 27.5h** | **Backend 100%** | ~15 files |
 
@@ -2076,7 +1883,7 @@ watch -n 1 cat /build/monitor.dat
 
 **Key Changes from Original dsynth**:
 - **BuildDB storage**: `RunRecord.LiveSnapshot` field stores JSON `TopInfo` (updated every 1s)
-- **File monitor optional**: `monitor.dat` is compatibility layer, not primary storage
+- **No file-based monitoring**: BuildDB is canonical storage (no monitor.dat)
 - **CLI reads from DB**: `go-synth monitor` queries `ActiveRunSnapshot()` API
 
 ---
@@ -2086,7 +1893,7 @@ watch -n 1 cat /build/monitor.dat
 ### External Dependencies
 - Original dsynth source: `usr.bin/dsynth/` from DragonFlyBSD repo
   - **Action**: `git clone https://github.com/DragonFlyBSD/DragonFlyBSD.git`
-  - **Files Needed**: `monitor.c`, `curses.c`
+  - **Files Analyzed**: `build.c`, `dsynth.h` (for behavioral reference)
 
 ### Go Packages
 - `golang.org/x/sys/unix` - BSD syscalls (already imported)
@@ -2118,15 +1925,15 @@ watch -n 1 cat /build/monitor.dat
 ### Original dsynth Source Files
 - `.original-c-source/dsynth.h:469-500` - `topinfo_t` struct, `runstats_t` interface
 - `.original-c-source/build.c` - `waitbuild()`, `adjloadavg()`, throttling logic
-- Upstream (to fetch): `usr.bin/dsynth/monitor.c`, `usr.bin/dsynth/curses.c`
 
 ### Go Implementation Files
-- `stats/collector.go` - StatsCollector implementation (NEW)
-- `stats/types.go` - TopInfo, StatsConsumer (NEW)
-- `stats/metrics_bsd.go` - System metric acquisition (NEW)
-- `stats/monitor.go` - Monitor file writer (NEW)
+- `stats/collector.go` - StatsCollector implementation
+- `stats/types.go` - TopInfo, StatsConsumer
+- `stats/metrics_bsd.go` - System metric acquisition (real BSD sysctls)
+- `stats/builddb_writer.go` - BuildDB persistence consumer
 - `build/build.go` - Integration hooks
 - `build/ui_ncurses.go`, `build/ui_stdout.go` - Stat display
+- `cmd/monitor.go` - CLI monitor command
 
 ### Documentation
 - `DEVELOPMENT.md` - Phase tracking
@@ -2160,7 +1967,7 @@ watch -n 1 cat /build/monitor.dat
 
 **UI Components (Complete)**:
 - Ncurses/stdout implementations with throttle warnings
-- CLI monitor command (3 modes: DB poll, file watch, export)
+- CLI monitor command (polls BuildDB for live stats)
 - Unit tests with 100% coverage
 
 **VM Testing**:
@@ -2174,8 +1981,8 @@ watch -n 1 cat /build/monitor.dat
 - ✅ Real BSD syscalls (metrics_bsd.go) - sysctl-based load/swap via vm.loadavg, vm.vmtotal, vm.swap_info (no cgo)
 - ✅ Unit tests: 10 test functions covering parsers, struct sizes, and integration
 
-**Deferred Items** (non-blocking):
-- File-based monitor.dat writer - BuildDB is primary storage, file export optional
+**Not Implemented** (by design):
+- File-based monitoring - BuildDB is canonical storage, no file layer needed
 
 ### Remaining Work (Documentation Only)
 
