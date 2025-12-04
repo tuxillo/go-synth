@@ -933,12 +933,208 @@ Without this VM infrastructure, Phase 4 cannot be tested or verified.
 
 ---
 
-## See Also
+## Procctl Testing (Process Reaping)
+
+### Overview
+
+The procctl tests verify that go-synth correctly kills ALL descendant processes during cleanup, solving the "cc1plus survival" bug where child/grandchild processes continued running after Ctrl+C.
+
+**Problem**: Original implementation tracked only direct child PIDs. Child processes spawned by make (like cc1plus) could escape tracking if the parent exited, were reparented to init, or the process group dissolved.
+
+**Solution**: Two complementary approaches:
+1. **procctl-based reaping** (DragonFly only): Use `procctl(PROC_REAP_ACQUIRE)` to become a reaper, automatically inheriting ALL orphaned descendants
+2. **/proc enumeration** (DragonFly/FreeBSD): Scan `/proc` at cleanup time to find ALL processes in the chroot
+
+### Running Procctl Tests
+
+**Prerequisites**:
+- DragonFly BSD VM running (see Quick Start above)
+- Root privileges (tests use chroot and mounts)
+- Go toolchain installed in VM
+
+**All procctl tests**:
+```bash
+make vm-test-procctl
+```
+
+**Individual tests**:
+```bash
+# Test 1: Procctl reaping (DragonFly only)
+make vm-test-procctl-reaping
+
+# Test 2: /proc enumeration (DragonFly/FreeBSD)
+make vm-test-procfind
+
+# Test 3: Orphaned processes (simulates cc1plus bug)
+make vm-test-orphans
+```
+
+### Test Scenarios
+
+#### 1. TestIntegration_ProcctlReaping (DragonFly Only)
+
+**What it tests**:
+- Calls `BecomeReaper()` to enable procctl reaping
+- Spawns 3 child processes via `spawn_children.sh`
+- Cancels execution (simulates Ctrl+C)
+- Calls `ReapAll()` to kill via procctl
+- Verifies NO processes remain
+
+**Expected output**:
+```
+=== RUN   TestIntegration_ProcctlReaping
+    procctl_integration_test.go:54: Setting up BSD environment...
+    procctl_integration_test.go:60: ✓ Setup complete: baseDir=/build/SL99
+    procctl_integration_test.go:64: Calling BecomeReaper()...
+    procctl_integration_test.go:68: ✓ BecomeReaper() succeeded
+    procctl_integration_test.go:85: Executing spawn_children.sh (spawns 3 background sleeps)...
+    procctl_integration_test.go:101: ✓ spawn_children.sh timed out as expected: context deadline exceeded
+    procctl_integration_test.go:110: Found 4 processes in chroot before cleanup: [12345 12346 12347 12348]
+    procctl_integration_test.go:116: Calling ReapAll() to kill descendants...
+    procctl_integration_test.go:120: Found 0 processes in chroot after cleanup: []
+    procctl_integration_test.go:131: ✓ SUCCESS: All processes killed by procctl reaping
+--- PASS: TestIntegration_ProcctlReaping (3.12s)
+PASS
+```
+
+**On failure**:
+```
+    procctl_integration_test.go:123: FAIL: 1 processes survived procctl reaping
+    procctl_integration_test.go:126:   Survivor PID 12347: sleep 9999
+```
+
+#### 2. TestIntegration_ProcfindReaping (DragonFly/FreeBSD)
+
+**What it tests**:
+- Spawns 3 child processes via `spawn_children.sh`
+- Calls `killProcessesInChroot()` to enumerate via /proc
+- Sends SIGTERM → SIGKILL to all found processes
+- Verifies NO processes remain
+
+**This is the FALLBACK** when procctl isn't available or when using goroutine-based workers instead of forked processes.
+
+**Expected output**:
+```
+=== RUN   TestIntegration_ProcfindReaping
+    procctl_integration_test.go:150: Setting up BSD environment...
+    procctl_integration_test.go:156: ✓ Setup complete: baseDir=/build/SL98
+    procctl_integration_test.go:181: Executing spawn_children.sh (spawns 3 background sleeps)...
+    procctl_integration_test.go:197: ✓ spawn_children.sh timed out as expected: context deadline exceeded
+[Cleanup] Found 4 process(es) in chroot /build/SL98
+[Cleanup] Sent SIGTERM to process group 12350
+[Cleanup] Sent SIGTERM to process group 12351
+[Cleanup] Sent SIGTERM to process group 12352
+[Cleanup] Sent SIGTERM to process group 12353
+[Cleanup] Sent SIGKILL to process group 12350
+[Cleanup] All processes in /build/SL98 terminated
+    procctl_integration_test.go:218: ✓ SUCCESS: All processes killed by /proc enumeration
+--- PASS: TestIntegration_ProcfindReaping (3.45s)
+PASS
+```
+
+#### 3. TestIntegration_OrphanedProcesses (Simulates cc1plus Bug)
+
+**What it tests**:
+- Executes a script that spawns children then IMMEDIATELY exits (orphaning them)
+- This simulates the exact scenario where cc1plus survived: parent (make) exits, children are reparented to init
+- Calls `killProcessesInChroot()` to find orphans via /proc
+- Verifies ALL orphans are killed
+
+**Expected output**:
+```
+=== RUN   TestIntegration_OrphanedProcesses
+    procctl_integration_test.go:237: Setup complete: baseDir=/build/SL97
+    procctl_integration_test.go:249: Executing script that orphans children...
+    procctl_integration_test.go:263: ✓ Script completed (orphaned children): Parent exiting, children orphaned
+    procctl_integration_test.go:270: Found 3 orphaned processes: [12400 12401 12402]
+    procctl_integration_test.go:275: Killing orphans via /proc enumeration...
+[Cleanup] Found 3 process(es) in chroot /build/SL97
+[Cleanup] Sent SIGTERM to process group 12400
+[Cleanup] Sent SIGTERM to process group 12401
+[Cleanup] Sent SIGTERM to process group 12402
+[Cleanup] All processes in /build/SL97 terminated
+    procctl_integration_test.go:286: ✓ SUCCESS: All orphaned processes killed
+--- PASS: TestIntegration_OrphanedProcesses (2.89s)
+PASS
+```
+
+### Test Files
+
+| File | Description |
+|------|-------------|
+| `environment/bsd/procctl_integration_test.go` | 3 integration tests for process reaping |
+| `environment/bsd/testdata/spawn_children.sh` | Helper script that spawns background processes |
+| `environment/bsd/procctl_dragonfly.go` | procctl(2) Go bindings (BecomeReaper, ReapAll) |
+| `environment/bsd/procfind_bsd.go` | /proc enumeration (findProcessesInChroot, killProcessesInChroot) |
+
+### Debugging Failed Tests
+
+**If processes survive cleanup**:
+```bash
+# SSH into VM
+make vm-ssh
+
+# Check for leftover processes
+ps auxww | grep /build/SL
+
+# Check for active mounts
+mount | grep /build/SL
+
+# Manually kill survivors
+pkill -9 -f /build/SL
+
+# Clean up mounts
+for m in /build/SL*/dev /build/SL*/proc /build/SL*; do
+    umount -f "$m" 2>/dev/null
+done
+```
+
+**If procctl tests fail with EINVAL**:
+- Check DragonFly version: `uname -r` (need 6.0.5+ for PROC_REAP_KILL)
+- Fall back to legacy PROC_REAP_STATUS (automatically handled in code)
+
+**If /proc tests fail**:
+- Verify /proc is mounted: `mount | grep proc`
+- Check /proc permissions: `ls -ld /proc`
+- Verify procfs in kernel: `dmesg | grep procfs`
+
+### Manual Testing on VM
+
+For ad-hoc testing without running the full test suite:
+
+```bash
+# SSH into VM
+make vm-ssh
+
+# Navigate to project
+cd /root/go-synth
+
+# Run specific test with verbose output
+doas go test -v -tags=integration -run TestIntegration_ProcctlReaping ./environment/bsd/
+
+# Run all procctl tests
+doas go test -v -tags=integration -run TestIntegration_Proc ./environment/bsd/
+
+# Check test coverage
+doas go test -v -tags=integration -coverprofile=coverage.out ./environment/bsd/
+go tool cover -html=coverage.out
+```
+
+### Performance Notes
+
+- Each test takes ~3-5 seconds (includes setup, execution, cleanup)
+- Tests create isolated chroot environments (no interference)
+- Can run concurrently (different worker IDs: SL97, SL98, SL99)
+- Cleanup is automatic (defer env.Cleanup())
+
+### See Also
 
 - `docs/design/PHASE_4_TODO.md` - Phase 4 implementation plan
 - `DEVELOPMENT.md` - General development guide
 - `scripts/vm/` - VM management scripts
 - `Makefile` - VM target definitions
+- `environment/bsd/procctl_dragonfly.go` - procctl bindings
+- `environment/bsd/procfind_bsd.go` - /proc enumeration
 
 ---
 

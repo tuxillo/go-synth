@@ -198,6 +198,22 @@ vm-test-phase4: vm-build
 	@echo "==> Running Phase 4 tests in VM (requires root + mount)..."
 	@$(VM_SSH) 'cd /root/go-synth && doas go test -v ./internal/worker/...'
 
+vm-test-procctl: vm-build
+	@echo "==> Running procctl integration tests in VM (requires root + DragonFly)..."
+	@$(VM_SSH) 'cd /root/go-synth && doas go test -v -tags=integration -run TestIntegration_Procctl ./environment/bsd/'
+
+vm-test-procctl-reaping: vm-build
+	@echo "==> Running procctl reaping test in VM (requires root + DragonFly)..."
+	@$(VM_SSH) 'cd /root/go-synth && doas go test -v -tags="dragonfly integration" -run TestIntegration_ProcctlReaping ./environment/bsd/'
+
+vm-test-procfind: vm-build
+	@echo "==> Running /proc enumeration test in VM (requires root)..."
+	@$(VM_SSH) 'cd /root/go-synth && doas go test -v -tags=integration -run TestIntegration_ProcfindReaping ./environment/bsd/'
+
+vm-test-orphans: vm-build
+	@echo "==> Running orphaned process test in VM (requires root)..."
+	@$(VM_SSH) 'cd /root/go-synth && doas go test -v -tags=integration -run TestIntegration_OrphanedProcesses ./environment/bsd/'
+
 vm-test-e2e: vm-build
 	@echo "==> Running E2E tests in VM..."
 	@$(VM_SSH) 'cd /root/go-synth && go test -v -tags=e2e ./...'
@@ -245,6 +261,10 @@ vm-help:
 	@echo "  vm-test-build-integration   Run build integration tests (requires root)"
 	@echo "  vm-test-build-cancellation  Run build cancellation test (requires root + ports)"
 	@echo "  vm-test-phase4              Run Phase 4 tests (mount, chroot)"
+	@echo "  vm-test-procctl             Run ALL procctl tests (requires root + DragonFly)"
+	@echo "  vm-test-procctl-reaping     Run procctl reaping test only"
+	@echo "  vm-test-procfind            Run /proc enumeration test only"
+	@echo "  vm-test-orphans             Run orphaned process test only"
 	@echo "  vm-test-e2e                 Run end-to-end tests (tags=e2e)"
 	@echo "  vm-test-all                 Run all tests (unit + integration + phase4)"
 	@echo "  vm-quick                    Quick cycle: sync + Phase 4 tests"
@@ -259,4 +279,5 @@ vm-help:
 .PHONY: vm-start vm-stop vm-destroy vm-restore vm-clean-phases
 .PHONY: vm-ssh vm-status vm-sync vm-build vm-test-unit vm-test-integration
 .PHONY: vm-test-integration-e2e vm-test-build-integration vm-test-build-cancellation
-.PHONY: vm-test-phase4 vm-test-e2e vm-test-all vm-quick vm-help
+.PHONY: vm-test-phase4 vm-test-procctl vm-test-procctl-reaping vm-test-procfind vm-test-orphans
+.PHONY: vm-test-e2e vm-test-all vm-quick vm-help
