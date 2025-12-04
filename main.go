@@ -21,6 +21,14 @@ import (
 var Version = "dev"
 
 func main() {
+	// Check for worker helper mode BEFORE parsing regular flags
+	// This must happen early because helper mode has different argument structure
+	for _, arg := range os.Args[1:] {
+		if arg == "--worker-helper" {
+			os.Exit(runWorkerHelper())
+		}
+	}
+
 	// Command-line flags
 	debug := flag.Bool("d", false, "Debug verbosity")
 	force := flag.Bool("f", false, "Force operations")

@@ -376,15 +376,41 @@ func (e *BSDEnvironment) Execute(ctx context.Context, cmd *environment.ExecComma
 		defer cancel()
 	}
 
-	// Build chroot command arguments
-	// Format: chroot <baseDir> <command> <arg1> <arg2> ...
-	// Example: chroot /build/SL01 /usr/bin/make -C /xports/editors/vim install
-	args := []string{e.baseDir, cmd.Command}
+	// Use worker helper mode to get procctl reaper benefits
+	// The helper will:
+	//  1. Acquire reaper status (PROC_REAP_ACQUIRE)
+	//  2. Enter chroot
+	//  3. Execute the command
+	//  4. Kill all descendants (PROC_REAP_KILL) before exiting
+	//
+	// Get path to current executable (go-synth)
+	selfPath, exeErr := os.Executable()
+	if exeErr != nil {
+		// Fallback to system path if we can't determine our own path
+		selfPath = "go-synth"
+	}
+
+	// Build worker helper arguments
+	// Format: go-synth --worker-helper --chroot=<path> --workdir=<dir> --timeout=<duration> -- <command> <args...>
+	args := []string{
+		"--worker-helper",
+		"--chroot=" + e.baseDir,
+		"--workdir=" + cmd.WorkDir,
+	}
+
+	if cmd.Timeout > 0 {
+		args = append(args, "--timeout="+cmd.Timeout.String())
+	}
+
+	// Add separator and actual command
+	args = append(args, "--")
+	args = append(args, cmd.Command)
 	args = append(args, cmd.Args...)
 
 	// Create command with context support
-	// CommandContext ensures the process is killed if context is cancelled
-	execCmd := exec.CommandContext(execCtx, "chroot", args...)
+	// CommandContext ensures the helper process is killed if context is cancelled
+	// The helper's reaper status ensures all descendants are killed too
+	execCmd := exec.CommandContext(execCtx, selfPath, args...)
 
 	// Set working directory from host perspective
 	// The chroot command itself runs from root, and the command inside
