@@ -559,7 +559,6 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			if ctx.statsCollector != nil {
 				ctx.statsCollector.UpdateWorkerCount(activeCount)
 			}
-			ctx.logger.Debug("Worker %d: activeWorkers=%d (incremented)", worker.ID, activeCount)
 
 			// Mark as running
 			ctx.registry.AddFlags(p, pkg.PkgFRunning)
@@ -608,7 +607,6 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			if ctx.statsCollector != nil {
 				ctx.statsCollector.UpdateWorkerCount(activeCount)
 			}
-			ctx.logger.Debug("Worker %d: activeWorkers=%d (decremented)", worker.ID, activeCount)
 
 			if success {
 				ctx.recordRunPackage(p, builddb.RunStatusSuccess, worker.ID, startTime, endTime, "")
