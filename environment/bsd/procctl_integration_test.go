@@ -96,12 +96,13 @@ func TestIntegration_ProcctlReaping(t *testing.T) {
 	execCtx, execCancel := context.WithTimeout(ctx, 2*time.Second)
 	defer execCancel()
 
-	var stdout strings.Builder
+	// NOTE: Do NOT capture stdout/stderr with context timeout - causes pipe deadlock
+	// See TestIntegration_ProcfindReaping for detailed explanation
 	result, err := env.Execute(execCtx, &environment.ExecCommand{
 		Command: "/bin/sh",
 		Args:    []string{"/tmp/spawn_children.sh", "3", "9999"},
-		Stdout:  &stdout,
-		Stderr:  &stdout,
+		Stdout:  nil, // Discard to avoid pipe deadlock
+		Stderr:  nil,
 	})
 
 	// We EXPECT this to fail with context deadline (script waits forever)
@@ -110,7 +111,6 @@ func TestIntegration_ProcctlReaping(t *testing.T) {
 	} else {
 		t.Logf("✓ spawn_children.sh timed out as expected: %v", err)
 	}
-	t.Logf("Script output:\n%s", stdout.String())
 
 	// Step 5: Give processes time to spawn
 	time.Sleep(500 * time.Millisecond)
@@ -212,12 +212,16 @@ func TestIntegration_ProcfindReaping(t *testing.T) {
 	execCtx, execCancel := context.WithTimeout(ctx, 2*time.Second)
 	defer execCancel()
 
-	var stdout strings.Builder
+	// NOTE: Do NOT capture stdout/stderr when using context timeout!
+	// This causes a deadlock: when CommandContext kills the process, the
+	// goroutines reading from stdout/stderr pipes get stuck in IO wait,
+	// and Wait() hangs forever. This is a known Go issue with exec.CommandContext.
+	// See: https://github.com/golang/go/issues/23019
 	result, err := env.Execute(execCtx, &environment.ExecCommand{
 		Command: "/bin/sh",
 		Args:    []string{"/tmp/spawn_children.sh", "3", "9999"},
-		Stdout:  &stdout,
-		Stderr:  &stdout,
+		Stdout:  nil, // Discard to avoid pipe deadlock
+		Stderr:  nil,
 	})
 
 	if err == nil {
@@ -225,7 +229,6 @@ func TestIntegration_ProcfindReaping(t *testing.T) {
 	} else {
 		t.Logf("✓ spawn_children.sh timed out as expected: %v", err)
 	}
-	t.Logf("Script output:\n%s", stdout.String())
 
 	// Step 4: Give processes time to spawn
 	time.Sleep(500 * time.Millisecond)
@@ -311,21 +314,20 @@ exit 0
 
 	// Execute script (should complete quickly, leaving orphans)
 	t.Log("Executing script that orphans children...")
-	var stdout strings.Builder
 	result, err := env.Execute(ctx, &environment.ExecCommand{
 		Command: "/bin/sh",
 		Args:    []string{"/tmp/spawn_and_exit.sh"},
-		Stdout:  &stdout,
-		Stderr:  &stdout,
+		Stdout:  nil, // Discard output (not needed)
+		Stderr:  nil,
 	})
 
 	if err != nil {
 		t.Fatalf("Script execution failed: %v", err)
 	}
 	if result.ExitCode != 0 {
-		t.Fatalf("Script exit code = %d, want 0. Output:\n%s", result.ExitCode, stdout.String())
+		t.Fatalf("Script exit code = %d, want 0", result.ExitCode)
 	}
-	t.Logf("✓ Script completed (orphaned children): %s", stdout.String())
+	t.Logf("✓ Script completed (orphaned children)")
 
 	// Wait for children to spawn
 	time.Sleep(1 * time.Second)
