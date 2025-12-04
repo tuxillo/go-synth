@@ -283,7 +283,7 @@ func TestIntegration_ProcfindReaping(t *testing.T) {
 //	doas go test -tags=integration -run TestIntegration_OrphanedProcesses ./environment/bsd
 func TestIntegration_OrphanedProcesses(t *testing.T) {
 	requireRoot(t)
-
+	skipDragonFly(t, "/proc/[pid]/root symlink does not exist on DragonFly BSD")
 	ctx := context.Background()
 	cfg := createTestConfig(t)
 	env := NewBSDEnvironment()
@@ -377,6 +377,24 @@ func requireDragonFly(t *testing.T) {
 		t.Skipf("Test requires DragonFly BSD (this is %s)", os)
 	}
 }
+
+// skipDragonFly skips the test if running on DragonFly BSD
+func skipDragonFly(t *testing.T, reason string) {
+	t.Helper()
+
+	cmd := exec.Command("uname", "-s")
+	output, err := cmd.Output()
+	if err != nil {
+		// Cannot determine OS, do not skip
+		return
+	}
+
+	os := strings.TrimSpace(string(output))
+	if os == "DragonFly" {
+		t.Skipf("Test not supported on DragonFly BSD: %s", reason)
+	}
+}
+
 
 // getProcessCmdline reads /proc/<pid>/cmdline for debugging
 func getProcessCmdline(pid int) string {

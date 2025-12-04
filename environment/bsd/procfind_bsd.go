@@ -16,7 +16,6 @@
 package bsd
 
 import (
-	"bufio"
 	"fmt"
 	stdlog "log"
 	"os"
@@ -83,37 +82,45 @@ func findProcessesInChroot(chrootPath string) []int {
 
 // isProcessInChroot checks if a process is running inside a chroot.
 //
-// DragonFly BSD: Read /proc/[pid]/file for executable path
-// FreeBSD: Read /proc/[pid]/cwd for current working directory
+// IMPORTANT PLATFORM DIFFERENCES:
+//   - Linux: Has /proc/[pid]/root symlink showing chroot path
+//   - FreeBSD: Has /proc/[pid]/root (similar to Linux)
+//   - DragonFly BSD: Does NOT have /proc/[pid]/root symlink!
 //
-// This is a heuristic - not perfect but catches most cases.
+// On DragonFly BSD, we cannot reliably detect chrooted processes via /proc.
+// The procfs on DragonFly only provides: cmdline, ctl, dbregs, etype, exe,
+// file, fpregs, map, mem, note, notepg, regs, rlimit, status.
+//
+// For DragonFly BSD, callers should use procctl reaper (see procctl_dragonfly.go)
+// instead of /proc enumeration.
+//
+// This function is provided for FreeBSD compatibility, but will always return
+// false on DragonFly BSD since /proc/[pid]/root doesn't exist.
 func isProcessInChroot(pid int, chrootPath string) bool {
-	// Try reading cwd symlink (works on both DragonFly and FreeBSD)
-	cwdPath := filepath.Join("/proc", strconv.Itoa(pid), "cwd")
-	target, err := os.Readlink(cwdPath)
-	if err == nil {
-		// If cwd is inside chroot, process is likely inside chroot
-		if strings.HasPrefix(target, chrootPath+"/") || target == chrootPath {
-			return true
-		}
-	}
-
-	// Try reading file (DragonFly: lists open files)
-	filePath := filepath.Join("/proc", strconv.Itoa(pid), "file")
-	f, err := os.Open(filePath)
+	// Read /proc/[pid]/root symlink to see process's root directory
+	// NOTE: This will fail on DragonFly BSD with "no such file or directory"
+	rootPath := filepath.Join("/proc", strconv.Itoa(pid), "root")
+	target, err := os.Readlink(rootPath)
 	if err != nil {
+		// Process may have exited, procfs not mounted, or /proc/[pid]/root
+		// doesn't exist (DragonFly BSD)
 		return false
 	}
-	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Each line format: "filename" or similar
-		// Check if any path references our chroot
-		if strings.Contains(line, chrootPath) {
-			return true
-		}
+	// Clean paths for comparison (remove trailing slashes)
+	target = filepath.Clean(target)
+	chrootPath = filepath.Clean(chrootPath)
+
+	// Check if the process's root matches our chroot
+	// Exact match means the process is chrooted to our directory
+	if target == chrootPath {
+		return true
+	}
+
+	// Also check if root is a subdirectory of our chroot
+	// (handles nested chroots, though unlikely in our case)
+	if strings.HasPrefix(target, chrootPath+"/") {
+		return true
 	}
 
 	return false
