@@ -1284,6 +1284,7 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
+- ✅ 2025-12-04: BSD metrics implementation complete - Real sysctl-based load/swap sampling via vm.loadavg, vm.vmtotal, vm.swap_info; no cgo; 10 unit tests (commit TBD)
 - ✅ 2025-12-04: System metrics sampling implemented - Created metrics_bsd.go/metrics_stub.go, integrated into StatsCollector.tick() (commit 4f46ba3)
 - ✅ 2025-12-04: Active worker count tracking complete - Implemented increment/decrement hooks in workerLoop, fixed stats showing zero workers (commits 24b42a6, e3e030b)
 - ✅ 2025-12-04: Worker helper procctl implementation complete - Self-invoking reaper with PROC_REAP_ACQUIRE for automatic descendant cleanup, UI fixes (layout, exit handling), critical syscall constant fix (commits 67fd365, 8939616, cd7b6ac, 8162134, c4efbf1)

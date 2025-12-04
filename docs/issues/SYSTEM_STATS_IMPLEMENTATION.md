@@ -707,58 +707,89 @@ Unlike dsynth's file-based `monitor.dat`, go-synth uses **BuildDB as the primary
 - **Clarity**: Single responsibility—stats collect, throttler decides
 - **Flexibility**: Can swap throttling algorithms without touching stats collection
 
-#### 3b. Metric Acquisition (2 hours)
+#### 3b. Metric Acquisition (2 hours) ✅ COMPLETE (2025-12-04)
 
-**3b.1: Adjusted Load Average (45 min)**
+**Implementation Status**: Real BSD sysctls implemented using `golang.org/x/sys/unix` without cgo.
+
+**3b.1: Adjusted Load Average (IMPLEMENTED)**
 ```go
 // stats/metrics_bsd.go
 func getAdjustedLoad() (float64, error) {
-    // Standard load average
-    var loadavg [3]float64
-    if err := unix.Getloadavg(loadavg[:]); err != nil {
-        return 0, err
+    // Parse vm.loadavg sysctl (binary format)
+    rawLoad, err := unix.SysctlRaw("vm.loadavg")
+    if err != nil {
+        return 0.0, fmt.Errorf("sysctl vm.loadavg: %w", err)
     }
     
-    // Get vm.vmtotal for page-fault waiting processes
-    var vmtotal unix.Vmtotal
-    mib := []int32{unix.CTL_VM, unix.VM_TOTAL}
-    if err := unix.Sysctl(mib, &vmtotal); err != nil {
-        return 0, err
+    var la loadavg  // {load [3]uint32, scale int32}
+    binary.Read(newBytesReader(rawLoad), binary.LittleEndian, &la)
+    
+    // Convert fixed-point to float64 (fscale = 2048.0)
+    load1min := float64(la.load[0]) / fscale
+    
+    // Parse vm.vmtotal for page-fault waiting processes
+    rawVmtotal, err := unix.SysctlRaw("vm.vmtotal")
+    if err != nil {
+        return load1min, nil  // Graceful fallback
     }
+    
+    var vmt vmtotal  // Contains t_pw field
+    binary.Read(newBytesReader(rawVmtotal), binary.LittleEndian, &vmt)
     
     // Adjusted load = 1-min load + page-fault waits
-    adjusted := loadavg[0] + float64(vmtotal.T_pw)
-    return adjusted, nil
+    return load1min + float64(vmt.t_pw), nil
 }
 ```
 
-**3b.2: Swap Percentage (45 min)**
+**Key Implementation Details**:
+- Uses `unix.SysctlRaw()` to fetch binary sysctl data
+- Parses fixed-point load average (divide by 2048.0)
+- Extracts `t_pw` field from `vm.vmtotal` struct
+- Graceful fallback: returns unadjusted load if vmtotal unavailable
+- No cgo required
+
+**3b.2: Swap Percentage (IMPLEMENTED)**
 ```go
 // stats/metrics_bsd.go
 func getSwapUsage() (int, error) {
-    // Query vm.swap_info sysctl
-    // Returns array of swap devices with ksw_used/ksw_total
-    
-    // Pseudo-code (actual sysctl call needs syscall.Sysctl)
-    mib := []int32{unix.CTL_VM, unix.VM_SWAPINFO}
-    // ... extract swap device array
-    
-    var totalUsed, totalSize uint64
-    for _, swapDev := range swapDevices {
-        totalUsed += swapDev.Used
-        totalSize += swapDev.Total
+    // Parse vm.swap_info sysctl (array of xswdev structs)
+    rawSwap, err := unix.SysctlRaw("vm.swap_info")
+    if err != nil {
+        return 0, fmt.Errorf("sysctl vm.swap_info: %w", err)
     }
     
-    if totalSize == 0 {
+    if len(rawSwap) == 0 {
         return 0, nil  // No swap configured
     }
     
-    pct := int((totalUsed * 100) / totalSize)
-    return pct, nil
+    // Each entry is an xswdev struct {version, dev, flags, nblks, used}
+    entrySize := int(unsafe.Sizeof(xswdev{}))
+    numEntries := len(rawSwap) / entrySize
+    
+    var totalBlks, usedBlks int32
+    for i := 0; i < numEntries; i++ {
+        chunk := rawSwap[i*entrySize : (i+1)*entrySize]
+        var xs xswdev
+        binary.Read(newBytesReader(chunk), binary.LittleEndian, &xs)
+        
+        totalBlks += xs.nblks
+        usedBlks += xs.used
+    }
+    
+    if totalBlks == 0 {
+        return 0, nil
+    }
+    
+    return int((float64(usedBlks) / float64(totalBlks)) * 100.0), nil
 }
 ```
 
-**Note**: If `vm.swap_info` sysctl is complex, fallback to parsing `swapinfo` command output.
+**Key Implementation Details**:
+- Parses `vm.swap_info` array of swap device entries
+- Aggregates `nblks` (total) and `used` across all devices
+- Returns percentage (0-100)
+- Handles no-swap case gracefully
+- Binary parsing with struct alignment via `unsafe.Sizeof`
 
 **3b.3: Memory Tracking (15 min)**
 ```go
@@ -2026,7 +2057,7 @@ watch -n 1 cat /build/monitor.dat
 | 1 | Source analysis | ✅ COMPLETE | 3h | (docs only) |
 | 2 | C implementation review | ✅ COMPLETE | 3h | (docs only) |
 | 3a | Collector architecture | ✅ COMPLETE | 1h | `stats/collector.go`, `stats/types.go`, `stats/throttler.go` |
-| 3b | Metric acquisition | ⏳ DEFERRED | - | `stats/metrics_bsd.go` (placeholder) |
+| 3b | Metric acquisition | ✅ COMPLETE | 2h | `stats/metrics_bsd.go` (real sysctl impl) |
 | 3c | Data model | ✅ COMPLETE | 0.5h | `stats/types.go` |
 | 3d | Hook integration | ✅ COMPLETE | 1.5h | `build/build.go` |
 | 3e | Stats consumers (BuildDB) | ✅ COMPLETE | 2h | `stats/builddb_writer.go`, `builddb/runs.go` |
@@ -2039,7 +2070,7 @@ watch -n 1 cat /build/monitor.dat
 | 5 | Rate/impulse (detailed) | ✅ COMPLETE | 2.5h | `stats/collector.go`, `stats/collector_test.go` |
 | 6 | Monitor persistence (file) | ⏳ DEFERRED | - | `stats/monitor.go` (BuildDB primary) |
 | 7 | Docs & commits | 🔲 TODO | 2h | `DEVELOPMENT.md`, issue doc |
-| **Total** | | **21.5h / 27.5h** | **Backend 100%** | ~15 files |
+| **Total** | | **23.5h / 27.5h** | **Backend 100%** | ~15 files |
 
 **Note**: Phases 5 & 6 overlap with Phase 3, so total is not 34h.
 
@@ -2139,8 +2170,11 @@ watch -n 1 cat /build/monitor.dat
 - ✅ Final stats show: 1 success, 0 failed
 - ⚠️ Minor bug: DynMaxWorkers shows throttled even with Load=0.00 (not initializing properly)
 
+**Completed Items** (2025-12-04):
+- ✅ Real BSD syscalls (metrics_bsd.go) - sysctl-based load/swap via vm.loadavg, vm.vmtotal, vm.swap_info (no cgo)
+- ✅ Unit tests: 10 test functions covering parsers, struct sizes, and integration
+
 **Deferred Items** (non-blocking):
-- Real BSD syscalls (metrics_bsd.go) - placeholder returns 0 for now
 - File-based monitor.dat writer - BuildDB is primary storage, file export optional
 
 ### Remaining Work (Documentation Only)
