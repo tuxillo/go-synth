@@ -2171,3 +2171,100 @@ watch -n 1 cat /build/monitor.dat
 - All tests passing
 
 🎉 **Phase 3 Backend Complete - Ready for Production Use**
+
+---
+
+## Worker Count Tracking Implementation
+
+**Status**: ✅ COMPLETE  
+**Date**: 2025-12-04  
+**Time**: ~1 hour
+
+### Problem Discovery
+
+After Phase 3 completion, user reported stats showing zeros despite documentation claiming feature complete:
+- ActiveWorkers always 0
+- DynMaxWorkers incorrect (throttled even with Load=0)
+- UI showing "0 / 8" workers
+
+**Root Cause**: Documentation overstated completion. Worker count tracking hooks were documented but not implemented in actual build code.
+
+### Implementation Details
+
+**Design Decision**: Simple counter approach, not per-worker state tracking.
+
+**Data Structure** (in `BuildContext`):
+```go
+type BuildContext struct {
+    // ... existing fields
+    activeWorkers int  // Number of workers actively building packages
+    statsMu       sync.Mutex  // Protects stats and activeWorkers
+}
+```
+
+**Tracking Strategy**:
+- Increment counter when worker receives package from queue
+- Decrement counter when package completes (success/failure)
+- Protect with existing `statsMu` mutex (reuse, no new lock)
+- Call `statsCollector.UpdateWorkerCount()` after changes
+- Add debug logging for verification
+
+**Worker Lifecycle Tracking Points**:
+
+1. **Package Start** (`build/build.go:554-561`):
+   ```go
+   // Increment active worker count and update stats collector
+   ctx.statsMu.Lock()
+   ctx.activeWorkers++
+   activeCount := ctx.activeWorkers
+   ctx.statsMu.Unlock()
+   if ctx.statsCollector != nil {
+       ctx.statsCollector.UpdateWorkerCount(activeCount)
+   }
+   ctx.logger.Debug("Worker %d: activeWorkers=%d (incremented)", worker.ID, activeCount)
+   ```
+
+2. **Package Completion** (`build/build.go:602-609`):
+   ```go
+   // Decrement active worker count and update stats collector
+   ctx.statsMu.Lock()
+   ctx.activeWorkers--
+   activeCount = ctx.activeWorkers
+   ctx.statsMu.Unlock()
+   if ctx.statsCollector != nil {
+       ctx.statsCollector.UpdateWorkerCount(activeCount)
+   }
+   ctx.logger.Debug("Worker %d: activeWorkers=%d (decremented)", worker.ID, activeCount)
+   ```
+
+**Key Implementation Notes**:
+
+1. **Variable Scope**: First declaration uses `:=`, second uses `=` (same function scope)
+2. **Thread Safety**: Uses existing `statsMu` mutex to avoid lock contention
+3. **Bootstrap Isolation**: Bootstrap phase (worker ID 99) has separate environment, doesn't affect counter
+4. **Skipped Packages**: Dependency failures never enter queue, don't affect counter
+5. **Debug Logging**: Added for VM validation (can be removed later)
+
+**Testing Strategy**:
+- ✅ Compilation successful
+- ⏳ VM testing pending (requires DragonFly BSD)
+- Expected behavior: ActiveWorkers 0→1→0 for single package builds
+- Expected behavior: ActiveWorkers scales with concurrent builds (up to MaxWorkers)
+
+### Files Modified
+
+- `build/build.go`: Added `activeWorkers` field, increment/decrement hooks, debug logging
+
+### Related Components
+
+**Not Modified** (already implemented):
+- `stats/collector.go` - `UpdateWorkerCount()` method exists and works
+- `stats/types.go` - `TopInfo.ActiveWorkers` field exists
+- UI consumers - Already display `ActiveWorkers` from TopInfo
+
+**Next Steps**:
+1. VM validation with `go-synth build editors/nano`
+2. Verify debug logs show increment/decrement
+3. Verify UI shows "1 / 8" during build, "0 / 8" when idle
+4. Remove debug logging if validation succeeds
+5. Commit with proper documentation updates

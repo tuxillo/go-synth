@@ -114,7 +114,8 @@ type BuildContext struct {
 	workers        []*Worker
 	queue          chan *pkg.Package
 	stats          BuildStats
-	statsMu        sync.Mutex
+	activeWorkers  int        // Count of workers currently building packages
+	statsMu        sync.Mutex // Protects stats and activeWorkers
 	startTime      time.Time
 	wg             sync.WaitGroup
 	statsCollector *stats.StatsCollector  // Real-time stats collection and monitoring
@@ -550,6 +551,16 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			startTime := worker.StartTime
 			worker.mu.Unlock()
 
+			// Increment active worker count and update stats collector
+			ctx.statsMu.Lock()
+			ctx.activeWorkers++
+			activeCount := ctx.activeWorkers
+			ctx.statsMu.Unlock()
+			if ctx.statsCollector != nil {
+				ctx.statsCollector.UpdateWorkerCount(activeCount)
+			}
+			ctx.logger.Debug("Worker %d: activeWorkers=%d (incremented)", worker.ID, activeCount)
+
 			// Mark as running
 			ctx.registry.AddFlags(p, pkg.PkgFRunning)
 
@@ -588,6 +599,16 @@ func (ctx *BuildContext) workerLoop(worker *Worker) {
 			worker.Current = nil
 			worker.Status = "idle"
 			worker.mu.Unlock()
+
+			// Decrement active worker count and update stats collector
+			ctx.statsMu.Lock()
+			ctx.activeWorkers--
+			activeCount = ctx.activeWorkers
+			ctx.statsMu.Unlock()
+			if ctx.statsCollector != nil {
+				ctx.statsCollector.UpdateWorkerCount(activeCount)
+			}
+			ctx.logger.Debug("Worker %d: activeWorkers=%d (decremented)", worker.ID, activeCount)
 
 			if success {
 				ctx.recordRunPackage(p, builddb.RunStatusSuccess, worker.ID, startTime, endTime, "")
