@@ -1284,7 +1284,8 @@ Rationale: Package should contain only metadata, not build-time state
 
 ### Recent Milestones
 
-- ✅ 2025-12-04: BSD metrics implementation complete - Real sysctl-based load/swap sampling via vm.loadavg, vm.vmtotal, vm.swap_info; no cgo; 10 unit tests (commit TBD)
+- ✅ 2025-12-04: **Issue #9 COMPLETE** - System stats monitoring fully implemented and documented. All 7 phases finished: real-time monitoring with BSD sysctls, dynamic worker throttling, rate/impulse tracking, UI integration, comprehensive documentation (commit 3d8fdf2)
+- ✅ 2025-12-04: BSD metrics implementation complete - Real sysctl-based load/swap sampling via vm.loadavg, vm.vmtotal, vm.swap_info; no cgo; 10 unit tests (commit 8db157b)
 - ✅ 2025-12-04: System metrics sampling implemented - Created metrics_bsd.go/metrics_stub.go, integrated into StatsCollector.tick() (commit 4f46ba3)
 - ✅ 2025-12-04: Active worker count tracking complete - Implemented increment/decrement hooks in workerLoop, fixed stats showing zero workers (commits 24b42a6, e3e030b)
 - ✅ 2025-12-04: Worker helper procctl implementation complete - Self-invoking reaper with PROC_REAP_ACQUIRE for automatic descendant cleanup, UI fixes (layout, exit handling), critical syscall constant fix (commits 67fd365, 8939616, cd7b6ac, 8162134, c4efbf1)
@@ -1565,9 +1566,10 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 **Next Steps**:
 - Implement bucket changes + DB helpers, then update build/service layers and add CLI/API commands to list runs.
 
-##### Issue #9: Missing system stats monitoring (NEW)
-**Status**: 🟢 Complete – Phase 3 Backend (8/8 tasks) | Phase 4 UI (10/10 tasks) | Phase 5 Collector (10/10 tasks)  
+##### Issue #9: Missing system stats monitoring (RESOLVED ✅)
+**Status**: ✅ COMPLETE – All 7 phases finished (Phase 3 Backend, Phase 4 UI, Phase 5 Collector, Phase 6 Integration, Phase 7 Documentation)  
 **Discovered**: 2025-12-02  
+**Completed**: 2025-12-04  
 **Priority**: P1 (high - feature parity with original dsynth)
 
 **Problem**: go-synth lacks the real-time system statistics monitoring that the original dsynth provides. Users cannot see active worker count, dynamic throttling status, package build rate (pkg/hr), impulse (instant completions), adjusted system load, swap usage, elapsed time, or build totals (queued/built/failed/ignored/skipped). Without these metrics, there's no visibility into build progress, system health, or performance bottlenecks.
@@ -1632,7 +1634,10 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
   - Pre-count ignored packages hook for BuildIgnored
   - UpdateQueuedCount after package counting
   - statsCollector.Close() in cleanup function
-- 🔲 **Phase 7**: Documentation and final commit (2h) - Tasks 9-10 remaining
+- ✅ **Phase 7 Complete**: Documentation and final commit (1.5h) - Commit 3d8fdf2
+  - Updated README.md with comprehensive Real-Time Monitoring section
+  - Updated AGENTS.md with stats package documentation (architecture table + key data structures)
+  - Documented live statistics, dynamic throttling, BSD sysctls, monitor command
 
 **Key Architectural Decisions** (commits c9ae296, 5f5fbca, a884bf0):
 - **Single-host execution only** (distributed builds out of scope)
