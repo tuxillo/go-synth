@@ -1,0 +1,23 @@
+# System Information
+# Generated: 2025-12-05T01:01:44+01:00
+# Source: Synthetic fixtures for testing
+
+System: DragonFly BSD (synthetic test data)
+Kernel: DragonFly v6.4.0-RELEASE
+CPU: 8 cores
+
+Load Averages: 3.24, 2.85, 2.12
+Adjusted Load: 3.24 + 2 (page wait) = 5.24
+
+Swap Configuration:
+  Device 0: 8GB, 25% used
+  Device 1: 8GB, 50% used
+  Total: 16GB, 37.5% used
+
+Memory: 16GB RAM
+
+Notes:
+- These are synthetic fixtures created by scripts/generate_fixtures.go
+- Values represent a moderately loaded system with some page-fault waits
+- Swap usage is intentionally varied across devices for testing
+- Use ./scripts/capture-bsd-fixtures.sh to capture real VM data

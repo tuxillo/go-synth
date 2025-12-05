@@ -1,0 +1,10 @@
+vm.swap_info:
+  Device 0:
+    Blocks: 2097152 (8.0 GB)
+    Used:   524288 (2.0 GB)
+    Usage:  25%
+  Device 1:
+    Blocks: 2097152 (8.0 GB)
+    Used:   1048576 (4.0 GB)
+    Usage:  50%
+  Total swap usage: 37%

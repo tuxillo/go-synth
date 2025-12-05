@@ -1,0 +1,13 @@
+vm.vmtotal:
+  Processes:
+    Runnable: 4
+    Disk Wait: 1
+    Page Wait: 2 (adjusted load contribution)
+    Sleeping: 50
+    Swapped: 0
+  Memory (pages):
+    Virtual: 400000
+    Active Virtual: 320000
+    Real: 200000
+    Active Real: 180000
+    Free: 20000
