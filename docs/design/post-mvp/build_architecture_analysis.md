@@ -1,8 +1,9 @@
 # Post-MVP Build Architecture Analysis
 
-**Date**: 2025-12-05  
+**Date**: 2025-12-05 (Updated: 2025-12-05)  
 **Status**: Analysis / Proposed Refactoring  
-**Context**: Phase 7 complete, working build system deployed
+**Context**: Phase 7 complete, working build system deployed  
+**Goal**: API-first architecture for REST/WebSocket support
 
 ## Executive Summary
 
@@ -11,9 +12,280 @@ with CRC-based incremental logic, environment isolation, and comprehensive
 monitoring. However, the architecture mixes concerns (orchestration, UI, stats,
 persistence) in ways that limit reusability and testability.
 
-This document analyzes the current design, identifies pain points, and proposes
-a layered architecture with narrow interfaces that separates the core build
-engine from runtime concerns.
+**Critical Finding**: The proposed refactoring addresses CLI reusability but is
+**incomplete for API-first architecture**. This document analyzes the current
+design, identifies **7 critical gaps** for API readiness, and proposes an
+enhanced layered architecture that supports:
+
+- **Asynchronous build execution** (start → return immediately)
+- **Multi-build concurrency** (queue, prioritize, isolate)
+- **Real-time event streaming** (WebSocket/SSE compatible)
+- **Worker pool reuse** (amortize expensive 27-mount setup)
+- **Resource isolation** (separate mount points per build)
+
+The enhanced design separates the core build engine from runtime concerns while
+adding a **Build Management Layer** for lifecycle, queuing, and real-time
+updates.
+
+## Critical Gaps for API-First Architecture
+
+The original refactoring proposal (sections below) addresses CLI-level concerns
+like separation of UI, persistence, and orchestration. However, **API-first
+development requires fundamentally different capabilities** that are missing
+from both the current implementation and the proposed refactoring:
+
+### Gap #1: No Build Lifecycle Management
+
+**Problem**: Current `DoBuild()` is synchronous and blocking. It returns only
+when the entire build completes.
+
+```go
+// Current API (synchronous)
+func DoBuild(cfg *config.Config, portList []string) error {
+    // ... setup ...
+    // ... execute all phases ...
+    // Returns after completion (minutes/hours later)
+}
+```
+
+**What REST/WebSocket APIs Need**:
+```go
+// Async API required
+buildID := BuildManager.Start(portList, options)  // Returns immediately
+status := BuildManager.GetStatus(buildID)         // Query progress
+stream := BuildManager.StreamEvents(buildID)      // Real-time updates
+BuildManager.Cancel(buildID)                      // Early termination
+```
+
+**Impact**: 
+- Cannot implement `POST /builds` endpoint that returns immediately
+- Cannot support multiple concurrent API clients monitoring different builds
+- Cannot implement `DELETE /builds/{id}` (cancel operation)
+- Cannot implement WebSocket streaming without blocking the API server thread
+
+**Missing Components**:
+- Build lifecycle state machine (queued → running → completed/failed/cancelled)
+- Background execution with goroutine management
+- Build ID generation and tracking
+- Graceful cancellation propagation to workers
+
+### Gap #2: No Build Queue/Scheduler
+
+**Problem**: Current design assumes one build at a time. Multiple `DoBuild()`
+calls would:
+- Collide on mount points (`/build/SL0/`, `/build/SL1/`, ...)
+- Collide on database writes (single bbolt file, single writer)
+- Collide on log directories (`/build/logs/`)
+- Exhaust system resources (each build spawns N workers × 27 mounts)
+
+**What REST/WebSocket APIs Need**:
+```go
+// Queue management required
+queue.Enqueue(BuildRequest{Ports: [...], Priority: High})
+queue.SetMaxConcurrent(2)  // Limit parallel builds
+queue.SetPriority(buildID, Critical)
+queue.Cancel(buildID)
+```
+
+**Impact**:
+- Cannot handle concurrent API requests (`POST /builds` while another build
+  runs)
+- Cannot implement priority queuing (rebuild security fix while routine build
+  queued)
+- Cannot implement resource limits (max 2 builds, each with 4 workers = 8 total
+  workers)
+- Cannot implement fair scheduling (user A vs user B in multi-tenant scenario)
+
+**Missing Components**:
+- Build request queue (FIFO, priority-based, or fair-share)
+- Concurrency limiter (max N builds system-wide)
+- Resource allocation (partition workers across builds)
+- Build isolation (separate directories per build ID)
+
+### Gap #3: No Structured Event Stream
+
+**Problem**: Current UI callbacks are fire-and-forget. No event history, no
+replay, no buffering.
+
+```go
+// Current callback pattern
+type BuildUI interface {
+    OnStart()
+    OnComplete(success, failed, ignored, skipped int)
+    OnPackageQueued(pkg *pkg.Package)
+    OnPackageStarted(pkg *pkg.Package, workerID int)
+    // ... etc ...
+}
+```
+
+**What REST/WebSocket APIs Need**:
+```go
+// Event stream required
+type Event struct {
+    BuildID   string
+    Timestamp time.Time
+    Type      string  // "package_started", "phase_completed", etc.
+    Data      json.RawMessage
+}
+
+stream := EventStream.Subscribe(buildID, sinceTimestamp)
+for event := range stream {
+    websocket.Send(event)  // Stream to client
+}
+```
+
+**Impact**:
+- Cannot implement `GET /builds/{id}/events?since=T` (event history API)
+- Cannot implement WebSocket reconnect with replay (client disconnected, needs
+  catchup)
+- Cannot implement `GET /builds/{id}/logs/tail` (streaming logs)
+- Cannot implement audit logging (who started what, when)
+
+**Missing Components**:
+- Event journal (in-memory ring buffer or persistent log)
+- Event subscription API with filtering
+- Event schema versioning
+- Backpressure handling (slow WebSocket consumer)
+
+### Gap #4: No Worker Pool Management
+
+**Problem**: Workers created per-build and destroyed after. Each worker
+creation:
+- Performs 27 `mount` syscalls (~5-10 seconds on NFS)
+- Allocates tmpfs (gigabytes of RAM)
+- Creates directory structures
+
+**What REST/WebSocket APIs Need**:
+```go
+// Persistent worker pool required
+pool := WorkerPool.Start(maxWorkers=8)
+worker := pool.Acquire(buildID)  // Reuse existing worker
+worker.Execute(package)
+pool.Release(worker)  // Return to pool for next build
+```
+
+**Impact**:
+- Every API-triggered build pays 5-10s setup cost × N workers
+- Cannot implement fast turnaround for small builds (setup > build time)
+- Resource thrashing (repeated mount/umount)
+- Cannot implement pre-warmed workers for low-latency APIs
+
+**Missing Components**:
+- Worker lifecycle management (start, stop, health checks)
+- Worker assignment to builds (isolation, cleanup between builds)
+- Worker recycling (reset state without destroying environment)
+- Worker scaling (grow/shrink pool based on load)
+
+### Gap #5: No Authentication/Authorization
+
+**Problem**: Current code has no concept of users, permissions, or audit
+trails.
+
+**What REST/WebSocket APIs Need**:
+```go
+// Auth/authz required
+user := Auth.Authenticate(token)
+if !Authz.CanStartBuild(user, portList) {
+    return ErrForbidden
+}
+AuditLog.Record("build_started", user, buildID)
+```
+
+**Impact**:
+- Cannot implement `Authorization: Bearer <token>` header validation
+- Cannot implement RBAC (user roles: admin, builder, viewer)
+- Cannot implement multi-tenancy (user A cannot see user B's builds)
+- Cannot implement audit logging (compliance, security)
+
+**Missing Components**:
+- Authentication middleware (JWT, API keys, OAuth)
+- Authorization policy engine (RBAC, ABAC)
+- Audit logging (structured logs, retention)
+- Multi-tenancy support (user/org isolation)
+
+### Gap #6: No API Versioning Strategy
+
+**Problem**: No plan for evolving APIs without breaking clients.
+
+**What REST/WebSocket APIs Need**:
+```go
+// Versioning required
+// Accept: application/vnd.gosynth.v1+json
+router.HandleFunc("/v1/builds", v1.CreateBuild)
+router.HandleFunc("/v2/builds", v2.CreateBuild)  // Future: batching support
+```
+
+**Impact**:
+- Cannot evolve APIs (e.g., add batching, change response schema)
+- Cannot deprecate features gracefully
+- Cannot support old/new clients simultaneously
+
+**Missing Components**:
+- API version negotiation (URL, header, query param)
+- Deprecation policy (sunset dates, warnings)
+- Version compatibility matrix
+
+### Gap #7: No Distributed/Scale-Out Design
+
+**Problem**: Current design assumes single-node execution. All workers, mounts,
+and state on one machine.
+
+**What REST/WebSocket APIs Need (Future)**:
+```go
+// Distributed design required (future)
+type WorkerPool interface {
+    Acquire(buildID string) (Worker, error)  // May return remote worker
+}
+
+type EventStream interface {
+    Publish(event Event)  // Broadcast to all API servers
+    Subscribe(buildID) <-chan Event
+}
+```
+
+**Impact**:
+- Cannot scale beyond single-node capacity (16-32 workers max)
+- Cannot implement distributed builds (50+ workers across 3 nodes)
+- Cannot implement HA (if node dies, builds lost)
+
+**Missing Components** (future):
+- Network-transparent worker management (gRPC, RabbitMQ)
+- Distributed event bus (Redis Pub/Sub, NATS, Kafka)
+- Distributed state (etcd, Consul)
+- Load balancing (assign builds to least-loaded node)
+
+**Note**: While full distributed support is post-MVP, designing interfaces now
+that *could* support distribution avoids painful rewrites later.
+
+---
+
+### Summary: What's Missing vs. What's Proposed
+
+| Capability | Current | Original Proposal | Required for API |
+|------------|---------|-------------------|------------------|
+| Sync build execution | ✅ | ✅ | ✅ |
+| Async build execution | ❌ | ❌ | ✅ Required |
+| Multi-build concurrency | ❌ | ❌ | ✅ Required |
+| UI/orchestration separation | ❌ | ✅ | ✅ |
+| Event streaming | Partial (callbacks) | ✅ (via BuildEvent) | ✅ (needs journal) |
+| Worker pool reuse | ❌ | ❌ | ✅ Required |
+| Build queue/scheduler | ❌ | ❌ | ✅ Required |
+| Auth/authz | ❌ | ❌ | ✅ Required |
+| API versioning | ❌ | ❌ | ✅ Required |
+| Distributed design | ❌ | ❌ | ⚠️ Desirable |
+
+**Conclusion**: The original refactoring proposal is a necessary first step
+(separation of concerns), but is **insufficient for API development**. We need
+a **Build Management Layer** that sits above the orchestration layer and
+provides:
+
+1. **BuildManager**: Async lifecycle (Start, Status, Cancel, Wait, List)
+2. **EventStream**: Structured event journal with replay
+3. **WorkerPool**: Persistent worker reuse with per-build isolation
+4. **BuildQueue**: Multi-build scheduling with prioritization
+
+These additions are **required** for Phase 5 (REST API), not optional
+enhancements.
 
 ## Current Architecture Assessment
 
@@ -226,7 +498,425 @@ if ncursesUI, ok := ctx.ui.(*NcursesUI); ok {
 
 ## Proposed Interfaces
 
-### 1. Scheduler Interface
+### Build Management Layer (New for API Support)
+
+The following interfaces form a **Build Management Layer** that sits above the
+orchestration layer. They address the 7 critical gaps identified for API-first
+architecture.
+
+#### 1. BuildManager Interface
+
+Manages asynchronous build lifecycle (Gap #1).
+
+```go
+// BuildManager orchestrates asynchronous build execution with lifecycle
+// management, status tracking, and graceful cancellation.
+//
+// Responsibilities:
+//   - Start builds in background goroutines
+//   - Track build state (queued → running → completed/failed/cancelled)
+//   - Provide status queries and event streaming
+//   - Support graceful cancellation with cleanup
+//
+// Thread-safe: All methods safe for concurrent access.
+type BuildManager interface {
+    // Start begins a new build asynchronously.
+    // Returns buildID immediately (non-blocking).
+    // Actual build runs in background with progress reported via events.
+    Start(ctx context.Context, req BuildRequest) (buildID string, err error)
+    
+    // GetStatus returns current build status snapshot.
+    // Returns ErrBuildNotFound if buildID invalid.
+    GetStatus(buildID string) (*BuildStatus, error)
+    
+    // Cancel requests graceful build cancellation.
+    // Waits for workers to finish current packages, then stops.
+    // Returns ErrBuildNotFound if buildID invalid.
+    // Returns ErrBuildAlreadyComplete if build finished.
+    Cancel(ctx context.Context, buildID string) error
+    
+    // Wait blocks until build completes or context cancelled.
+    // Returns final status or error.
+    Wait(ctx context.Context, buildID string) (*BuildStatus, error)
+    
+    // List returns all builds matching filter criteria.
+    // Filter by status, user, time range, etc.
+    List(filter BuildFilter) ([]*BuildStatus, error)
+    
+    // Delete removes build metadata and logs.
+    // Returns ErrBuildRunning if build still active.
+    Delete(buildID string) error
+}
+
+// BuildRequest specifies what to build.
+type BuildRequest struct {
+    Ports     []string          // Port origins (e.g., "editors/vim")
+    Options   BuildOptions      // Build configuration
+    UserID    string            // User requesting build (for auth/audit)
+    Priority  BuildPriority     // Queue priority
+}
+
+// BuildOptions configures build behavior.
+type BuildOptions struct {
+    Force       bool              // Ignore CRC, rebuild all
+    FetchOnly   bool              // Download distfiles only
+    MaxWorkers  int               // Override default worker count (0=default)
+    Timeout     time.Duration     // Max build duration (0=unlimited)
+    Tags        map[string]string // User-defined metadata
+}
+
+// BuildPriority affects queue ordering.
+type BuildPriority int
+
+const (
+    PriorityLow BuildPriority = iota
+    PriorityNormal
+    PriorityHigh
+    PriorityCritical  // Security fixes, etc.
+)
+
+// BuildStatus represents current build state.
+type BuildStatus struct {
+    BuildID    string
+    State      BuildState
+    Request    BuildRequest
+    
+    // Timing
+    QueuedAt   time.Time
+    StartedAt  *time.Time  // nil if not started
+    CompletedAt *time.Time  // nil if running
+    Duration   time.Duration
+    
+    // Progress
+    Packages   PackageStats
+    
+    // Results
+    Error      string  // Non-empty if build failed
+    LogPath    string  // Path to build logs
+}
+
+// BuildState is the high-level build lifecycle state.
+type BuildState string
+
+const (
+    StateQueued    BuildState = "queued"     // Waiting for resources
+    StateRunning   BuildState = "running"    // Actively building
+    StateCompleted BuildState = "completed"  // Finished successfully
+    StateFailed    BuildState = "failed"     // Build failed
+    StateCancelled BuildState = "cancelled"  // User cancelled
+)
+
+// PackageStats tracks per-package progress.
+type PackageStats struct {
+    Total    int  // Total packages to build
+    Pending  int  // Not yet started
+    Building int  // Currently building
+    Success  int  // Successfully built
+    Failed   int  // Build failed
+    Skipped  int  // Skipped (dependencies failed)
+}
+
+// BuildFilter specifies list query criteria.
+type BuildFilter struct {
+    States   []BuildState  // Filter by state
+    UserID   string        // Filter by user
+    Since    *time.Time    // Filter by queued time
+    Limit    int           // Max results (0=all)
+}
+```
+
+**Implementation Notes**:
+- Initial implementation: in-memory state, single-node only
+- Future: persistent state (bbolt/SQLite), distributed coordination (etcd)
+- Build ID generation: UUID v4 or `time.Now().UnixNano()` for sortability
+
+#### 2. EventStream Interface
+
+Provides structured event journal with replay (Gap #3).
+
+```go
+// EventStream publishes and subscribes to build events with history replay.
+//
+// Responsibilities:
+//   - Publish structured events from orchestrator
+//   - Subscribe to event streams (all builds or specific buildID)
+//   - Replay historical events (for reconnect, audit)
+//   - Buffer events for slow consumers (backpressure)
+//
+// Thread-safe: All methods safe for concurrent access.
+type EventStream interface {
+    // Publish sends event to all subscribers.
+    // Non-blocking: event buffered if subscribers slow.
+    Publish(event Event)
+    
+    // Subscribe returns channel of events for buildID.
+    // If buildID empty, subscribes to all builds.
+    // If since non-zero, replays historical events first.
+    // Channel closed when unsubscribed or buildID completed.
+    Subscribe(ctx context.Context, opts SubscribeOptions) (<-chan Event, error)
+    
+    // Unsubscribe closes subscription channel.
+    Unsubscribe(subscriptionID string)
+    
+    // History returns past events for buildID.
+    // If buildID empty, returns events for all builds.
+    History(buildID string, since time.Time, limit int) ([]Event, error)
+}
+
+// SubscribeOptions configures event subscription.
+type SubscribeOptions struct {
+    BuildID    string        // Empty = all builds
+    EventTypes []EventType   // Filter by type (empty = all)
+    Since      time.Time     // Replay from timestamp
+    BufferSize int           // Channel buffer (default 100)
+}
+
+// Event represents a structured build event.
+type Event struct {
+    ID        string          // Unique event ID
+    BuildID   string          // Build that generated event
+    Timestamp time.Time       // Event time (UTC)
+    Type      EventType       // Event category
+    Data      interface{}     // Type-specific payload
+}
+
+// EventType categorizes events.
+type EventType string
+
+const (
+    // Build lifecycle
+    EventBuildQueued    EventType = "build.queued"
+    EventBuildStarted   EventType = "build.started"
+    EventBuildCompleted EventType = "build.completed"
+    EventBuildFailed    EventType = "build.failed"
+    EventBuildCancelled EventType = "build.cancelled"
+    
+    // Package lifecycle
+    EventPackageQueued  EventType = "package.queued"
+    EventPackageStarted EventType = "package.started"
+    EventPackageSuccess EventType = "package.success"
+    EventPackageFailed  EventType = "package.failed"
+    EventPackageSkipped EventType = "package.skipped"
+    
+    // Worker events
+    EventWorkerAcquired EventType = "worker.acquired"
+    EventWorkerReleased EventType = "worker.released"
+    EventWorkerFailed   EventType = "worker.failed"
+    
+    // Phase events
+    EventPhaseStarted   EventType = "phase.started"
+    EventPhaseCompleted EventType = "phase.completed"
+    EventPhaseFailed    EventType = "phase.failed"
+    
+    // System events
+    EventLogLine        EventType = "log.line"
+    EventStatsUpdate    EventType = "stats.update"
+)
+
+// Example event data structures:
+
+type BuildStartedData struct {
+    BuildID   string
+    Ports     []string
+    Workers   int
+}
+
+type PackageStartedData struct {
+    Package   string  // e.g., "editors/vim-9.0.1"
+    WorkerID  int
+}
+
+type PhaseStartedData struct {
+    Package   string
+    Phase     string  // "fetch", "extract", "build", etc.
+}
+
+type LogLineData struct {
+    Package   string
+    Phase     string
+    Line      string
+}
+```
+
+**Implementation Notes**:
+- Initial: in-memory ring buffer (1000 events per build, FIFO eviction)
+- Future: persistent journal (append-only log, SQLite, or event store)
+- WebSocket integration: subscribe → range over channel → JSON encode events
+- Backpressure: slow subscribers get dropped events (log warning)
+
+#### 3. WorkerPool Interface
+
+Manages persistent worker lifecycle and reuse (Gap #4).
+
+```go
+// WorkerPool manages a pool of pre-initialized workers with lifecycle
+// management, resource allocation, and build isolation.
+//
+// Responsibilities:
+//   - Start/stop persistent workers (amortize mount setup cost)
+//   - Assign workers to builds (isolation via per-build directories)
+//   - Health monitoring and worker recycling
+//   - Dynamic pool resizing based on load
+//
+// Thread-safe: All methods safe for concurrent access.
+type WorkerPool interface {
+    // Start initializes the worker pool with given capacity.
+    // Workers created lazily on first Acquire() call.
+    // Returns error if pool already started.
+    Start(ctx context.Context, size int) error
+    
+    // Acquire returns a worker for buildID.
+    // Blocks until worker available or context cancelled.
+    // Worker isolated to buildID (separate mount points).
+    // Caller must call Release() when done.
+    Acquire(ctx context.Context, buildID string) (Worker, error)
+    
+    // Release returns worker to pool for reuse.
+    // Worker cleaned up (remove build artifacts) before reuse.
+    // Returns error if worker in bad state (worker destroyed).
+    Release(worker Worker) error
+    
+    // Resize changes pool capacity (grows or shrinks).
+    // Growing: creates new workers immediately.
+    // Shrinking: waits for workers to become idle, then destroys.
+    Resize(ctx context.Context, newSize int) error
+    
+    // Stop gracefully shuts down pool.
+    // Waits for all workers to finish current tasks.
+    // Context timeout controls max wait time.
+    Stop(ctx context.Context) error
+    
+    // Stats returns current pool statistics.
+    Stats() WorkerPoolStats
+}
+
+// Worker represents a build executor with environment isolation.
+type Worker interface {
+    // ID returns unique worker identifier.
+    ID() int
+    
+    // Execute runs command in worker's isolated environment.
+    // BuildID used to determine mount point isolation.
+    Execute(ctx context.Context, cmd ExecCommand) (*ExecResult, error)
+    
+    // Cleanup removes build artifacts for buildID.
+    // Called automatically by Release(), but exposed for explicit use.
+    Cleanup(buildID string) error
+    
+    // Health checks worker state.
+    // Returns error if worker environment corrupted.
+    Health(ctx context.Context) error
+}
+
+// WorkerPoolStats tracks pool health and utilization.
+type WorkerPoolStats struct {
+    Capacity  int  // Max workers
+    Active    int  // Currently executing builds
+    Idle      int  // Available for assignment
+    Unhealthy int  // Failed health checks
+}
+
+// ExecCommand specifies command execution parameters.
+type ExecCommand struct {
+    Program string
+    Args    []string
+    Env     []string
+    WorkDir string
+    Timeout time.Duration
+}
+
+// ExecResult contains command execution result.
+type ExecResult struct {
+    ExitCode int
+    Stdout   string
+    Stderr   string
+    Duration time.Duration
+}
+```
+
+**Implementation Notes**:
+- Worker creation: call `environment.New("bsd")` once, reuse for multiple builds
+- Build isolation: mount points use `/build/{buildID}/SL{N}/` pattern (see
+  Mount Point Isolation section)
+- Cleanup between builds: `rm -rf /build/{oldBuildID}/`, not full teardown
+- Health checks: verify mounts present, chroot accessible, ~5s interval
+- Initial size: `config.MaxWorkers` (default 8)
+
+#### 4. BuildQueue Interface
+
+Implements multi-build scheduling with prioritization (Gap #2).
+
+```go
+// BuildQueue manages multiple concurrent builds with priority scheduling,
+// resource limits, and fairness policies.
+//
+// Responsibilities:
+//   - Queue build requests when resources exhausted
+//   - Prioritize builds (critical > high > normal > low)
+//   - Enforce concurrency limits (max N simultaneous builds)
+//   - Fair scheduling (round-robin per user in multi-tenant)
+//
+// Thread-safe: All methods safe for concurrent access.
+type BuildQueue interface {
+    // Enqueue adds build request to queue.
+    // Returns buildID immediately (build may not start yet).
+    // Build transitions: queued → running when resources available.
+    Enqueue(req BuildRequest) (buildID string, err error)
+    
+    // Dequeue returns next build ready to execute.
+    // Blocks until build available or context cancelled.
+    // Considers priority, fairness, and resource limits.
+    // Returns nil if queue empty and no builds waiting.
+    Dequeue(ctx context.Context) (*QueuedBuild, error)
+    
+    // SetPriority changes priority of queued build.
+    // Returns ErrBuildNotQueued if build already running.
+    SetPriority(buildID string, priority BuildPriority) error
+    
+    // Remove cancels queued build before it starts.
+    // Returns ErrBuildNotQueued if already running.
+    Remove(buildID string) error
+    
+    // Stats returns queue statistics.
+    Stats() QueueStats
+    
+    // SetMaxConcurrent changes concurrent build limit.
+    // If reducing limit below current running count, waits for builds to
+    // complete (does not cancel).
+    SetMaxConcurrent(max int) error
+}
+
+// QueuedBuild represents a build ready for execution.
+type QueuedBuild struct {
+    BuildID  string
+    Request  BuildRequest
+    QueuedAt time.Time
+}
+
+// QueueStats tracks queue health.
+type QueueStats struct {
+    Queued     int  // Waiting for resources
+    Running    int  // Currently executing
+    MaxConcurrent int  // Concurrency limit
+}
+```
+
+**Implementation Notes**:
+- Initial: simple FIFO + priority queue (heap-based)
+- Future: fair-share scheduling (weighted round-robin per user)
+- Concurrency limit: default 1 (sequential builds), configurable via config or
+  API
+- Resource allocation: each build gets `MaxWorkers / MaxConcurrent` workers
+  (e.g., 8 workers, 2 builds = 4 workers each)
+
+---
+
+### Orchestration Layer Interfaces (Original Proposal)
+
+The following interfaces refactor the existing orchestration layer for better
+separation of concerns. They work with the Build Management Layer above.
+
+#### 5. Scheduler Interface
 
 Manages dependency-aware task scheduling.
 
@@ -280,7 +970,7 @@ const (
 )
 ```
 
-### 2. BuildExecutor Interface
+### 6. BuildExecutor Interface
 
 Executes a build job against an environment.
 
@@ -319,7 +1009,7 @@ type BuildResult struct {
 }
 ```
 
-### 3. PhaseRunner Interface
+### 7. PhaseRunner Interface
 
 Executes a single build phase.
 
@@ -348,7 +1038,7 @@ type PhaseOptions struct {
 }
 ```
 
-### 4. IncrementalPolicy Interface
+### 8. IncrementalPolicy Interface
 
 Decides which packages need building.
 
@@ -374,7 +1064,7 @@ type IncrementalPolicy interface {
 }
 ```
 
-### 5. EnvironmentProvider Interface
+### 9. EnvironmentProvider Interface
 
 Creates and manages environment backends.
 
@@ -397,7 +1087,7 @@ type EnvironmentProvider interface {
 }
 ```
 
-### 6. RunRecorder Interface
+### 10. RunRecorder Interface
 
 Persists build records and run history.
 
@@ -427,7 +1117,7 @@ type RunRecorder interface {
 }
 ```
 
-### 7. BuildEvents Interface
+### 11. BuildEvents Interface (Original Proposal - Superseded)
 
 Dispatches build lifecycle events to consumers.
 
@@ -845,7 +1535,402 @@ func doBuild(portList []string, cfg *config.Config, logger *log.Logger) error {
 }
 ```
 
+## Mount Point Isolation Strategy
+
+### Problem Statement
+
+Current design uses fixed mount points per worker:
+```
+/build/SL0/   → Worker 0
+/build/SL1/   → Worker 1
+...
+/build/SL7/   → Worker 7
+```
+
+This works for single builds but **collides when multiple builds run
+concurrently**:
+- Build A starts with 8 workers (SL0-SL7)
+- Build B starts while A running → collides on same mount points
+- Workers from different builds interfere with each other's artifacts
+
+**User Requirement**: "For multi-builds we will need separate mount points for
+each build run, otherwise they'll just collide."
+
+### Proposed Solution: Build-Scoped Directories
+
+Use a two-level hierarchy: `{BuildBase}/{buildID}/SL{N}/`
+
+```
+/build/
+├── build-123e4567-e89b-12d3-a456-426614174000/
+│   ├── SL0/  → Worker 0 for build 123e...
+│   ├── SL1/  → Worker 1 for build 123e...
+│   └── SL7/
+├── build-abcd1234-e89b-12d3-a456-426614174001/
+│   ├── SL0/  → Worker 0 for build abcd...
+│   └── SL3/
+└── logs/
+    ├── build-123e.../  → Logs for build 123e...
+    └── build-abcd.../  → Logs for build abcd...
+```
+
+**Benefits**:
+- **Isolation**: Each build has dedicated directories (no collision)
+- **Concurrency**: Builds run simultaneously without interference
+- **Cleanup**: Delete entire `build-{ID}/` directory when done
+- **Debugging**: Easy to identify which build owns which mounts
+- **Compatibility**: Worker IDs remain 0-N (no changes to worker logic)
+
+### Implementation Changes
+
+#### 1. Worker Environment Creation
+
+**Current** (`build/build.go:428`):
+```go
+env, err := environment.New("bsd")
+if err != nil {
+    return nil, err
+}
+```
+
+**Proposed** (with build-scoped base path):
+```go
+// WorkerPool.Acquire() sets per-build base path
+env, err := environment.NewWithBasePath("bsd", worker.ID, buildID, cfg)
+if err != nil {
+    return nil, err
+}
+
+// Inside environment/bsd/bsd.go
+func NewWithBasePath(workerID int, buildID string, cfg *config.Config) (*BSDEnvironment, error) {
+    // Build-scoped base path
+    basePath := filepath.Join(cfg.BuildBase, fmt.Sprintf("build-%s", buildID), fmt.Sprintf("SL%d", workerID))
+    
+    // Create directory structure
+    if err := os.MkdirAll(basePath, 0755); err != nil {
+        return nil, err
+    }
+    
+    // Rest of setup (27 mounts) unchanged
+    // ...
+}
+```
+
+#### 2. WorkerPool Lifecycle
+
+**Worker Acquisition** (assigns worker to buildID):
+```go
+func (p *WorkerPool) Acquire(ctx context.Context, buildID string) (Worker, error) {
+    // Wait for idle worker
+    worker := <-p.idleWorkers
+    
+    // Configure worker for this build
+    worker.buildID = buildID
+    worker.basePath = filepath.Join(p.cfg.BuildBase, fmt.Sprintf("build-%s", buildID))
+    
+    // Create build-specific directories
+    if err := os.MkdirAll(worker.basePath, 0755); err != nil {
+        p.idleWorkers <- worker  // Return to pool
+        return nil, err
+    }
+    
+    // Reconfigure mounts to point to new base path
+    if err := worker.env.SetBasePath(worker.basePath); err != nil {
+        p.idleWorkers <- worker
+        return nil, err
+    }
+    
+    return worker, nil
+}
+```
+
+**Worker Release** (cleanup between builds):
+```go
+func (p *WorkerPool) Release(worker Worker) error {
+    // Remove build-specific artifacts
+    buildPath := filepath.Join(p.cfg.BuildBase, fmt.Sprintf("build-%s", worker.buildID))
+    
+    // Unmount all 27 mount points (but keep environment alive)
+    if err := worker.env.UnmountAll(); err != nil {
+        // Worker corrupted, destroy it
+        worker.env.Cleanup()
+        return err
+    }
+    
+    // Delete build directory
+    if err := os.RemoveAll(buildPath); err != nil {
+        log.Warn("Failed to cleanup build directory: %v", err)
+    }
+    
+    // Return worker to pool (ready for next build)
+    worker.buildID = ""
+    p.idleWorkers <- worker
+    
+    return nil
+}
+```
+
+#### 3. Environment Interface Extension
+
+Add `SetBasePath()` method for dynamic reconfiguration:
+
+```go
+// In environment/environment.go
+type Environment interface {
+    Setup(ctx context.Context, cfg *EnvironmentConfig) error
+    Execute(ctx context.Context, cmd ExecCommand) (*ExecResult, error)
+    Cleanup() error
+    GetBasePath() string
+    
+    // NEW: Reconfigure base path for multi-build support
+    SetBasePath(basePath string) error
+    
+    // NEW: Unmount all mounts but keep environment alive
+    UnmountAll() error
+}
+```
+
+**BSD Implementation** (`environment/bsd/bsd.go`):
+```go
+func (e *BSDEnvironment) SetBasePath(basePath string) error {
+    // Update base path
+    e.basePath = basePath
+    
+    // Remount all 27 mount points to new base path
+    for _, mnt := range e.mounts {
+        newTarget := filepath.Join(basePath, mnt.relPath)
+        
+        // Create mount point
+        if err := os.MkdirAll(newTarget, 0755); err != nil {
+            return err
+        }
+        
+        // Mount (nullfs, tmpfs, devfs, procfs)
+        if err := mount(mnt.source, newTarget, mnt.fstype, mnt.flags); err != nil {
+            return err
+        }
+    }
+    
+    return nil
+}
+
+func (e *BSDEnvironment) UnmountAll() error {
+    // Unmount in reverse order (innermost first)
+    for i := len(e.mounts) - 1; i >= 0; i-- {
+        target := filepath.Join(e.basePath, e.mounts[i].relPath)
+        if err := unmount(target); err != nil {
+            return fmt.Errorf("unmount %s: %w", target, err)
+        }
+    }
+    return nil
+}
+```
+
+### Migration Path
+
+**Phase 0a: Add buildID parameter** (backward compatible)
+1. Add `buildID` parameter to `environment.New()` (default to empty string)
+2. If `buildID == ""`, use legacy path `/build/SL{N}/` (current behavior)
+3. If `buildID != ""`, use new path `/build/build-{ID}/SL{N}/`
+4. Update tests to pass explicit buildID
+
+**Phase 0b: Implement WorkerPool**
+1. Create `WorkerPool` with `Acquire()`/`Release()` methods
+2. Pool initializes N workers at startup (one-time mount setup)
+3. `Acquire()` assigns worker to buildID, reconfigures base path
+4. `Release()` unmounts, deletes build directory, returns to pool
+
+**Phase 0c: Update BuildManager**
+1. `BuildManager.Start()` generates unique buildID (UUID)
+2. Acquires workers from pool: `workers := pool.AcquireN(buildID, maxWorkers)`
+3. Passes buildID to orchestrator for logging/metrics
+4. On completion: `pool.ReleaseAll(workers)`
+
+**Verification**:
+- Single build: works with `/build/build-{ID}/SL{N}/` (no `/build/SL{N}/`)
+- Concurrent builds: `/build/build-{ID1}/` and `/build/build-{ID2}/` coexist
+- Worker reuse: single worker handles build-{ID1}, then build-{ID2} (different
+  paths)
+- Cleanup: `rm -rf /build/build-{ID}/` removes all artifacts
+
+### Performance Considerations
+
+**Mount/Unmount Overhead**:
+- **Current**: 27 mounts per worker × N workers = 27N mounts per build
+- **Proposed**: 27 mounts per worker at pool startup (one-time), then 27
+  unmount/remount per `Acquire()` (~2-3s on NFS)
+- **Optimization**: Keep mounts alive across builds (only change symlinks or
+  chroot path), reducing to ~0.1s per `Acquire()`
+
+**Disk Space**:
+- Each build needs ~5-10GB temporary space (work directories, distfiles)
+- With 2 concurrent builds: 10-20GB peak usage
+- Cleanup after each build keeps usage bounded
+
+**Future Optimization** (post-MVP):
+- Use bind mounts or overlayfs to share read-only layers (`/xports`,
+  `/packages`)
+- Only isolate writable layers (`/construction`, `/distfiles`)
+- Reduces per-build overhead to ~500MB
+
+### Summary
+
+**What Changes**:
+- Mount points: `/build/SL{N}/` → `/build/build-{ID}/SL{N}/`
+- Worker lifecycle: create once → acquire/release many times
+- Environment interface: add `SetBasePath()`, `UnmountAll()`
+
+**What Stays the Same**:
+- Worker IDs remain 0-N (no changes to phase execution logic)
+- 27-mount chroot structure unchanged (same nullfs/tmpfs/devfs layout)
+- Package building logic unchanged (`executePhase()`, dependencies, CRC)
+
+**Risk**: Medium (involves mount operations, but BSD backend has 38 unit tests +
+8 integration tests covering mount edge cases)
+
 ## Migration Strategy
+
+### Overview: Revised Phased Approach
+
+The original migration strategy focused on refactoring the orchestration layer
+(separation of concerns). However, **API-first architecture requires** the Build
+Management Layer **first**, before orchestration refactoring provides value.
+
+**Revised Phase Order**:
+1. **Phase 0**: Build Management Layer (async, queuing, events, worker pool) →
+   **Enables API development**
+2. **Phase 1-6**: Orchestration refactoring (scheduler, executor, policies) →
+   Improves testability, reusability
+3. **Phase 7**: REST API Layer (HTTP endpoints, WebSocket, auth) → Consumes
+   Build Management Layer
+
+**Rationale**: Without Phase 0, the REST API cannot be built (no async
+execution, no multi-build support, no event streaming). The orchestration
+refactoring (original phases 1-6) improves code quality but doesn't unblock API
+work.
+
+---
+
+### Phase 0: Build Management Layer (NEW - Required for API)
+
+**Goal**: Implement 4 core interfaces that enable API-first architecture.
+
+**Deliverables**:
+1. `BuildManager` interface + in-memory implementation
+2. `EventStream` interface + ring buffer implementation
+3. `WorkerPool` interface + persistent worker pool
+4. `BuildQueue` interface + priority queue implementation
+5. Mount point isolation (per-build directories)
+6. Integration with existing `DoBuild()` (backward compatible wrapper)
+
+**Effort**: 30-40 hours (4-5 days)
+
+#### Phase 0.1: BuildManager + EventStream (10-12h)
+
+**Tasks**:
+1. Create `build/manager.go` with `BuildManager` interface
+2. Implement `DefaultBuildManager`:
+   - `Start()`: generate UUID, launch goroutine calling `DoBuild()`, publish
+     `EventBuildStarted`
+   - `GetStatus()`: query in-memory map[buildID]*BuildStatus
+   - `Cancel()`: call context cancel function
+   - `Wait()`: block on completion channel
+   - `List()`: filter in-memory builds by state/user/time
+3. Create `build/events.go` with `EventStream` interface
+4. Implement `RingBufferEventStream`:
+   - Ring buffer: 1000 events per build (FIFO eviction)
+   - `Publish()`: append to ring buffer, notify subscribers
+   - `Subscribe()`: create buffered channel, replay history, forward new events
+   - `History()`: query ring buffer by buildID/time range
+5. Unit tests: 20 tests covering lifecycle, cancellation, event replay
+
+**Verification**: Build can be started async, status queried, events subscribed.
+
+#### Phase 0.2: WorkerPool + Mount Isolation (12-15h)
+
+**Tasks**:
+1. Create `build/workerpool.go` with `WorkerPool` interface
+2. Implement `DefaultWorkerPool`:
+   - `Start()`: create N workers, call `environment.New()` once per worker
+   - `Acquire()`: block until worker available, assign buildID, reconfigure
+     mounts
+   - `Release()`: unmount, cleanup build directory, return to pool
+   - `Health()`: verify mounts present, chroot accessible
+3. Extend `environment.Environment` interface:
+   - Add `SetBasePath(basePath string) error`
+   - Add `UnmountAll() error`
+4. Implement `SetBasePath()` in `environment/bsd/bsd.go`:
+   - Unmount all 27 mounts from old base path
+   - Remount all 27 mounts to new base path (`/build/build-{ID}/SL{N}/`)
+5. Update `DoBuild()` to accept `buildID` parameter (default to `""` for legacy
+   behavior)
+6. Unit tests: 15 tests covering acquisition, release, mount reconfiguration,
+   cleanup
+
+**Verification**: Worker can be acquired by build-{ID1}, released, then acquired
+by build-{ID2} (different mount points).
+
+#### Phase 0.3: BuildQueue + Multi-Build Support (8-10h)
+
+**Tasks**:
+1. Create `build/queue.go` with `BuildQueue` interface
+2. Implement `PriorityBuildQueue`:
+   - `Enqueue()`: add to heap sorted by priority + FIFO within priority
+   - `Dequeue()`: pop from heap, block if concurrent limit reached
+   - `SetPriority()`: remove + re-add with new priority
+   - `SetMaxConcurrent()`: enforce limit (default 1)
+3. Integrate with `BuildManager`:
+   - `Start()` → `Enqueue()` → dequeue when resources available
+   - Track running builds count
+   - Wait for slots before calling `DoBuild()`
+4. Unit tests: 12 tests covering priority ordering, concurrency limits, fairness
+
+**Verification**: 2 builds enqueued, first starts immediately, second waits
+until first completes (with MaxConcurrent=1).
+
+#### Phase 0.4: Integration + Backward Compatibility (5-8h)
+
+**Tasks**:
+1. Update `main.go` to use `BuildManager`:
+   ```go
+   buildMgr := build.NewDefaultBuildManager(cfg, workerPool, eventStream, queue)
+   buildID, err := buildMgr.Start(ctx, build.BuildRequest{Ports: portList})
+   if err != nil {
+       return err
+   }
+   
+   // Wait for completion (CLI is synchronous)
+   status, err := buildMgr.Wait(ctx, buildID)
+   ```
+2. Keep legacy `DoBuild()` as wrapper for CLI compatibility:
+   ```go
+   func DoBuild(cfg *config.Config, portList []string) error {
+       buildMgr := getGlobalBuildManager()  // Singleton
+       buildID, err := buildMgr.Start(ctx, BuildRequest{Ports: portList})
+       if err != nil {
+           return err
+       }
+       _, err = buildMgr.Wait(ctx, buildID)
+       return err
+   }
+   ```
+3. Update integration tests to test both `BuildManager.Start()` and legacy
+   `DoBuild()`
+4. Documentation: Update DEVELOPMENT.md with new architecture diagram
+
+**Verification**: Existing CLI behavior unchanged, new `BuildManager` API tested
+via integration tests.
+
+**Exit Criteria**:
+- [ ] All 4 interfaces implemented with in-memory backends
+- [ ] 47+ unit tests passing (BuildManager, EventStream, WorkerPool, BuildQueue)
+- [ ] Integration tests pass (single build, concurrent builds, cancellation)
+- [ ] Mount point isolation verified: `/build/build-{ID1}/SL0/` vs
+  `/build/build-{ID2}/SL0/` coexist
+- [ ] Legacy `DoBuild()` wrapper functional (CLI backward compatible)
+- [ ] Documentation updated (architecture diagram, API examples)
+
+---
 
 ### Phase 1: Extract Interfaces (Low Risk)
 
@@ -1115,30 +2200,139 @@ stats, cleanup, err := DoBuild(..., ui)
 5. **Event Ordering**: Do consumers need guaranteed ordering of events, or is
    best-effort sufficient?
 
+## Effort Estimates (Revised for API-First Development)
+
+### Phase 0: Build Management Layer (NEW - API Required)
+**Effort**: 30-40 hours (4-5 days)
+
+| Sub-Phase | Description | Time |
+|-----------|-------------|------|
+| 0.1 | BuildManager + EventStream interfaces + in-memory impl | 10-12h |
+| 0.2 | WorkerPool + mount point isolation | 12-15h |
+| 0.3 | BuildQueue + multi-build support | 8-10h |
+| 0.4 | Integration + backward compatibility | 5-8h |
+| **Total** | **Phase 0** | **30-40h** |
+
+**Exit Criteria**: Async builds, event streaming, worker reuse, concurrent build
+isolation verified via tests.
+
+### Original Refactoring Phases (1-6)
+**Effort**: 51-70 hours (7-9 days) - unchanged from original proposal
+
+| Phase | Description | Time |
+|-------|-------------|------|
+| 1 | Extract interfaces + adapters | 6-8h |
+| 2 | Inject dependencies with defaults | 8-10h |
+| 3 | Create DoBuildLite | 10-12h |
+| 4 | Refactor Scheduler | 12-15h |
+| 5 | Extract PhaseRunner | 8-10h |
+| 6 | Extract Events + UI | 10-12h |
+| **Total** | **Phases 1-6** | **51-70h** |
+
+### Phase 7: REST API Layer (NEW)
+**Effort**: 20-30 hours (3-4 days)
+
+| Task | Description | Time |
+|------|-------------|------|
+| 7.1 | HTTP server + routing (chi/gorilla) | 4-5h |
+| 7.2 | REST endpoints (POST /builds, GET /builds/{id}, etc.) | 6-8h |
+| 7.3 | WebSocket streaming (/builds/{id}/events) | 5-6h |
+| 7.4 | Authentication middleware (JWT/API keys) | 4-5h |
+| 7.5 | OpenAPI spec + documentation | 3-4h |
+| 7.6 | Integration tests (API endpoints) | 5-7h |
+| **Total** | **Phase 7** | **20-30h** |
+
+### Testing & Documentation
+**Effort**: 10-15 hours (1-2 days)
+
+| Task | Time |
+|------|------|
+| Integration tests (multi-build scenarios) | 5-6h |
+| Performance testing (worker pool, event streaming) | 3-4h |
+| Documentation updates (DEVELOPMENT.md, API guide) | 3-4h |
+| **Total** | **10-15h** |
+
+### Grand Total
+**Total Effort**: **110-140 hours (14-18 days)**
+
+**Breakdown**:
+- Phase 0 (Build Management Layer): 30-40h ← **Required for API**
+- Phases 1-6 (Orchestration Refactoring): 51-70h ← Improves quality
+- Phase 7 (REST API): 20-30h ← **API development**
+- Testing/docs: 10-15h
+
+**Critical Path for API Development**:
+1. Phase 0 (Build Management) → 30-40h
+2. Phase 7 (REST API) → 20-30h
+3. **Total for minimal API**: 50-70h (7-9 days)
+
+Phases 1-6 (orchestration refactoring) can be done in parallel or deferred
+post-API launch if needed.
+
 ## Conclusion
 
-The current build system works well but mixes concerns in ways that limit
-reusability and testability. The proposed refactoring:
+The current build system works well but is **not API-ready**. This analysis
+identifies **7 critical gaps** that block REST/WebSocket API development:
 
-- **Separates** orchestration, execution, policy, and presentation
-- **Introduces** narrow interfaces enabling dependency injection
-- **Preserves** existing behavior via adapter pattern
-- **Enables** future extensions (API, alternative builders, distributed builds)
-- **Improves** testability via mockable interfaces
+1. No async build execution (synchronous `DoBuild()` blocks)
+2. No multi-build concurrency (mount/DB collisions)
+3. No structured event streaming (fire-and-forget callbacks)
+4. No worker pool reuse (expensive per-build setup)
+5. No authentication/authorization (security)
+6. No API versioning strategy (evolution)
+7. No distributed design (future scalability)
 
-The migration can proceed incrementally with low risk, starting with quick wins
-(recorder extraction, environment provider) before tackling larger refactors
-(scheduler, event system).
+The original refactoring proposal (separation of concerns) is **necessary but
+insufficient**. We must add a **Build Management Layer** (Phase 0) that
+provides:
 
-**Recommendation**: Start with Phase 1 (interface definitions) and Phase 2
-(dependency injection with defaults) to prove the pattern without breaking
-changes. Evaluate benefits before committing to full refactor.
+- **BuildManager**: Async lifecycle (Start, Status, Cancel, Wait)
+- **EventStream**: Event journal with replay (WebSocket streaming)
+- **WorkerPool**: Persistent worker reuse (amortize mount setup cost)
+- **BuildQueue**: Multi-build scheduling (concurrency limits, priorities)
+- **Mount Isolation**: Per-build directories (`/build/{buildID}/SL{N}/`)
+
+**Revised Architecture**:
+```
+CLI/API → BuildManager → BuildQueue → WorkerPool → Orchestrator → Environment
+                ↓
+           EventStream (WebSocket, logging, audit)
+```
+
+**Benefits**:
+- **API-first**: Async builds, real-time streaming, multi-build support
+- **Testability**: All layers mockable (BuildManager, EventStream, WorkerPool)
+- **Scalability**: Worker pool reuse, mount point isolation
+- **Extensibility**: Pluggable backends (in-memory → Redis → distributed)
+
+**Recommendation**:
+1. **Implement Phase 0 (Build Management Layer) FIRST** - required for API work
+   (30-40h)
+2. **Implement Phase 7 (REST API)** - enables API development (20-30h)
+3. **Defer Phases 1-6 (Orchestration Refactoring)** - improves quality but not
+   blocking (51-70h)
+
+**Why Phase 0 First?**:
+- Unblocks REST API development immediately
+- Provides async execution, event streaming, worker reuse
+- Backward compatible (legacy `DoBuild()` wrapper for CLI)
+- Can be tested independently (47+ unit tests)
+
+**Why Defer Phases 1-6?**:
+- Improves code quality (testability, separation) but doesn't add features
+- API can be built on current orchestration layer (Phase 0 provides async
+  wrapper)
+- Can refactor incrementally after API launch
+
+**Total Effort for API-Ready System**: 50-70 hours (Phase 0 + Phase 7)  
+**Total Effort for Full Refactoring**: 110-140 hours (Phase 0-7 + testing)
 
 ---
 
 **Next Steps**:
-1. Review proposed interfaces with team
-2. Prototype `RunRecorder` extraction to validate approach
-3. Create feature branch for incremental refactoring
-4. Write integration tests capturing current behavior
-5. Implement Phase 1 interface definitions
+1. Review Phase 0 interfaces (BuildManager, EventStream, WorkerPool, BuildQueue)
+2. Validate mount point isolation strategy (build-scoped directories)
+3. Create feature branch: `feature/phase-0-build-management`
+4. Implement Phase 0.1 (BuildManager + EventStream)
+5. Write 47+ unit tests (lifecycle, events, worker pool, queue)
+6. Update DEVELOPMENT.md with Phase 0 tasks and exit criteria
