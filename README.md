@@ -474,15 +474,16 @@ This project follows a phased development approach with comprehensive design doc
 
 ### Development Resources
 
+- **[Documentation Index](docs/INDEX.md)** - Master index for all documentation
 - **[Development Guide](DEVELOPMENT.md)** - Complete phase tracking, status, and contribution workflow
 - **[Agent Guide](AGENTS.md)** - Essential information for developers and AI agents working on the codebase
 - **[Quick Start](QUICKSTART.md)** - Practical getting-started guide for users
 
 ### Architecture & Planning
 
-- **[IDEAS.md](docs/design/IDEAS.md)** - Comprehensive architectural vision and planning (729 lines)
-- **[IDEAS_MVP.md](docs/design/IDEAS_MVP.md)** - Minimum Viable Product scope and goals
-- **[Future Backlog](docs/design/FUTURE_BACKLOG.md)** - Features deferred for future releases
+- **[Brainstorming & Ideas](docs/history/brainstorming.md)** - Comprehensive architectural vision and planning
+- **[MVP Scope](docs/history/brainstorming.md#mvp-scope)** - Minimum Viable Product scope and goals
+- **[Future Backlog](docs/history/brainstorming.md#future-backlog)** - Features deferred for future releases
 
 ### Phase Development Plan
 
@@ -490,13 +491,13 @@ The project is developed in phases, each with detailed documentation:
 
 | Phase | Focus | Status | Documentation |
 |-------|-------|--------|---------------|
-| **Phase 1** | Library Extraction (pkg) | 🟢 100% Core Complete | [Overview](docs/design/PHASE_1_LIBRARY.md) · [Tasks](docs/design/PHASE_1_TODO.md) · [Analysis](docs/design/PHASE_1_ANALYSIS_SUMMARY.md) |
-| **Phase 2** | Build Database | 🟢 Complete | [Overview](docs/design/PHASE_2_BUILDDB.md) · [Tasks](docs/design/PHASE_2_TODO.md) |
-| **Phase 3** | Builder Orchestration | 🟢 Complete | [Overview](docs/design/PHASE_3_BUILDER.md) · [Tasks](docs/design/PHASE_3_TODO.md) |
-| **Phase 4** | Environment Abstraction | 🟢 Complete | [Overview](docs/design/PHASE_4_ENVIRONMENT.md) · [Tasks](docs/design/PHASE_4_TODO.md) |
-| **Phase 5** | Minimal API | 📋 Planned | [Plan](docs/design/PHASE_5_MIN_API.md) |
-| **Phase 6** | Testing | 📋 Planned | [Plan](docs/design/PHASE_6_TESTING.md) |
-| **Phase 7** | Integration | 📋 Planned | [Plan](docs/design/PHASE_7_INTEGRATION.md) |
+| **Phase 1** | Library Extraction (pkg) | 🟢 100% Core Complete | [Overview](docs/design/mvp/phase1_library.md) · [Tasks](docs/design/PHASE_1_TODO.md) · [Analysis](docs/design/PHASE_1_ANALYSIS_SUMMARY.md) |
+| **Phase 2** | Build Database | 🟢 Complete | [Overview](docs/design/mvp/phase2_builddb.md) · [Tasks](docs/design/PHASE_2_TODO.md) |
+| **Phase 3** | Builder Orchestration | 🟢 Complete | [Overview](docs/design/mvp/phase3_builder.md) · [Tasks](docs/design/PHASE_3_TODO.md) |
+| **Phase 4** | Environment Abstraction | 🟢 Complete | [Overview](docs/design/mvp/phase4_environment.md) · [Tasks](docs/design/PHASE_4_TODO.md) |
+| **Phase 5** | Minimal API | 📋 Planned | [Plan](docs/design/mvp/phase5_min_api.md) |
+| **Phase 6** | Testing | 📋 Planned | [Plan](docs/design/mvp/phase6_testing.md) |
+| **Phase 7** | Integration | 📋 Planned | [Plan](docs/design/mvp/phase7_integration.md) |
 
 ### Phase 1 Status
 
@@ -523,7 +524,7 @@ The project is developed in phases, each with detailed documentation:
 
 **Critical Milestone:** All 9 exit criteria met! The pkg library is complete as a pure, well-documented, thread-safe library with no global state, no build concerns, and comprehensive API documentation. Only additional documentation and quality improvements remain.
 
-See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed task list (6 tasks remaining, ~6-13 hours estimated).
+See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed task list (historical - Phase 1 complete).
 
 ## Contributing
 
@@ -536,7 +537,7 @@ Contributions welcome! Please:
 **For Contributors:**
 - Read [DEVELOPMENT.md](DEVELOPMENT.md) for complete phase tracking and workflow
 - Read [AGENTS.md](AGENTS.md) for detailed development guidelines
-- Check [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for current tasks
+- Check [Development Guide](DEVELOPMENT.md) for current phase status
 - Follow the commit guidelines in AGENTS.md
 
 ## License

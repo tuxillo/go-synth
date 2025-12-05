@@ -66,15 +66,16 @@ gh pr create --repo otheruser/somerepo
 
 ### Essential Documentation Structure
 - **`DEVELOPMENT.md`** (root) - **PRIMARY DEVELOPMENT GUIDE**: Phase tracking, task status, exit criteria, contribution workflow
-- **`docs/design/`** - **PHASE DESIGN DOCUMENTS**: Detailed specifications for each phase
-  - `PHASE_1_LIBRARY.md` - Library extraction (pkg package)
-  - `PHASE_2_BUILDDB.md` - Build database with bbolt
-  - `PHASE_3_BUILDER.md` - Builder orchestration
-  - `PHASE_4_ENVIRONMENT.md` - Environment abstraction
-  - `PHASE_5_MIN_API.md` - Minimal REST API
-  - `PHASE_6_TESTING.md` - Testing strategy
-  - `PHASE_7_INTEGRATION.md` - Integration & migration
-  - Plus planning docs: `IDEAS.md`, `IDEAS_MVP.md`, `FUTURE_BACKLOG.md`
+- **`docs/design/mvp/`** - **MVP PHASE DOCUMENTS**: Detailed specifications for phases 1-7
+  - `phase1_library.md` - Library extraction (pkg package)
+  - `phase2_builddb.md` - Build database with bbolt
+  - `phase3_builder.md` - Builder orchestration
+  - `phase4_environment.md` - Environment abstraction
+  - `phase5_min_api.md` - Minimal REST API
+  - `phase6_testing.md` - Testing strategy
+  - `phase7_integration.md` - Integration & migration
+- **`docs/design/post-mvp/`** - Post-MVP refactoring plans
+- **`docs/history/`** - Historical planning docs: `brainstorming.md` (IDEAS, MVP scope, Future Backlog)
 
 ## Architecture Summary
 
@@ -453,7 +454,7 @@ make -C /usr/ports/editors/vim -V PKGORIGIN
 
 ## Future Development Plans
 
-See `IDEAS.md` for comprehensive architectural plans:
+See `docs/history/brainstorming.md` for comprehensive architectural plans:
 - Library-first design with reusable components
 - REST API + WebSocket for web UI integration
 - Advanced build tracking with bbolt database backend
@@ -464,17 +465,17 @@ See `IDEAS.md` for comprehensive architectural plans:
 
 ### Documentation Reading Order for New Contributors
 1. **`DEVELOPMENT.md`** - Start here! Understand phases, current status, and workflow
-2. **`docs/design/PHASE_N_*.md`** - Read the current phase document for detailed tasks
+2. **`docs/design/mvp/phase*.md`** - Read the current phase document for detailed tasks
 3. **`AGENTS.md`** - This file: Development patterns and workflows
 4. **`README.md`** - User-facing features and usage
 5. **`QUICKSTART.md`** - Practical examples
-6. **`docs/design/IDEAS.md`** - Deep dive into architectural vision
+6. **`docs/history/brainstorming.md`** - Deep dive into architectural vision
 
 ### Quick References
 - Current phase status: Check **`DEVELOPMENT.md`** Phase Status section
-- Task list: Check **`DEVELOPMENT.md`** and relevant phase document in `docs/design/`
+- Task list: Check **`DEVELOPMENT.md`** and relevant phase document in `docs/design/mvp/`
 - Code patterns: This file (AGENTS.md) "Common Workflows" section
-- Architectural decisions: `docs/design/PHASE_N_*.md` "Key Decisions" sections
+- Architectural decisions: `docs/design/mvp/phase*.md` "Key Decisions" sections
 - Debug mode: Use `-d` flag for troubleshooting
 - Build logs: `/build/logs/` directory
 

@@ -4,9 +4,10 @@ This document provides an overview of the development process, phase tracking, a
 
 ## 🔗 Quick Links
 
+- **[Documentation Index](docs/INDEX.md)** - Master index for all documentation
 - **[Agent Guide](AGENTS.md)** - Essential information for developers and AI agents
-- **[Architecture & Ideas](docs/design/IDEAS.md)** - Comprehensive architectural vision
-- **[MVP Scope](docs/design/IDEAS_MVP.md)** - Minimum Viable Product definition
+- **[Architecture & Ideas](docs/history/brainstorming.md)** - Comprehensive architectural vision
+- **[MVP Scope](docs/history/brainstorming.md#mvp-scope)** - Minimum Viable Product definition
 
 ## 💡 Development Philosophy
 
@@ -99,10 +100,10 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - Improve error test coverage (~2-3h)
 
 ### 📖 Documentation
-- **[Phase 1 Overview](docs/design/PHASE_1_LIBRARY.md)** - Complete status and analysis
+- **[Phase 1 Overview](docs/design/mvp/phase1_library.md)** - Complete status and analysis
 - **[Phase 1 TODO](docs/design/PHASE_1_TODO.md)** - Detailed task breakdown (12 tasks, ~25-35h)
 - **[Phase 1 Analysis](docs/design/PHASE_1_ANALYSIS_SUMMARY.md)** - Findings and recommendations
-- **[Phase 1.5 Fidelity Analysis](docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md)** - C implementation comparison
+- **[Phase 1.5 Fidelity Analysis](docs/design/phase_1.5_part_b_plan.md)** - C implementation comparison
 - **[Phase 1.5 Part B Plan](docs/design/phase_1.5_part_b_plan.md)** - C-ism removal plan (completed)
 
 ### 🔑 Key Decisions
@@ -170,7 +171,7 @@ None - all dependencies resolved
 - **Architecture**: Cleaner, more idiomatic Go
 
 ### 📖 Documentation
-- **[Fidelity Analysis](docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md)** - Comprehensive C vs Go comparison
+- **[Fidelity Analysis](docs/design/phase_1.5_part_b_plan.md)** - Comprehensive C vs Go comparison
 - **[Part B Plan](docs/design/phase_1.5_part_b_plan.md)** - C-ism removal planning (1,348 lines)
 
 ### 🔑 Key Benefits
@@ -288,7 +289,7 @@ func (db *DB) UpdateCRC(portDir string, crc uint32) error
 ```
 
 ### 📖 Documentation
-- **[Phase 2 Plan](docs/design/PHASE_2_BUILDDB.md)** - Complete specification (updated 2025-11-27)
+- **[Phase 2 Plan](docs/design/mvp/phase2_builddb.md)** - Complete specification (updated 2025-11-27)
 
 ### 🔑 Key Decisions
 - **bbolt vs. BoltDB**: Use `go.etcd.io/bbolt` (maintained fork; original archived 2019)
@@ -441,8 +442,8 @@ Phase 3 adds:
 - CRC updates on success (`UpdateCRC`, `UpdatePackageIndex`)
 
 ### 📖 Documentation
-- **[Phase 3 Plan](docs/design/PHASE_3_BUILDER.md)** - Complete specification with 6 tasks
-- **[Phase 2 BuildDB](docs/design/PHASE_2_BUILDDB.md)** - BuildDB API reference
+- **[Phase 3 Plan](docs/design/mvp/phase3_builder.md)** - Complete specification with 6 tasks
+- **[Phase 2 BuildDB](docs/design/mvp/phase2_builddb.md)** - BuildDB API reference
 
 ### 🔑 Key Decisions
 - Fail-safe error handling (log builddb errors, continue with build)
@@ -571,7 +572,7 @@ type ExecCommand struct {
    - **Files modified**: main.go, service/build.go, service/cleanup.go, service/service.go, service/types.go
 
 ### 📖 Documentation
-- **[Phase 4 Overview](docs/design/PHASE_4_ENVIRONMENT.md)** - Complete specification (450 lines)
+- **[Phase 4 Overview](docs/design/mvp/phase4_environment.md)** - Complete specification (450 lines)
 - **[Phase 4 TODO](docs/design/PHASE_4_TODO.md)** - Detailed task breakdown (700 lines)
 - **[Environment README](environment/README.md)** - Package documentation (600 lines)
 
@@ -905,7 +906,7 @@ GET /api/v1/builds
 ```
 
 ### 📖 Documentation
-- **[Phase 5 Plan](docs/design/PHASE_5_MIN_API.md)** - High-level specification
+- **[Phase 5 Plan](docs/design/mvp/phase5_min_api.md)** - High-level specification
 - **[Phase 5 TODO](docs/design/PHASE_5_TODO.md)** - Detailed task list (NEW)
 
 ### 🔑 Key Decisions
@@ -984,7 +985,7 @@ GET /api/v1/builds
 | **Overall** | **~85%** | **80%** | ✅ Target met |
 
 ### 📖 Documentation
-- **[Phase 6 Plan](docs/design/PHASE_6_TESTING.md)** - High-level specification
+- **[Phase 6 Plan](docs/design/mvp/phase6_testing.md)** - High-level specification
 - **[Phase 6 TODO](docs/design/PHASE_6_TODO.md)** - Detailed task list (NEW)
 
 ### 🔑 Key Decisions
@@ -1070,7 +1071,7 @@ GET /api/v1/builds
 - Legacy commands continue to work
 
 ### 📖 Documentation
-- **[Phase 7 Plan](docs/design/PHASE_7_INTEGRATION.md)** - High-level specification
+- **[Phase 7 Plan](docs/design/mvp/phase7_integration.md)** - High-level specification
 - **[Phase 7 TODO](docs/design/PHASE_7_TODO.md)** - Detailed task list (NEW)
 
 ### 🔑 Key Decisions
@@ -1189,7 +1190,7 @@ We chose the simpler host-copy approach because:
 
 1. **Read Essential Docs**
    - [AGENTS.md](AGENTS.md) - Development workflow and commit guidelines
-   - [Phase 1 TODO](docs/design/PHASE_1_TODO.md) - Current task list
+   - [Phase 1 TODO](docs/design/PHASE_1_TODO.md) - Current task list (historical)
 
 2. **Pick a Task**
    - Check Phase 1 TODO for available tasks
@@ -1732,7 +1733,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - Phase 2 Task 12 benchmarks deferred
 - Phase 6 Task 6 CI/CD setup deferred
 
-**Reference**: See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed Phase 1 issues.  
+**Reference**: See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed Phase 1 issues (historical).  
 **Detailed Analysis**: See [INCONSISTENCIES.md](INCONSISTENCIES.md) for comprehensive codebase review (50 items).
 
 ---
@@ -1812,7 +1813,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - [ ] Remote builder support
 - [ ] Package signing
 
-**Reference**: See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for detailed future plans.  
+**Reference**: See [Future Backlog](docs/history/brainstorming.md#future-backlog) for detailed future plans.  
 **Detailed Issues**: See [INCONSISTENCIES.md](INCONSISTENCIES.md) for 50 tracked items.
 
 ---
@@ -1867,7 +1868,7 @@ Features:
 
 ## 🚀 Future Plans
 
-See [FUTURE_BACKLOG.md](docs/design/FUTURE_BACKLOG.md) for features deferred beyond Phase 7:
+See [Future Backlog](docs/history/brainstorming.md#future-backlog) for features deferred beyond Phase 7:
 
 - ncurses UI (like original dsynth)
 - Profile switching
@@ -1984,7 +1985,7 @@ Implemented proper pkg bootstrap with CRC-based incremental build support:
 - `DEVELOPMENT.md` - Documented resolution
 
 **Related Documentation**:
-- `docs/design/PHASE_1.5_FIDELITY_ANALYSIS.md` - Original analysis
+- `docs/design/phase_1.5_part_b_plan.md` - Original analysis
 
 ---
 
