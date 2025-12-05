@@ -4,6 +4,7 @@ Command-line interface and API reference.
 
 ## Available Documentation
 
+- [Implementation Status](implementation_status.md) - Command implementation tracking
 - [CLI Reference](cli_reference.md) - Command-line interface (TODO)
 - [REST API](rest_api.md) - REST API reference (future)
 

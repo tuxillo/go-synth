@@ -490,7 +490,7 @@ jobs:
 
 - [pkg/testdata/README.md](pkg/testdata/README.md) - Detailed fixture documentation
 - [examples/README.md](examples/README.md) - Example programs
-- [PHASE_1_DEVELOPER_GUIDE.md](PHASE_1_DEVELOPER_GUIDE.md) - Developer guide
+- [pkg_library.md](pkg_library.md) - Developer guide for pkg library
 - [Go Testing Documentation](https://golang.org/pkg/testing/) - Official Go testing docs
 
 ---

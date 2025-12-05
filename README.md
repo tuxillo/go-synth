@@ -452,7 +452,7 @@ func main() {
 
 ### Documentation & Examples
 
-- **[Phase 1 Developer Guide](PHASE_1_DEVELOPER_GUIDE.md)** - Complete guide to using the pkg library
+- **[Phase 1 Developer Guide](docs/guide/pkg_library.md)** - Complete guide to using the pkg library
   - Installation & setup
   - API reference
   - Error handling

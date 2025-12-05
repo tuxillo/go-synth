@@ -4,8 +4,9 @@ Historical context, decisions, and project evolution.
 
 ## Available Documentation
 
+- [Brainstorming](brainstorming.md) - Architectural vision, MVP scope, future backlog
+- [Phase 6 Results](phase6_results.md) - Testing phase completion summary
 - [Roadmap](roadmap.md) - Project timeline and milestones (TODO)
-- [Brainstorming](brainstorming.md) - Ideas and future plans (TODO)
 - [Phase Summaries](phase_summaries.md) - What each MVP phase achieved (TODO)
 - [ADRs](adr/) - Architecture Decision Records
 

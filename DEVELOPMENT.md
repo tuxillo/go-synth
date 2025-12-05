@@ -85,7 +85,7 @@ The goal is to maintain a working, compilable codebase at every step while progr
 - **Phase 1 Task 3**: Structured error types (80 lines, 4 tests)
 - **Phase 1 Task 4**: Removed global state - pkgRegistry now passed as parameter
 - **Phase 1 Task 5**: Comprehensive godoc documentation (package, types, functions)
-- **Phase 1 Task 6**: Developer guide with 5 examples (PHASE_1_DEVELOPER_GUIDE.md, 1057 lines)
+- **Phase 1 Task 6**: Developer guide with 5 examples (docs/guide/pkg_library.md, 1057 lines)
 
 **Clean Architecture Achieved:**
 - ✅ Package struct is now pure metadata (no build state)
@@ -958,7 +958,7 @@ GET /api/v1/builds
 - [x] 3. Add Log Package Tests (1.5h) - ✅ Complete (2025-11-28, commit 1c0b86c, 90.3% coverage)
 - [x] 4. Add Mount Package Tests (1h) - ✅ Complete (Phase 4, 91.6% coverage)
 - [ ] 5. CI/CD Integration (1.5h) - Deferred as optional (manual testing sufficient for MVP)
-- [x] 6. Testing Documentation (0.5h) - ✅ Complete (TESTING_PHASE6.md)
+- [x] 6. Testing Documentation (0.5h) - ✅ Complete (docs/history/phase6_results.md)
 
 **Completed**: ~6 hours | **Deferred**: CI/CD (optional for MVP)
 
@@ -969,7 +969,7 @@ GET /api/v1/builds
 - [ ] CI runs on every PR with race detector - Deferred (manual `go test -race` sufficient for MVP)
 - [x] All tests pass without data races - ✅ All tests race-detector clean
 - [x] Failure tests validate error propagation - ✅ Covered in config/log/environment tests
-- [x] Documentation explains testing approach - ✅ TESTING_PHASE6.md complete
+- [x] Documentation explains testing approach - ✅ docs/history/phase6_results.md complete
 - [x] Make targets work for local testing - ✅ `go test ./...` works, integration requires VM
 
 ### 🧪 Test Coverage Summary
@@ -996,7 +996,7 @@ GET /api/v1/builds
 
 ### 📊 Code Impact
 - New tests: 3,619 lines (config: 814, log: 458, build integration: 1,783, environment: 564)
-- Documentation: 200 lines (TESTING_PHASE6.md)
+- Documentation: 200 lines (docs/history/phase6_results.md)
 - Bug fixes: Mount cleanup path mismatch fix (commit 1f11cf9)
 
 ---
@@ -1664,23 +1664,23 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
   - Progress: All 85 print statements removed (120% of estimate)
   - Packages: migration ✅, pkg ✅, build ✅, environment ✅, util ✅, mount ✅ (deleted)
   - Impact: **Phase 5 REST API now unblocked** 🎉
-  - Documentation: [REFACTOR_ISSUE_FIXES.md](docs/refactoring/REFACTOR_ISSUE_FIXES.md), [INCONSISTENCIES.md](INCONSISTENCIES.md) Pattern 1
+  - Documentation: [REFACTOR_ISSUE_FIXES.md](docs/refactoring/REFACTOR_ISSUE_FIXES.md), [Known Issues](docs/ops/known_issues.md) Pattern 1
   - Commits: c9c9153 → e4589a7 (6 stage commits), 8ad1bc0 (docs)
 - **Split CRC responsibility** between pkg and build
   - Context: "Needs build" logic duplicated in pkg.MarkPackagesNeedingBuild and build.DoBuild
   - Impact: Harder to maintain, risk of drift, wasted CRC computation
   - Plan: Consolidate into single source of truth (~4h effort)
-  - Reference: INCONSISTENCIES.md pkg/#1, build/#1, build/#2
+  - Reference: docs/ops/known_issues.md pkg/#1, build/#1, build/#2
 - **Duplicate mount logic** in mount/ and environment/bsd
   - Context: Old mount/ deprecated but still present
   - Impact: Risk of drift if someone modifies wrong code
   - Plan: Remove mount/ package after validation (~2h effort)
-  - Reference: INCONSISTENCIES.md mount/ (entire package deprecated)
+  - Reference: docs/ops/known_issues.md mount/ (entire package deprecated)
 - **Global mutable state** in pkg, config, environment
   - Context: portsQuerier, globalConfig, backend registry are package-level globals
   - Impact: Complicates testing and concurrent usage
   - Plan: Explicit dependency injection (~6h effort)
-  - Reference: INCONSISTENCIES.md Pattern 3
+  - Reference: docs/ops/known_issues.md Pattern 3
 
 **Architectural/Design** (Design Patterns):
 - No context.Context support in pkg APIs (by design for now)
@@ -1734,7 +1734,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - Phase 6 Task 6 CI/CD setup deferred
 
 **Reference**: See [Phase 1 TODO](docs/design/PHASE_1_TODO.md) for detailed Phase 1 issues (historical).  
-**Detailed Analysis**: See [INCONSISTENCIES.md](INCONSISTENCIES.md) for comprehensive codebase review (50 items).
+**Detailed Analysis**: See [Known Issues](docs/ops/known_issues.md) for comprehensive codebase review (50 items).
 
 ---
 
@@ -1746,14 +1746,14 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
   - Effort: 8 hours actual (6 packages affected)
   - Status: All 85 print statements removed, LibraryLogger interface implemented
   - **Phase 5 REST API now unblocked** 🎉
-  - Reference: INCONSISTENCIES.md Pattern 1 (marked RESOLVED)
+  - Reference: docs/ops/known_issues.md Pattern 1 (marked RESOLVED)
 - [x] ~~**[main.go]** Extract service layer from main.go~~ ✅ **COMPLETE** (2025-11-30)
   - Benefit: Reusable functions for API/other frontends
   - Effort: ~13 hours actual (8h refactoring + 3h testing + 2h docs)
   - Status: ✅ **COMPLETE** - Service layer package created (service/)
   - Result: 5 commands migrated, 969 lines production code, 1,845 lines tests
   - **Phase 5 REST API now unblocked** 🎉
-  - Reference: INCONSISTENCIES.md main.go/#1, service/README.md
+  - Reference: docs/ops/known_issues.md main.go/#1, service/README.md
 
 **High Priority** (Next sprint):
 - [ ] Test with complex ports (editors/vim, www/nginx, lang/python)
@@ -1765,19 +1765,19 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - [ ] **[pkg+build]** Consolidate split CRC responsibility
   - Benefit: Single source of truth, less duplication
   - Effort: ~4 hours
-  - Reference: INCONSISTENCIES.md Pattern 2
+  - Reference: docs/ops/known_issues.md Pattern 2
 - [ ] **[all]** Remove global mutable state (querier, config, registry)
   - Benefit: Better testing, concurrent usage
   - Effort: ~6 hours
-  - Reference: INCONSISTENCIES.md Pattern 3
+  - Reference: docs/ops/known_issues.md Pattern 3
 - [ ] **[log]** Configurable logging backends
   - Benefit: In-memory logs, structured logging, tests
   - Effort: ~4 hours
-  - Reference: INCONSISTENCIES.md log/#1
+  - Reference: docs/ops/known_issues.md log/#1
 - [ ] **[builddb]** Context-aware CRC computation
   - Benefit: Cancellable long operations
   - Effort: ~2 hours
-  - Reference: INCONSISTENCIES.md builddb/#4
+  - Reference: docs/ops/known_issues.md builddb/#4
 
 **Medium Priority** (Post-MVP enhancements):
 - [ ] Phase 5: REST API for remote monitoring (~15 hours, **requires blockers above**)
@@ -1790,11 +1790,11 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - [ ] **[build]** Event-driven dependency tracking
   - Benefit: Lower latency, less CPU wakeups
   - Effort: ~4 hours
-  - Reference: INCONSISTENCIES.md build/#6
+  - Reference: docs/ops/known_issues.md build/#6
 - [ ] **[util]** Platform-specific implementations (GetSwapUsage)
   - Benefit: Real metrics on supported platforms
   - Effort: ~2 hours
-  - Reference: INCONSISTENCIES.md util/#3
+  - Reference: docs/ops/known_issues.md util/#3
 - [ ] **Quick wins** (~1 hour total for 5 fixes)
   - builddb: Use bucket constants consistently (5 min)
   - config: Fix boolean parsing logic (10 min)
@@ -1814,7 +1814,7 @@ devfs on /build/synth/build/SL00/dev (devfs, local)
 - [ ] Package signing
 
 **Reference**: See [Future Backlog](docs/history/brainstorming.md#future-backlog) for detailed future plans.  
-**Detailed Issues**: See [INCONSISTENCIES.md](INCONSISTENCIES.md) for 50 tracked items.
+**Detailed Issues**: See [Known Issues](docs/ops/known_issues.md) for 50 tracked items.
 
 ---
 

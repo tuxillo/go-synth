@@ -4,9 +4,9 @@ Deployment, operations, and maintenance.
 
 ## Available Documentation
 
+- [Known Issues](known_issues.md) - Known issues, inconsistencies, and workarounds
 - [Deployment](deployment.md) - Deployment procedures (TODO)
 - [Monitoring](monitoring.md) - Monitoring and metrics (TODO)
-- [Known Issues](known_issues.md) - Known issues and workarounds (TODO)
 
 ## Related Documentation
 
