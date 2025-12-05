@@ -10,8 +10,8 @@ High-level system documentation and core concepts.
 
 ## Related Documentation
 
-- [Design](../design/INDEX.md) - Design specifications
-- [Guides](../guide/INDEX.md) - Task-oriented how-tos
+- [Design](../design/README.md) - Design specifications
+- [Guides](../guide/README.md) - Task-oriented how-tos
 
 ---
 

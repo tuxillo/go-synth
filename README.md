@@ -474,7 +474,7 @@ This project follows a phased development approach with comprehensive design doc
 
 ### Development Resources
 
-- **[Documentation Index](docs/INDEX.md)** - Master index for all documentation
+- **[Documentation Index](docs/README.md)** - Master index for all documentation
 - **[Development Guide](DEVELOPMENT.md)** - Complete phase tracking, status, and contribution workflow
 - **[Agent Guide](AGENTS.md)** - Essential information for developers and AI agents working on the codebase
 - **[Quick Start](QUICKSTART.md)** - Practical getting-started guide for users

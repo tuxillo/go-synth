@@ -10,8 +10,8 @@ Deployment, operations, and maintenance.
 
 ## Related Documentation
 
-- [Guides](../guide/INDEX.md) - Implementation guides
-- [API](../api/INDEX.md) - Command reference
+- [Guides](../guide/README.md) - Implementation guides
+- [API](../api/README.md) - Command reference
 
 ---
 

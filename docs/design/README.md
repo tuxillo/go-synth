@@ -28,9 +28,9 @@ Current design work, refactoring plans, and architectural analyses beyond the MV
 
 ## Related Documentation
 
-- [Overview](../overview/INDEX.md) - High-level architecture and concepts
-- [History](../history/INDEX.md) - Project evolution and decisions
-- [Guides](../guide/INDEX.md) - Implementation how-tos
+- [Overview](../overview/README.md) - High-level architecture and concepts
+- [History](../history/README.md) - Project evolution and decisions
+- [Guides](../guide/README.md) - Implementation how-tos
 
 ## Adding Design Documentation
 
@@ -45,7 +45,7 @@ When adding new design docs:
    updated: YYYY-MM-DD
    ---
    ```
-4. **Update this INDEX.md** with a link to your new document
+4. **Update this README.md** with a link to your new document
 5. **Cross-reference** related docs (overview, guides, history)
 
 ## Document Lifecycle

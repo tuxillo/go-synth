@@ -20,9 +20,9 @@ Task-oriented how-to guides for working with go-synth.
 
 ## Related Documentation
 
-- [API Reference](../api/INDEX.md) - CLI commands
-- [Operations](../ops/INDEX.md) - Deployment and maintenance
-- [Design](../design/INDEX.md) - Architecture and design docs
+- [API Reference](../api/README.md) - CLI commands
+- [Operations](../ops/README.md) - Deployment and maintenance
+- [Design](../design/README.md) - Architecture and design docs
 
 ---
 

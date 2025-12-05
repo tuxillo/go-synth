@@ -14,7 +14,7 @@ Welcome to the go-synth documentation. This index provides an overview of all av
 ### 📚 Overview
 High-level system documentation and core concepts.
 
-**Location**: [docs/overview/](overview/INDEX.md)
+**Location**: [docs/overview/](overview/README.md)
 
 - System architecture
 - Core concepts (packages, dependencies, CRC, workers)
@@ -23,7 +23,7 @@ High-level system documentation and core concepts.
 ### 🏗️ Design
 Design specifications, architectural decisions, and analyses.
 
-**Location**: [docs/design/INDEX.md](design/INDEX.md)
+**Location**: [docs/design/README.md](design/README.md)
 
 - **MVP Phase Specs** ([mvp/](design/mvp/)) - Historical phase 1-7 specifications
 - **Post-MVP Design** ([post-mvp/](design/post-mvp/)) - Current refactoring and new features
@@ -31,7 +31,7 @@ Design specifications, architectural decisions, and analyses.
 ### 📖 Guides
 Task-oriented how-to guides and tutorials.
 
-**Location**: [docs/guide/INDEX.md](guide/INDEX.md)
+**Location**: [docs/guide/README.md](guide/README.md)
 
 - Building packages
 - Environment isolation
@@ -43,7 +43,7 @@ Task-oriented how-to guides and tutorials.
 ### 🔧 API Reference
 Command-line interface and API documentation.
 
-**Location**: [docs/api/INDEX.md](api/INDEX.md)
+**Location**: [docs/api/README.md](api/README.md)
 
 - CLI command reference
 - REST API (future)
@@ -51,7 +51,7 @@ Command-line interface and API documentation.
 ### ⚙️ Operations
 Deployment, operations, and maintenance documentation.
 
-**Location**: [docs/ops/INDEX.md](ops/INDEX.md)
+**Location**: [docs/ops/README.md](ops/README.md)
 
 - Deployment procedures
 - Monitoring and metrics
@@ -60,7 +60,7 @@ Deployment, operations, and maintenance documentation.
 ### 📜 History
 Historical context, decisions, and project evolution.
 
-**Location**: [docs/history/INDEX.md](history/INDEX.md)
+**Location**: [docs/history/README.md](history/README.md)
 
 - Project roadmap and timeline
 - Brainstorming and ideas
@@ -72,18 +72,18 @@ Historical context, decisions, and project evolution.
 ### For New Contributors
 1. Read [QUICKSTART.md](../QUICKSTART.md) to get the project running
 2. Read [DEVELOPMENT.md](../DEVELOPMENT.md) to understand contribution workflow
-3. Browse [docs/overview/](overview/INDEX.md) to understand architecture
-4. Check [docs/guide/](guide/INDEX.md) for specific how-tos
+3. Browse [docs/overview/](overview/README.md) to understand architecture
+4. Check [docs/guide/](guide/README.md) for specific how-tos
 
 ### For Developers
 1. [AGENTS.md](../AGENTS.md) - Development patterns and workflows
 2. [docs/design/post-mvp/](design/post-mvp/) - Current design work
-3. [docs/guide/](guide/INDEX.md) - Implementation guides
+3. [docs/guide/](guide/README.md) - Implementation guides
 
 ### For Operators
-1. [docs/ops/](ops/INDEX.md) - Operational procedures
-2. [docs/api/](api/INDEX.md) - CLI reference
-3. [docs/guide/troubleshooting.md](guide/INDEX.md) - Common issues
+1. [docs/ops/](ops/README.md) - Operational procedures
+2. [docs/api/](api/README.md) - CLI reference
+3. [docs/guide/troubleshooting.md](guide/README.md) - Common issues
 
 ## Documentation Standards
 
@@ -91,7 +91,7 @@ When adding new documentation:
 - Place design specs in `docs/design/post-mvp/`
 - Place how-to guides in `docs/guide/`
 - Place operational docs in `docs/ops/`
-- Update the relevant INDEX.md file
+- Update the relevant README.md file
 - Add cross-references to related docs
 - Use lowercase_with_underscores for filenames
 

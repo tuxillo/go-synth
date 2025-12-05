@@ -4,7 +4,7 @@ This document provides an overview of the development process, phase tracking, a
 
 ## 🔗 Quick Links
 
-- **[Documentation Index](docs/INDEX.md)** - Master index for all documentation
+- **[Documentation Index](docs/README.md)** - Master index for all documentation
 - **[Agent Guide](AGENTS.md)** - Essential information for developers and AI agents
 - **[Architecture & Ideas](docs/history/brainstorming.md)** - Comprehensive architectural vision
 - **[MVP Scope](docs/history/brainstorming.md#mvp-scope)** - Minimum Viable Product definition

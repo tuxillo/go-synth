@@ -10,8 +10,8 @@ Command-line interface and API reference.
 
 ## Related Documentation
 
-- [Guides](../guide/INDEX.md) - How-to guides
-- [Operations](../ops/INDEX.md) - Deployment and operations
+- [Guides](../guide/README.md) - How-to guides
+- [Operations](../ops/README.md) - Deployment and operations
 
 ---
 
